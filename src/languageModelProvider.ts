@@ -174,7 +174,12 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         token: vscode.CancellationToken
     ): Promise<number> {
         // Simple estimation: ~4 characters per token
-        // This is a rough approximation; a proper implementation would use tiktoken or similar
+        // NOTE: This is a very rough approximation and may be significantly inaccurate
+        // Different models use different tokenization schemes:
+        // - GPT models use tiktoken (BPE-based)
+        // - Other models may use SentencePiece or other tokenizers
+        // - Non-English text typically requires more tokens per character
+        // For production use, consider integrating a proper tokenizer library
         let textContent: string;
         
         if (typeof text === 'string') {
@@ -203,7 +208,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 return 'user';
             case vscode.LanguageModelChatMessageRole.Assistant:
                 return 'assistant';
+            // System role may not be directly exposed in LanguageModelChatMessageRole enum
+            // but we handle it as a fallback
             default:
+                // Default to 'user' for safety, though ideally we'd have explicit System handling
                 return 'user';
         }
     }

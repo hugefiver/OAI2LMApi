@@ -12,6 +12,12 @@ export interface ChatMessage {
     content: string;
 }
 
+// Type-safe message format for OpenAI API
+interface OpenAIChatMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
+
 export interface StreamOptions {
     onChunk?: (chunk: string) => void;
     signal?: AbortSignal;
@@ -51,10 +57,16 @@ export class OpenAIClient {
     ): Promise<string> {
         const modelToUse = model || this.config.defaultModel;
 
+        // Convert to OpenAI message format
+        const openaiMessages: OpenAIChatMessage[] = messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+        }));
+
         try {
             const response = await this.client.chat.completions.create({
                 model: modelToUse,
-                messages: messages as any,
+                messages: openaiMessages,
                 max_tokens: options?.maxTokens,
                 temperature: options?.temperature ?? 0.7,
                 stream: false
@@ -75,10 +87,16 @@ export class OpenAIClient {
         const modelToUse = model || this.config.defaultModel;
         let fullContent = '';
 
+        // Convert to OpenAI message format
+        const openaiMessages: OpenAIChatMessage[] = messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+        }));
+
         try {
             const stream = await this.client.chat.completions.create({
                 model: modelToUse,
-                messages: messages as any,
+                messages: openaiMessages,
                 stream: true,
                 temperature: 0.7
             });
