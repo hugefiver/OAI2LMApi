@@ -54,17 +54,14 @@ jobs:
       - name: Run tests (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a pnpm test
-        continue-on-error: true
 
       - name: Run tests (macOS)
         if: runner.os == 'macOS'
         run: pnpm test
-        continue-on-error: true
 
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
         run: pnpm test
-        continue-on-error: true
 
       - name: Package extension
         run: pnpm run package
