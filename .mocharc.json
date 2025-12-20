@@ -1,0 +1,6 @@
+{
+  "extensions": ["js"],
+  "spec": ["out/test/suite/**/*.test.js"],
+  "ui": "tdd",
+  "color": true
+}
