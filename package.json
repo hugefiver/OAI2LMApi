@@ -1,0 +1,84 @@
+{
+  "name": "oai2lmapi",
+  "displayName": "OpenAI to Language Model API Bridge",
+  "description": "Connect OpenAI-compatible APIs to VSCode's Language Model API for Copilot",
+  "version": "0.1.0",
+  "publisher": "oai2lmapi",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "oai2lmapi.refreshModels",
+        "title": "OAI2LMApi: Refresh Models"
+      }
+    ],
+    "configuration": {
+      "title": "OpenAI to Language Model API",
+      "properties": {
+        "oai2lmapi.apiEndpoint": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "OpenAI-compatible API endpoint URL"
+        },
+        "oai2lmapi.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for authentication"
+        },
+        "oai2lmapi.defaultModel": {
+          "type": "string",
+          "default": "gpt-3.5-turbo",
+          "description": "Default model to use"
+        },
+        "oai2lmapi.modelFamily": {
+          "type": "string",
+          "default": "gpt-3.5-turbo",
+          "description": "Model family identifier for VSCode Language Model API"
+        },
+        "oai2lmapi.modelVendor": {
+          "type": "string",
+          "default": "openai",
+          "description": "Model vendor identifier"
+        },
+        "oai2lmapi.maxTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Maximum tokens for model"
+        },
+        "oai2lmapi.autoLoadModels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically load models from API on startup"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "eslint": "^8.x",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "openai": "^4.20.0"
+  }
+}
