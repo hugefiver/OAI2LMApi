@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { OpenAILanguageModelProvider } from './languageModelProvider';
-
-const API_KEY_SECRET_KEY = 'oai2lmapi.apiKey';
+import { API_KEY_SECRET_KEY } from './constants';
 
 let languageModelProvider: OpenAILanguageModelProvider | undefined;
 
@@ -106,7 +105,8 @@ async function initializeProvider(context: vscode.ExtensionContext): Promise<voi
         await languageModelProvider.initialize();
     } catch (error) {
         console.error('OAI2LMApi: Failed to initialize provider:', error);
-        vscode.window.showErrorMessage(`OAI2LMApi: Failed to initialize: ${error}`);
+        // Show a generic message to avoid exposing sensitive information
+        vscode.window.showErrorMessage('OAI2LMApi: Failed to initialize. Check the Developer Console for details.');
     }
 }
 

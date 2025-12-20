@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { OpenAIClient, ChatMessage } from './openaiClient';
-
-const API_KEY_SECRET_KEY = 'oai2lmapi.apiKey';
+import { API_KEY_SECRET_KEY } from './constants';
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
