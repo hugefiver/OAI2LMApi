@@ -35,6 +35,14 @@
       {
         "command": "oai2lmapi.manage",
         "title": "OAI2LMApi: Manage Provider Settings"
+      },
+      {
+        "command": "oai2lmapi.setApiKey",
+        "title": "OAI2LMApi: Set API Key"
+      },
+      {
+        "command": "oai2lmapi.clearApiKey",
+        "title": "OAI2LMApi: Clear API Key"
       }
     ],
     "configuration": {
@@ -48,7 +56,8 @@
         "oai2lmapi.apiKey": {
           "type": "string",
           "default": "",
-          "description": "API key for authentication"
+          "description": "DEPRECATED: API key is now stored securely. Use the 'OAI2LMApi: Set API Key' command instead. Any value here will be migrated automatically.",
+          "deprecationMessage": "API key is now stored securely using VSCode's SecretStorage. Use the 'OAI2LMApi: Set API Key' command to set your API key."
         },
         "oai2lmapi.defaultModel": {
           "type": "string",

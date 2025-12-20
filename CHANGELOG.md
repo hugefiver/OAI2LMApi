@@ -2,6 +2,21 @@
 
 All notable changes to the "oai2lmapi" extension will be documented in this file.
 
+## [0.2.0] - Secure API Key Storage
+
+### Fixed
+- Fixed "command 'oai2lmapi.refreshModels' not found" error by registering commands before async initialization
+
+### Changed
+- **BREAKING**: API key is now stored securely using VSCode's SecretStorage instead of plaintext in settings
+- The `oai2lmapi.apiKey` setting is now deprecated; existing keys are automatically migrated to secure storage
+- Commands are now registered immediately on extension activation to prevent "command not found" errors
+
+### Added
+- New command "OAI2LMApi: Set API Key" for securely entering the API key via password input
+- New command "OAI2LMApi: Clear API Key" for removing the stored API key
+- Automatic migration of API keys from plaintext settings to secure storage
+
 ## [0.1.0] - Initial Release
 
 ### Added

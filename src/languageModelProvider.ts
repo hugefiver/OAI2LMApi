@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { OpenAIClient, ChatMessage } from './openaiClient';
 
+const API_KEY_SECRET_KEY = 'oai2lmapi.apiKey';
+
 interface ModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
 }
@@ -18,14 +20,16 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     async initialize() {
         const config = vscode.workspace.getConfiguration('oai2lmapi');
         const apiEndpoint = config.get<string>('apiEndpoint', 'https://api.openai.com/v1');
-        const apiKey = config.get<string>('apiKey', '');
         const defaultModel = config.get<string>('defaultModel', 'gpt-3.5-turbo');
+        
+        // Retrieve API key from SecretStorage
+        const apiKey = await this.context.secrets.get(API_KEY_SECRET_KEY);
 
         console.log(`OAI2LMApi: Initializing with endpoint: ${apiEndpoint}`);
 
         if (!apiKey) {
             console.warn('OAI2LMApi: API key not configured');
-            vscode.window.showWarningMessage('OAI2LMApi: API key not configured. Please set oai2lmapi.apiKey in settings.');
+            vscode.window.showWarningMessage('OAI2LMApi: API key not configured. Use command "OAI2LMApi: Set API Key" to configure.');
             return;
         }
 

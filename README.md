@@ -32,12 +32,30 @@ A VSCode extension that connects OpenAI-compatible APIs to VSCode's Language Mod
 
 ## Configuration
 
-Configure the extension through VSCode settings (`settings.json` or UI):
+### Setting Up the API Key (Secure Storage)
+
+The API key is stored securely using VSCode's built-in SecretStorage. To set your API key:
+
+1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
+2. Type "OAI2LMApi: Set API Key" and select the command
+3. Enter your API key in the password input field
+4. The key will be stored securely and the extension will initialize automatically
+
+To clear your API key:
+
+1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
+2. Type "OAI2LMApi: Clear API Key" and select the command
+3. Confirm when prompted
+
+**Note**: If you have previously stored an API key in settings (the deprecated `oai2lmapi.apiKey` setting), it will be automatically migrated to secure storage on the next extension activation.
+
+### Other Settings
+
+Configure other extension options through VSCode settings (`settings.json` or UI):
 
 ```json
 {
   "oai2lmapi.apiEndpoint": "https://api.openai.com/v1",
-  "oai2lmapi.apiKey": "your-api-key-here",
   "oai2lmapi.defaultModel": "gpt-3.5-turbo",
   "oai2lmapi.modelFamily": "gpt-3.5-turbo",
   "oai2lmapi.modelVendor": "openai",
@@ -49,12 +67,18 @@ Configure the extension through VSCode settings (`settings.json` or UI):
 ### Configuration Options
 
 - **apiEndpoint**: The base URL of your OpenAI-compatible API (e.g., `https://api.openai.com/v1`)
-- **apiKey**: Your API authentication key
 - **defaultModel**: The default model to use if none is specified
 - **modelFamily**: Model family identifier for VSCode Language Model API
 - **modelVendor**: Vendor identifier (e.g., "openai", "custom")
 - **maxTokens**: Maximum number of tokens the model can handle
 - **autoLoadModels**: Automatically fetch and register all available models from the API
+
+### Available Commands
+
+- **OAI2LMApi: Set API Key**: Securely store your API key
+- **OAI2LMApi: Clear API Key**: Remove the stored API key
+- **OAI2LMApi: Refresh Models**: Manually refresh the list of available models
+- **OAI2LMApi: Manage Provider Settings**: Open extension settings
 
 ## Usage
 
@@ -147,10 +171,11 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ### Models not loading
 
+- Use the "OAI2LMApi: Set API Key" command to ensure your API key is properly configured
 - Verify your API endpoint is correct and accessible
 - Check that your API key is valid
 - Look at the VSCode Developer Console (Help > Toggle Developer Tools) for error messages
-- Try manually refreshing models with the "Refresh Models" command
+- Try manually refreshing models with the "OAI2LMApi: Refresh Models" command
 
 ### API errors
 
