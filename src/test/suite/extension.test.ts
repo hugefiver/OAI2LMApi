@@ -19,4 +19,9 @@ suite('Extension Test Suite', () => {
 		const commands = await vscode.commands.getCommands(true);
 		assert.ok(commands.includes('oai2lmapi.refreshModels'));
 	});
+
+	test('Should register manage command', async () => {
+		const commands = await vscode.commands.getCommands(true);
+		assert.ok(commands.includes('oai2lmapi.manage'));
+	});
 });

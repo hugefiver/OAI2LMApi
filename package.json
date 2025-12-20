@@ -20,10 +20,21 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "oai2lmapi",
+        "displayName": "OpenAI to Language Model API Bridge",
+        "managementCommand": "oai2lmapi.manage"
+      }
+    ],
     "commands": [
       {
         "command": "oai2lmapi.refreshModels",
         "title": "OAI2LMApi: Refresh Models"
+      },
+      {
+        "command": "oai2lmapi.manage",
+        "title": "OAI2LMApi: Manage Provider Settings"
       }
     ],
     "configuration": {
