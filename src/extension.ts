@@ -28,7 +28,12 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage('Models refreshed successfully');
     });
 
-    context.subscriptions.push(refreshCommand);
+    // Register command to manage provider settings
+    const manageCommand = vscode.commands.registerCommand('oai2lmapi.manage', async () => {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'oai2lmapi');
+    });
+
+    context.subscriptions.push(refreshCommand, manageCommand);
 }
 
 export function deactivate() {
