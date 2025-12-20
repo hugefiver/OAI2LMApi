@@ -7,17 +7,15 @@ export interface OpenAIConfig {
 }
 
 /**
- * Normalizes the API endpoint URL.
- * The OpenAI SDK expects the baseURL to include the version path (e.g., /v1).
- * This function ensures the URL is properly formatted.
+ * Normalizes the API endpoint URL by removing trailing slashes.
+ * The OpenAI SDK expects baseURL to be the full path (e.g., https://api.openai.com/v1).
+ * This function ensures trailing slashes are removed for consistent URL construction.
+ * @param endpoint - The API endpoint URL (should include /v1 path for OpenAI-compatible APIs)
+ * @returns The normalized endpoint URL without trailing slashes
  */
 function normalizeApiEndpoint(endpoint: string): string {
-    // Remove trailing slash
-    let normalized = endpoint.replace(/\/+$/, '');
-    
-    // The OpenAI SDK expects baseURL to be the full path including /v1
-    // So we don't need to modify it further
-    return normalized;
+    // Remove trailing slashes for consistent URL construction
+    return endpoint.replace(/\/+$/, '');
 }
 
 export interface ChatMessage {
