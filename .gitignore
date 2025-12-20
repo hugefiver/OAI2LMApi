@@ -3,7 +3,6 @@ out
 .vscode-test/
 *.vsix
 .DS_Store
-pnpm-lock.yaml
 .pnpm-debug.log
 *.log
 coverage/
