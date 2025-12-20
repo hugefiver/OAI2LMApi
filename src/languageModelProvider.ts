@@ -21,7 +21,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const apiKey = config.get<string>('apiKey', '');
         const defaultModel = config.get<string>('defaultModel', 'gpt-3.5-turbo');
 
+        console.log(`OAI2LMApi: Initializing with endpoint: ${apiEndpoint}`);
+
         if (!apiKey) {
+            console.warn('OAI2LMApi: API key not configured');
             vscode.window.showWarningMessage('OAI2LMApi: API key not configured. Please set oai2lmapi.apiKey in settings.');
             return;
         }
@@ -33,28 +36,31 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         });
 
         // Register the provider
+        console.log('OAI2LMApi: Registering language model provider');
         const disposable = vscode.lm.registerLanguageModelChatProvider('oai2lmapi', this);
         this.disposables.push(disposable);
 
         // Auto-load models if enabled
         const autoLoadModels = config.get<boolean>('autoLoadModels', true);
         if (autoLoadModels) {
+            console.log('OAI2LMApi: Auto-loading models from API');
             await this.loadModels();
         } else {
             // At least add the default model
+            console.log(`OAI2LMApi: Using default model: ${defaultModel}`);
             this.addModel(defaultModel);
         }
     }
 
     async loadModels() {
         if (!this.client) {
-            console.warn('OpenAI client not initialized');
+            console.warn('OAI2LMApi: OpenAI client not initialized');
             return;
         }
 
         try {
             const models = await this.client.listModels();
-            console.log(`Loaded ${models.length} models from API`);
+            console.log(`OAI2LMApi: Loaded ${models.length} models from API`);
 
             // Clear existing models
             this.modelList = [];
@@ -66,6 +72,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
             // If no models loaded, add default model
             if (models.length === 0) {
+                console.log('OAI2LMApi: No models returned from API, using default model');
                 const config = vscode.workspace.getConfiguration('oai2lmapi');
                 const defaultModel = config.get<string>('defaultModel', 'gpt-3.5-turbo');
                 this.addModel(defaultModel);
@@ -74,12 +81,13 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             // Notify listeners that models changed
             this._onDidChangeLanguageModelChatInformation.fire();
         } catch (error) {
-            console.error('Failed to load models:', error);
-            vscode.window.showErrorMessage(`Failed to load models: ${error}`);
+            console.error('OAI2LMApi: Failed to load models:', error);
+            vscode.window.showErrorMessage(`OAI2LMApi: Failed to load models from API. Please check your endpoint and API key. Error: ${error}`);
             
             // Fallback to default model
             const config = vscode.workspace.getConfiguration('oai2lmapi');
             const defaultModel = config.get<string>('defaultModel', 'gpt-3.5-turbo');
+            console.log(`OAI2LMApi: Falling back to default model: ${defaultModel}`);
             this.addModel(defaultModel);
             this._onDidChangeLanguageModelChatInformation.fire();
         }
@@ -105,13 +113,14 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         };
 
         this.modelList.push(modelInfo);
-        console.log(`Added language model: ${modelInfo.id}`);
+        console.log(`OAI2LMApi: Added language model: ${modelInfo.id}`);
     }
 
     async provideLanguageModelChatInformation(
         options: vscode.PrepareLanguageModelChatModelOptions,
         token: vscode.CancellationToken
     ): Promise<ModelInformation[]> {
+        console.log(`OAI2LMApi: Providing ${this.modelList.length} models to VSCode`);
         return this.modelList;
     }
 
