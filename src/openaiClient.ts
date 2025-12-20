@@ -1,10 +1,21 @@
 import OpenAI from 'openai';
-import * as vscode from 'vscode';
 
 export interface OpenAIConfig {
     apiEndpoint: string;
     apiKey: string;
     defaultModel: string;
+}
+
+/**
+ * Normalizes the API endpoint URL by removing trailing slashes.
+ * The OpenAI SDK expects baseURL to be the full path (e.g., https://api.openai.com/v1).
+ * This function ensures trailing slashes are removed for consistent URL construction.
+ * @param endpoint - The API endpoint URL (should include /v1 path for OpenAI-compatible APIs)
+ * @returns The normalized endpoint URL without trailing slashes
+ */
+function normalizeApiEndpoint(endpoint: string): string {
+    // Remove trailing slashes for consistent URL construction
+    return endpoint.replace(/\/+$/, '');
 }
 
 export interface ChatMessage {
@@ -29,19 +40,24 @@ export class OpenAIClient {
 
     constructor(config: OpenAIConfig) {
         this.config = config;
+        const normalizedEndpoint = normalizeApiEndpoint(config.apiEndpoint);
+        console.log(`OAI2LMApi: Initializing OpenAI client with endpoint: ${normalizedEndpoint}`);
         this.client = new OpenAI({
             apiKey: config.apiKey,
-            baseURL: config.apiEndpoint,
+            baseURL: normalizedEndpoint,
             dangerouslyAllowBrowser: false
         });
     }
 
     async listModels(): Promise<string[]> {
         try {
+            console.log('OAI2LMApi: Fetching models from API...');
             const response = await this.client.models.list();
-            return response.data.map(model => model.id);
+            const models = response.data.map(model => model.id);
+            console.log(`OAI2LMApi: Successfully fetched ${models.length} models:`, models);
+            return models;
         } catch (error) {
-            console.error('Failed to list models:', error);
+            console.error('OAI2LMApi: Failed to list models:', error);
             throw new Error(`Failed to fetch models from API: ${error}`);
         }
     }
@@ -126,9 +142,11 @@ export class OpenAIClient {
 
     updateConfig(config: OpenAIConfig) {
         this.config = config;
+        const normalizedEndpoint = normalizeApiEndpoint(config.apiEndpoint);
+        console.log(`OAI2LMApi: Updating OpenAI client with endpoint: ${normalizedEndpoint}`);
         this.client = new OpenAI({
             apiKey: config.apiKey,
-            baseURL: config.apiEndpoint,
+            baseURL: normalizedEndpoint,
             dangerouslyAllowBrowser: false
         });
     }
