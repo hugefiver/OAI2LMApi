@@ -1,4 +1,4 @@
-name: Build and Package
+name: Lint and Test
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - '**'
 
 jobs:
-  build-package:
+  lint-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -44,15 +44,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run ESLint
+        run: pnpm run lint
+
       - name: Compile TypeScript
         run: pnpm run compile
 
-      - name: Package extension
-        run: pnpm run package
-
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: vscode-extension
-          path: '*.vsix'
-          retention-days: 30
+      - name: Run tests
+        run: xvfb-run -a pnpm test
