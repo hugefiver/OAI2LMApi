@@ -176,12 +176,9 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             }
         }
 
-        // Fallback: use the first part before any version/variant suffix
-        const parts = nameWithoutPrefix.split(/[-_]/);
-        if (parts.length >= 2) {
-            return `${parts[0]}-${parts[1]}`.toLowerCase();
-        }
-        return parts[0].toLowerCase();
+        // Fallback: use the model ID as-is for the family
+        // This ensures unknown models are at least grouped consistently
+        return nameWithoutPrefix.toLowerCase();
     }
 
     private addModel(apiModel: APIModelInfo) {
