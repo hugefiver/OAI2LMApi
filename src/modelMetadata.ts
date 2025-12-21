@@ -876,7 +876,7 @@ const NON_LLM_PATTERNS: { pattern: RegExp; modelType: ModelMetadata['modelType']
     // Audio models
     { pattern: /whisper/i, modelType: 'audio' },
     { pattern: /tts-/i, modelType: 'audio' },
-    { pattern: /speech/i, modelType: 'audio' },
+    { pattern: /^speech[-_]/i, modelType: 'audio' },
     { pattern: /audio/i, modelType: 'audio' },
     { pattern: /voice/i, modelType: 'audio' },
     
