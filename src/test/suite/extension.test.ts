@@ -24,4 +24,14 @@ suite('Extension Test Suite', () => {
 		const commands = await vscode.commands.getCommands(true);
 		assert.ok(commands.includes('oai2lmapi.manage'));
 	});
+
+	test('Should register set API key command', async () => {
+		const commands = await vscode.commands.getCommands(true);
+		assert.ok(commands.includes('oai2lmapi.setApiKey'));
+	});
+
+	test('Should register clear API key command', async () => {
+		const commands = await vscode.commands.getCommands(true);
+		assert.ok(commands.includes('oai2lmapi.clearApiKey'));
+	});
 });
