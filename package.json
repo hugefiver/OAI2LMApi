@@ -9,7 +9,7 @@
     "url": "https://github.com/hugefiver/OAI2LMApi.git"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.107.0"
   },
   "categories": [
     "AI",
