@@ -921,9 +921,17 @@ export function getModelMetadata(modelId: string): ModelMetadata {
         return MODEL_METADATA_REGISTRY[normalized];
     }
 
-    // Try prefix matching for model families
+    // Try prefix matching for model families using word-boundary-aware matches
+    const matchesModelFamily = (normalizedId: string, key: string): boolean => {
+        if (normalizedId === key) {
+            return true;
+        }
+        // Match keys that appear at the start of the ID followed by a common separator
+        return normalizedId.startsWith(`${key}-`) || normalizedId.startsWith(`${key}/`);
+    };
+
     for (const [key, metadata] of Object.entries(MODEL_METADATA_REGISTRY)) {
-        if (normalized.startsWith(key) || normalized.includes(key)) {
+        if (matchesModelFamily(normalized, key)) {
             return metadata;
         }
     }
