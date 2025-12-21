@@ -89,6 +89,8 @@ async function initializeAsync(context: vscode.ExtensionContext): Promise<void> 
         await initializeProvider(context);
     } catch (error) {
         console.error('OAI2LMApi: Background initialization failed:', error);
+        // Surface critical initialization failures to the user
+        vscode.window.showErrorMessage('OAI2LMApi: Background initialization failed. Check the Developer Console for details.');
     }
 }
 
