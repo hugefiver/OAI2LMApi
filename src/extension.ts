@@ -4,7 +4,7 @@ import { API_KEY_SECRET_KEY } from './constants';
 
 let languageModelProvider: OpenAILanguageModelProvider | undefined;
 
-export async function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext) {
     console.log('OAI2LMApi extension is now active');
 
     // Register commands FIRST to ensure they are always available
@@ -60,12 +60,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(refreshCommand, manageCommand, setApiKeyCommand, clearApiKeyCommand);
 
-    // Migrate plaintext API key to SecretStorage if exists
-    await migrateApiKeyToSecretStorage(context);
-
-    // Create and register the language model provider
-    await initializeProvider(context);
-
     // Watch for configuration changes (excluding apiKey which is now in SecretStorage)
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
@@ -75,6 +69,27 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+
+    // Perform async initialization in the background to avoid blocking activation
+    // This prevents the extension from staying in "activating" state if API calls hang
+    initializeAsync(context);
+}
+
+/**
+ * Performs async initialization operations in the background.
+ * This function is intentionally not awaited to avoid blocking extension activation.
+ * Any errors are logged and handled gracefully without affecting extension availability.
+ */
+async function initializeAsync(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        // Migrate plaintext API key to SecretStorage if exists
+        await migrateApiKeyToSecretStorage(context);
+
+        // Create and register the language model provider
+        await initializeProvider(context);
+    } catch (error) {
+        console.error('OAI2LMApi: Background initialization failed:', error);
+    }
 }
 
 async function migrateApiKeyToSecretStorage(context: vscode.ExtensionContext): Promise<void> {
