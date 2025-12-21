@@ -159,7 +159,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         // Common patterns for model families
         const patterns = [
             // OpenAI patterns
-            /^(gpt-4\.1|gpt-4o|gpt-4-turbo|gpt-4|gpt-3\.5-turbo|o1|o3|o4)/i,
+            /^(gpt-4\.1|gpt-4o|gpt-4-turbo|gpt-4|gpt-3\.5-turbo|o1|o3|o4)(?=$|\b|[-_])/i,
             // Anthropic patterns
             /^(claude-sonnet-4|claude-3\.7|claude-3\.5|claude-3|claude-2\.1|claude-2|claude-instant)/i,
             // Google patterns
