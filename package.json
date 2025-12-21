@@ -94,7 +94,7 @@
     "pretest": "pnpm run compile && pnpm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",
