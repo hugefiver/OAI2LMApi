@@ -7,3 +7,4 @@ out
 *.log
 coverage/
 .nyc_output/
+package-lock.json
