@@ -3,7 +3,24 @@ import OpenAI from 'openai';
 export interface OpenAIConfig {
     apiEndpoint: string;
     apiKey: string;
-    defaultModel: string;
+}
+
+/**
+ * Model information returned from the /v1/models API.
+ * Extended with optional fields that some providers include.
+ */
+export interface APIModelInfo {
+    id: string;
+    object: string;
+    created?: number;
+    owned_by?: string;
+    // Extended fields from some providers (e.g., OpenRouter)
+    context_length?: number;
+    max_completion_tokens?: number;
+    capabilities?: {
+        tool_calling?: boolean;
+        vision?: boolean;
+    };
 }
 
 /**
@@ -49,12 +66,13 @@ export class OpenAIClient {
         });
     }
 
-    async listModels(): Promise<string[]> {
+    async listModels(): Promise<APIModelInfo[]> {
         try {
             console.log('OAI2LMApi: Fetching models from API...');
             const response = await this.client.models.list();
-            const models = response.data.map(model => model.id);
-            console.log(`OAI2LMApi: Successfully fetched ${models.length} models:`, models);
+            // Cast to APIModelInfo to preserve extended fields from some providers
+            const models = response.data.map(model => model as unknown as APIModelInfo);
+            console.log(`OAI2LMApi: Successfully fetched ${models.length} models`);
             return models;
         } catch (error) {
             console.error('OAI2LMApi: Failed to list models:', error);
@@ -64,15 +82,13 @@ export class OpenAIClient {
 
     async createChatCompletion(
         messages: ChatMessage[],
-        model?: string,
+        model: string,
         options?: {
             maxTokens?: number;
             temperature?: number;
             stream?: boolean;
         }
     ): Promise<string> {
-        const modelToUse = model || this.config.defaultModel;
-
         // Convert to OpenAI message format
         const openaiMessages: OpenAIChatMessage[] = messages.map(msg => ({
             role: msg.role,
@@ -81,7 +97,7 @@ export class OpenAIClient {
 
         try {
             const response = await this.client.chat.completions.create({
-                model: modelToUse,
+                model: model,
                 messages: openaiMessages,
                 max_tokens: options?.maxTokens,
                 temperature: options?.temperature ?? 0.7,
@@ -97,10 +113,9 @@ export class OpenAIClient {
 
     async streamChatCompletion(
         messages: ChatMessage[],
-        model: string | undefined,
+        model: string,
         streamOptions: StreamOptions
     ): Promise<string> {
-        const modelToUse = model || this.config.defaultModel;
         let fullContent = '';
 
         // Convert to OpenAI message format
@@ -111,7 +126,7 @@ export class OpenAIClient {
 
         try {
             const stream = await this.client.chat.completions.create({
-                model: modelToUse,
+                model: model,
                 messages: openaiMessages,
                 stream: true,
                 temperature: 0.7
