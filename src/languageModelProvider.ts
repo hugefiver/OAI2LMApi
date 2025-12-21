@@ -47,6 +47,11 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         if (autoLoadModels) {
             console.log('OAI2LMApi: Auto-loading models from API');
             await this.loadModels();
+        } else {
+            console.warn('OAI2LMApi: autoLoadModels is disabled; no models have been loaded automatically.');
+            vscode.window.showWarningMessage(
+                'OAI2LMApi: autoLoadModels is disabled. No models have been loaded automatically; enable autoLoadModels in settings or manually refresh models to use this provider.'
+            );
         }
     }
 
