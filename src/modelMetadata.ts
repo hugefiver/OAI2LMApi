@@ -868,7 +868,7 @@ const NON_LLM_PATTERNS: { pattern: RegExp; modelType: ModelMetadata['modelType']
     { pattern: /sdxl/i, modelType: 'image' },
     { pattern: /midjourney/i, modelType: 'image' },
     { pattern: /imagen/i, modelType: 'image' },
-    { pattern: /flux/i, modelType: 'image' },
+    { pattern: /flux-\d/i, modelType: 'image' },
     { pattern: /playground-v/i, modelType: 'image' },
     { pattern: /ideogram/i, modelType: 'image' },
     { pattern: /recraft/i, modelType: 'image' },
