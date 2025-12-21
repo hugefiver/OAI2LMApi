@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import { OpenAIClient, ChatMessage } from './openaiClient';
+import { OpenAIClient, ChatMessage, APIModelInfo } from './openaiClient';
 import { API_KEY_SECRET_KEY } from './constants';
+import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -19,7 +20,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     async initialize() {
         const config = vscode.workspace.getConfiguration('oai2lmapi');
         const apiEndpoint = config.get<string>('apiEndpoint', 'https://api.openai.com/v1');
-        const defaultModel = config.get<string>('defaultModel', 'gpt-3.5-turbo');
         
         // Retrieve API key from SecretStorage
         const apiKey = await this.context.secrets.get(API_KEY_SECRET_KEY);
@@ -34,8 +34,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
         this.client = new OpenAIClient({
             apiEndpoint,
-            apiKey,
-            defaultModel
+            apiKey
         });
 
         // Register the provider
@@ -49,9 +48,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             console.log('OAI2LMApi: Auto-loading models from API');
             await this.loadModels();
         } else {
-            // At least add the default model
-            console.log(`OAI2LMApi: Using default model: ${defaultModel}`);
-            this.addModel(defaultModel);
+            console.warn('OAI2LMApi: autoLoadModels is disabled; no models have been loaded automatically.');
+            vscode.window.showWarningMessage(
+                'OAI2LMApi: autoLoadModels is disabled. No models have been loaded automatically; enable autoLoadModels in settings or manually refresh models to use this provider.'
+            );
         }
     }
 
@@ -61,62 +61,152 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             return;
         }
 
+        const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const showModelsWithoutToolCalling = config.get<boolean>('showModelsWithoutToolCalling', false);
+
         try {
-            const models = await this.client.listModels();
-            console.log(`OAI2LMApi: Loaded ${models.length} models from API`);
+            const apiModels = await this.client.listModels();
+            console.log(`OAI2LMApi: Loaded ${apiModels.length} models from API`);
 
             // Clear existing models
             this.modelList = [];
 
-            // Add all models
-            for (const modelId of models) {
-                this.addModel(modelId);
+            // Filter and add models
+            let addedCount = 0;
+            let filteredCount = 0;
+            for (const apiModel of apiModels) {
+                // Filter out non-LLM models (embedding, rerank, image, audio, etc.)
+                if (!isLLMModel(apiModel.id)) {
+                    filteredCount++;
+                    console.log(`OAI2LMApi: Filtered out non-LLM model: ${apiModel.id}`);
+                    continue;
+                }
+
+                // Filter out models without tool calling support unless setting is enabled
+                if (!showModelsWithoutToolCalling && !this.modelSupportsToolCalling(apiModel)) {
+                    filteredCount++;
+                    console.log(`OAI2LMApi: Filtered out model without tool calling: ${apiModel.id}`);
+                    continue;
+                }
+
+                this.addModel(apiModel);
+                addedCount++;
             }
 
-            // If no models loaded, add default model
-            if (models.length === 0) {
-                console.log('OAI2LMApi: No models returned from API, using default model');
-                const config = vscode.workspace.getConfiguration('oai2lmapi');
-                const defaultModel = config.get<string>('defaultModel', 'gpt-3.5-turbo');
-                this.addModel(defaultModel);
-            }
+            console.log(`OAI2LMApi: Added ${addedCount} models, filtered ${filteredCount} models`);
 
             // Notify listeners that models changed
             this._onDidChangeLanguageModelChatInformation.fire();
         } catch (error) {
             console.error('OAI2LMApi: Failed to load models:', error);
             vscode.window.showErrorMessage(`OAI2LMApi: Failed to load models from API. Please check your endpoint and API key. Error: ${error}`);
-            
-            // Fallback to default model
-            const config = vscode.workspace.getConfiguration('oai2lmapi');
-            const defaultModel = config.get<string>('defaultModel', 'gpt-3.5-turbo');
-            console.log(`OAI2LMApi: Falling back to default model: ${defaultModel}`);
-            this.addModel(defaultModel);
             this._onDidChangeLanguageModelChatInformation.fire();
         }
     }
 
-    private addModel(modelId: string) {
-        const config = vscode.workspace.getConfiguration('oai2lmapi');
-        const modelFamily = config.get<string>('modelFamily', 'gpt-3.5-turbo');
-        const maxTokens = config.get<number>('maxTokens', 4096);
+    /**
+     * Checks if a model supports tool calling.
+     * First checks API response, then falls back to pre-fetched metadata.
+     */
+    private modelSupportsToolCalling(apiModel: APIModelInfo): boolean {
+        // Check if API provides capability information
+        if (apiModel.capabilities?.tool_calling !== undefined) {
+            return apiModel.capabilities.tool_calling;
+        }
+        // Fall back to pre-fetched metadata
+        return supportsToolCalling(apiModel.id);
+    }
+
+    /**
+     * Gets model metadata, preferring API response over pre-fetched data.
+     */
+    private getModelInfo(apiModel: APIModelInfo): { metadata: ModelMetadata; fromApi: boolean } {
+        const registryMetadata = getModelMetadata(apiModel.id);
+        
+        // Start with registry metadata as base
+        const metadata: ModelMetadata = { ...registryMetadata };
+        let fromApi = false;
+
+        // Override with API-provided values if available
+        if (apiModel.context_length !== undefined) {
+            metadata.maxInputTokens = apiModel.context_length;
+            fromApi = true;
+        }
+        if (apiModel.max_completion_tokens !== undefined) {
+            metadata.maxOutputTokens = apiModel.max_completion_tokens;
+            fromApi = true;
+        }
+        if (apiModel.capabilities?.tool_calling !== undefined) {
+            metadata.supportsToolCalling = apiModel.capabilities.tool_calling;
+            fromApi = true;
+        }
+        if (apiModel.capabilities?.vision !== undefined) {
+            metadata.supportsImageInput = apiModel.capabilities.vision;
+            fromApi = true;
+        }
+
+        return { metadata, fromApi };
+    }
+
+    /**
+     * Extracts model family from model ID.
+     * Examples: 'gpt-4o-mini' -> 'gpt-4o', 'claude-3.5-sonnet' -> 'claude-3.5'
+     */
+    private extractModelFamily(modelId: string): string {
+        // Remove provider prefix if present
+        const nameWithoutPrefix = modelId.replace(/^[^/]+\//, '');
+        
+        // Common patterns for model families
+        const patterns = [
+            // OpenAI patterns
+            /^(gpt-4\.1|gpt-4o|gpt-4-turbo|gpt-4|gpt-3\.5-turbo|o1|o3|o4)(?=$|\b|[-_])/i,
+            // Anthropic patterns
+            /^(claude-sonnet-4|claude-3\.7|claude-3\.5|claude-3|claude-2\.1|claude-2|claude-instant)/i,
+            // Google patterns
+            /^(gemini-2\.5|gemini-2\.0|gemini-1\.5|gemini)/i,
+            // Meta patterns
+            /^(llama-4|llama-3\.3|llama-3\.2|llama-3\.1|llama-3|llama-2)/i,
+            // Mistral patterns
+            /^(mistral-large|mistral-medium|mistral-small|mixtral-8x22b|mixtral-8x7b|mistral|codestral|pixtral)/i,
+            // Qwen patterns
+            /^(qwq|qvq|qwen-3|qwen-2\.5|qwen-2|qwen-1\.5|qwen)/i,
+            // DeepSeek patterns
+            /^(deepseek-r1|deepseek-v3|deepseek-v2\.5|deepseek-v2|deepseek)/i,
+        ];
+
+        for (const pattern of patterns) {
+            const match = nameWithoutPrefix.match(pattern);
+            if (match) {
+                return match[1].toLowerCase();
+            }
+        }
+
+        // Fallback: use the model ID as-is for the family
+        // This ensures unknown models are at least grouped consistently
+        return nameWithoutPrefix.toLowerCase();
+    }
+
+    private addModel(apiModel: APIModelInfo) {
+        const { metadata, fromApi } = this.getModelInfo(apiModel);
+        const family = this.extractModelFamily(apiModel.id);
 
         const modelInfo: ModelInformation = {
-            modelId: modelId,
-            id: `oai2lmapi-${modelId}`,
-            family: modelFamily,
-            name: modelId,
+            modelId: apiModel.id,
+            id: `oai2lmapi-${apiModel.id}`,
+            family: family,
+            name: apiModel.id,
             version: '1.0',
-            maxInputTokens: maxTokens,
-            maxOutputTokens: maxTokens,
+            maxInputTokens: metadata.maxInputTokens,
+            maxOutputTokens: metadata.maxOutputTokens,
             capabilities: {
-                toolCalling: false,
-                imageInput: false
+                toolCalling: metadata.supportsToolCalling,
+                imageInput: metadata.supportsImageInput
             }
         };
 
         this.modelList.push(modelInfo);
-        console.log(`OAI2LMApi: Added language model: ${modelInfo.id}`);
+        const source = fromApi ? 'API' : 'registry';
+        console.log(`OAI2LMApi: Added model: ${modelInfo.id} (family: ${family}, source: ${source})`);
     }
 
     async provideLanguageModelChatInformation(

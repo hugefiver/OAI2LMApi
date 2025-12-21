@@ -59,30 +59,15 @@
           "description": "DEPRECATED: API key is now stored securely. Use the 'OAI2LMApi: Set API Key' command instead. Any value here will be migrated automatically.",
           "deprecationMessage": "API key is now stored securely using VSCode's SecretStorage. Use the 'OAI2LMApi: Set API Key' command to set your API key."
         },
-        "oai2lmapi.defaultModel": {
-          "type": "string",
-          "default": "gpt-3.5-turbo",
-          "description": "Default model to use"
-        },
-        "oai2lmapi.modelFamily": {
-          "type": "string",
-          "default": "gpt-3.5-turbo",
-          "description": "Model family identifier for VSCode Language Model API"
-        },
-        "oai2lmapi.modelVendor": {
-          "type": "string",
-          "default": "openai",
-          "description": "Model vendor identifier"
-        },
-        "oai2lmapi.maxTokens": {
-          "type": "number",
-          "default": 4096,
-          "description": "Maximum tokens for model"
-        },
         "oai2lmapi.autoLoadModels": {
           "type": "boolean",
           "default": true,
           "description": "Automatically load models from API on startup"
+        },
+        "oai2lmapi.showModelsWithoutToolCalling": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show models that do not support tool/function calling. By default, only models with tool calling support are displayed."
         }
       }
     }

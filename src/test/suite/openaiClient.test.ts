@@ -6,8 +6,7 @@ suite('OpenAIClient Unit Tests', () => {
 	test('Should create OpenAIClient with config', () => {
 		const config: OpenAIConfig = {
 			apiEndpoint: 'https://api.openai.com/v1',
-			apiKey: 'test-key',
-			defaultModel: 'gpt-3.5-turbo'
+			apiKey: 'test-key'
 		};
 
 		const client = new OpenAIClient(config);
@@ -17,16 +16,14 @@ suite('OpenAIClient Unit Tests', () => {
 	test('Should update config', () => {
 		const config: OpenAIConfig = {
 			apiEndpoint: 'https://api.openai.com/v1',
-			apiKey: 'test-key',
-			defaultModel: 'gpt-3.5-turbo'
+			apiKey: 'test-key'
 		};
 
 		const client = new OpenAIClient(config);
 
 		const newConfig: OpenAIConfig = {
 			apiEndpoint: 'https://api.openai.com/v1',
-			apiKey: 'new-test-key',
-			defaultModel: 'gpt-4'
+			apiKey: 'new-test-key'
 		};
 
 		client.updateConfig(newConfig);
