@@ -51,25 +51,16 @@ jobs:
       - name: Run tests
         run: xvfb-run -a pnpm test
 
-      # Update version for VS Code Marketplace prerelease
+      # Get version from package.json for VS Code Marketplace prerelease
       # VS Code Marketplace only supports major.minor.patch format (no semver pre-release tags)
-      # Use odd minor version (e.g., 0.1.x) for pre-releases as recommended by VS Code
-      # Generate unique patch version using timestamp (YYMMDDHHMM) to avoid version conflicts
-      - name: Update version for prerelease
+      # The --pre-release flag handles marking this as a prerelease in the marketplace
+      - name: Get version
         id: version
         shell: bash
         run: |
-          # Get major.minor from package.json
-          MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
-          MINOR=$(node -p "require('./package.json').version.split('.')[1]")
-          # Use timestamp as patch version for uniqueness
-          # Format: YYMMDDHHMM (e.g., 2512221304 for Dec 22, 2025 at 13:04)
-          PATCH=$(date -u +"%y%m%d%H%M")
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          # Update package.json version
-          npm version "${NEW_VERSION}" --no-git-tag-version --allow-same-version
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "Updated version to $NEW_VERSION"
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version $VERSION"
 
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
