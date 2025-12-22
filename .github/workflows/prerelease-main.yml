@@ -52,23 +52,23 @@ jobs:
         run: xvfb-run -a pnpm test
 
       # Get version from package.json for VS Code Marketplace prerelease
-      # For pre-releases, use a 4-part version: MAJOR.MINOR.YYYYMMDD.HHMMSS
-      # This ensures pre-release versions are always distinct and monotonically increasing.
-      # Each part fits within int32 limit: YYYYMMDD (max ~20991231) and HHMMSS (max 235959)
+      # For pre-releases, use MAJOR.MINOR.PATCH_SUFFIX format where SUFFIX is timestamp % 10^7.
+      # This ensures pre-release versions are always distinct and fit within int32 limit.
+      # Example: 0.1.2 -> 0.1.21234567 (patch 2 + 7-digit suffix)
       - name: Get and adjust version for prerelease
         id: version
         shell: bash
         run: |
           MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
           MINOR=$(node -p "require('./package.json').version.split('.')[1]")
-          # Use YYYYMMDD and HHMMSS as separate version parts (both fit in int32)
-          DATEPART=$(date -u +"%Y%m%d")
-          TIMEPART=$(date -u +"%H%M%S")
-          VERSION="${MAJOR}.${MINOR}.${DATEPART}.${TIMEPART}"
+          PATCH=$(node -p "require('./package.json').version.split('.')[2]")
+          # Use seconds since epoch % 10^7 as suffix (always 7 digits with leading zeros)
+          SUFFIX=$(printf "%07d" $(($(date +%s) % 10000000)))
+          VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
           # Update package.json with the new version
           npm version "${VERSION}" --no-git-tag-version --allow-same-version
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using pre-release version $VERSION"
+          echo "Using pre-release version $VERSION (patch: $PATCH, suffix: $SUFFIX)"
 
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
