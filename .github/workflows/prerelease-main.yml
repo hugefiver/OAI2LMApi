@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Run lint and tests before packaging (Fix 2)
+      # Run lint and tests before packaging
       - name: Run ESLint
         run: pnpm run lint
 
@@ -51,20 +51,33 @@ jobs:
       - name: Run tests
         run: xvfb-run -a pnpm test
 
-      # Add timestamp suffix to version for VS Code Marketplace prerelease (Fix 4)
-      - name: Update version with prerelease suffix
+      # Get version from package.json for VS Code Marketplace prerelease
+      # VS Code Marketplace requires distinct versions for pre-releases and regular releases.
+      # Versioning strategy:
+      # - Pre-releases use EVEN minor versions (e.g., 0.2.x, 0.4.x)
+      # - Regular releases use ODD minor versions (e.g., 0.1.x, 0.3.x)
+      # If minor version is odd, auto-increment to make it even for pre-releases.
+      # The --pre-release flag handles marking this as a prerelease in the marketplace.
+      - name: Get and adjust version for prerelease
         id: version
         shell: bash
         run: |
-          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
-          ORIGINAL_VERSION=$(node -p "require('./package.json').version")
-          NEW_VERSION="${ORIGINAL_VERSION}-pre-${TIMESTAMP}"
-          # Update package.json version using npm version (more reliable)
-          npm version "${NEW_VERSION}" --no-git-tag-version --allow-same-version
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "Updated version to $NEW_VERSION"
+          MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
+          MINOR=$(node -p "require('./package.json').version.split('.')[1]")
+          PATCH=$(node -p "require('./package.json').version.split('.')[2]")
+          # If minor version is odd, increment it by 1 to make it even
+          if [ $((MINOR % 2)) -eq 1 ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            echo "Minor version was odd, incremented to $MINOR for pre-release"
+          fi
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          # Update package.json with the new version
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using pre-release version $VERSION (minor version $MINOR is even ✓)"
 
-      # Package with --pre-release flag (Fix 1)
+      # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
         run: pnpm exec vsce package --no-dependencies --pre-release
 
@@ -83,7 +96,7 @@ jobs:
           extensionFile: ${{ steps.vsix.outputs.filename }}
           preRelease: true
 
-      # Clean up existing release and tag before recreating (Fix 3)
+      # Clean up existing release and tag before recreating
       - name: Delete existing prerelease and tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

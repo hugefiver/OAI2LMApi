@@ -41,6 +41,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Validate version for VS Code Marketplace regular release
+      # Versioning strategy:
+      # - Pre-releases use EVEN minor versions (e.g., 0.2.x, 0.4.x)
+      # - Regular releases use ODD minor versions (e.g., 0.1.x, 0.3.x)
+      # This ensures pre-release and regular release versions are always distinct.
+      - name: Validate version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          MINOR=$(node -p "require('./package.json').version.split('.')[1]")
+          # Validate that minor version is odd (for regular releases)
+          if [ $((MINOR % 2)) -eq 0 ]; then
+            echo "::error::Regular release versions must use ODD minor version (e.g., 0.1.x, 0.3.x). Current version $VERSION has even minor version."
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using release version $VERSION (minor version $MINOR is odd ✓)"
+
       - name: Package extension
         run: pnpm run package
 
