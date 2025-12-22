@@ -52,9 +52,9 @@ jobs:
         run: xvfb-run -a pnpm test
 
       # Get version from package.json for VS Code Marketplace prerelease
-      # For pre-releases, use MAJOR.MINOR.PATCH_SUFFIX format where SUFFIX is timestamp % 10^7.
+      # For pre-releases, use MAJOR.MINOR.X format where X is PATCH concatenated with a 7-digit SUFFIX (timestamp % 10^7).
       # This ensures pre-release versions are always distinct and fit within int32 limit.
-      # Example: 0.1.2 -> 0.1.21234567 (patch 2 + 7-digit suffix)
+      # Example: 0.1.2 -> 0.1.21234567 (third component 21234567 = patch 2 + 7-digit suffix)
       - name: Get and adjust version for prerelease
         id: version
         shell: bash
