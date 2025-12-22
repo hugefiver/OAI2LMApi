@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Run lint and tests before packaging (Fix 2)
+      # Run lint and tests before packaging
       - name: Run ESLint
         run: pnpm run lint
 
@@ -51,20 +51,27 @@ jobs:
       - name: Run tests
         run: xvfb-run -a pnpm test
 
-      # Add timestamp suffix to version for VS Code Marketplace prerelease (Fix 4)
-      - name: Update version with prerelease suffix
+      # Update version for VS Code Marketplace prerelease
+      # VS Code Marketplace only supports major.minor.patch format (no semver pre-release tags)
+      # Use odd minor version (e.g., 0.1.x) for pre-releases as recommended by VS Code
+      # Generate unique patch version using timestamp (YYMMDDHHMM) to avoid version conflicts
+      - name: Update version for prerelease
         id: version
         shell: bash
         run: |
-          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
-          ORIGINAL_VERSION=$(node -p "require('./package.json').version")
-          NEW_VERSION="${ORIGINAL_VERSION}-pre-${TIMESTAMP}"
-          # Update package.json version using npm version (more reliable)
+          # Get major.minor from package.json
+          MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
+          MINOR=$(node -p "require('./package.json').version.split('.')[1]")
+          # Use timestamp as patch version for uniqueness
+          # Format: YYMMDDHHMM (e.g., 2512221304 for Dec 22, 2025 at 13:04)
+          PATCH=$(date -u +"%y%m%d%H%M")
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          # Update package.json version
           npm version "${NEW_VERSION}" --no-git-tag-version --allow-same-version
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Updated version to $NEW_VERSION"
 
-      # Package with --pre-release flag (Fix 1)
+      # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
         run: pnpm exec vsce package --no-dependencies --pre-release
 
@@ -83,7 +90,7 @@ jobs:
           extensionFile: ${{ steps.vsix.outputs.filename }}
           preRelease: true
 
-      # Clean up existing release and tag before recreating (Fix 3)
+      # Clean up existing release and tag before recreating
       - name: Delete existing prerelease and tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
