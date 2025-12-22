@@ -224,101 +224,50 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         progress: vscode.Progress<vscode.LanguageModelResponsePart>,
         token: vscode.CancellationToken
     ): Promise<void> {
-        console.log(`OAI2LMApi: provideLanguageModelChatResponse called for model: ${model.modelId}`);
-        console.log(`OAI2LMApi: Received ${messages.length} messages`);
-
         if (!this.client) {
-            console.error('OAI2LMApi: OpenAI client not initialized');
             throw new Error('OpenAI client not initialized');
         }
 
         // Convert VSCode messages to OpenAI format
-        const chatMessages: ChatMessage[] = messages.map((msg, index) => {
+        const chatMessages: ChatMessage[] = messages.map(msg => {
             let content = '';
-            
-            console.log(`OAI2LMApi: Processing message ${index}, role: ${msg.role}, content type: ${typeof msg.content}`);
             
             if (typeof msg.content === 'string') {
                 // Plain string content
                 content = msg.content;
-                console.log(`OAI2LMApi: Message ${index} is plain string, length: ${content.length}`);
             } else if (Array.isArray(msg.content)) {
                 // Array of content parts
-                console.log(`OAI2LMApi: Message ${index} is array with ${msg.content.length} parts`);
-                content = msg.content.map((part, partIndex) => {
-                    const extracted = this.extractTextFromPart(part);
-                    console.log(`OAI2LMApi: Message ${index} part ${partIndex}: extracted ${extracted.length} chars`);
-                    return extracted;
-                }).join('');
+                content = msg.content.map(part => this.extractTextFromPart(part)).join('');
             } else if (msg.content && typeof msg.content === 'object') {
                 // Single content part object (e.g., LanguageModelTextPart)
-                console.log(`OAI2LMApi: Message ${index} is single object`);
                 content = this.extractTextFromPart(msg.content);
-            } else {
-                console.warn(`OAI2LMApi: Message ${index} has unknown content type: ${msg.content}`);
-            }
-
-            const mappedRole = this.mapRole(msg.role);
-            console.log(`OAI2LMApi: Message ${index} final - role: ${mappedRole}, content length: ${content.length}`);
-            
-            if (content.length === 0) {
-                console.warn(`OAI2LMApi: WARNING - Message ${index} has empty content!`);
             }
 
             return {
-                role: mappedRole,
+                role: this.mapRole(msg.role),
                 content
             };
-        });
-
-        // Log the final messages being sent
-        console.log(`OAI2LMApi: Sending ${chatMessages.length} messages to API`);
-        chatMessages.forEach((msg, i) => {
-            console.log(`OAI2LMApi: Final message ${i}: role=${msg.role}, content preview: "${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}"`);
         });
 
         // Create abort controller from cancellation token
         const abortController = new AbortController();
         if (token) {
             token.onCancellationRequested(() => {
-                console.log('OAI2LMApi: Cancellation requested');
                 abortController.abort();
             });
         }
 
-        // Track chunks received
-        let chunkCount = 0;
-        let totalContentLength = 0;
-
-        try {
-            // Stream the response
-            const result = await this.client.streamChatCompletion(
-                chatMessages,
-                model.modelId,
-                {
-                    onChunk: (chunk) => {
-                        chunkCount++;
-                        totalContentLength += chunk.length;
-                        console.log(`OAI2LMApi: Received chunk ${chunkCount}, length: ${chunk.length}`);
-                        progress.report(new vscode.LanguageModelTextPart(chunk));
-                    },
-                    signal: abortController.signal
-                }
-            );
-
-            console.log(`OAI2LMApi: Stream completed. Total chunks: ${chunkCount}, total content length: ${totalContentLength}`);
-            console.log(`OAI2LMApi: streamChatCompletion returned: "${result.substring(0, 100)}${result.length > 100 ? '...' : ''}"`);
-
-            if (chunkCount === 0) {
-                console.error('OAI2LMApi: ERROR - No chunks were received from the API!');
+        // Stream the response
+        await this.client.streamChatCompletion(
+            chatMessages,
+            model.modelId,
+            {
+                onChunk: (chunk) => {
+                    progress.report(new vscode.LanguageModelTextPart(chunk));
+                },
+                signal: abortController.signal
             }
-            if (totalContentLength === 0) {
-                console.error('OAI2LMApi: ERROR - Total content length is 0!');
-            }
-        } catch (error) {
-            console.error('OAI2LMApi: Error during streaming:', error);
-            throw error;
-        }
+        );
     }
 
     async provideTokenCount(
@@ -364,7 +313,12 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             return '';
         }
         
-        // LanguageModelTextPart has a 'text' property
+        // LanguageModelTextPart uses 'value' property in VSCode's API
+        if ('value' in part && typeof (part as { value: unknown }).value === 'string') {
+            return (part as { value: string }).value;
+        }
+        
+        // Some implementations may use 'text' property
         if ('text' in part && typeof (part as { text: unknown }).text === 'string') {
             return (part as { text: string }).text;
         }
