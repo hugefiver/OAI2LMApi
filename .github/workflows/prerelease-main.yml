@@ -52,8 +52,9 @@ jobs:
         run: xvfb-run -a pnpm test
 
       # Get version from package.json for VS Code Marketplace prerelease
-      # For pre-releases, append a timestamp (yyyymmddhhmmss) to the patch version
-      # This ensures pre-release versions are always distinct from regular releases.
+      # For pre-releases, use MAJOR.MINOR.X format where X is PATCH concatenated with a 7-digit SUFFIX (timestamp % 10^7).
+      # This ensures pre-release versions are always distinct and fit within int32 limit.
+      # Example: 0.1.2 -> 0.1.21234567 (third component 21234567 = patch 2 + 7-digit suffix)
       - name: Get and adjust version for prerelease
         id: version
         shell: bash
@@ -61,13 +62,13 @@ jobs:
           MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
           MINOR=$(node -p "require('./package.json').version.split('.')[1]")
           PATCH=$(node -p "require('./package.json').version.split('.')[2]")
-          # Generate timestamp suffix (yyyymmddhhmmss)
-          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
-          VERSION="${MAJOR}.${MINOR}.${PATCH}${TIMESTAMP}"
+          # Use seconds since epoch % 10^7 as suffix (always 7 digits with leading zeros)
+          SUFFIX=$(printf "%07d" $(($(date +%s) % 10000000)))
+          VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
           # Update package.json with the new version
           npm version "${VERSION}" --no-git-tag-version --allow-same-version
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using pre-release version $VERSION (patch $PATCH + timestamp $TIMESTAMP)"
+          echo "Using pre-release version $VERSION (patch: $PATCH, suffix: $SUFFIX)"
 
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
