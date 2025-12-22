@@ -137,7 +137,14 @@ export class OpenAIClient {
                     break;
                 }
 
-                const content = chunk.choices[0]?.delta?.content || '';
+                const delta = chunk.choices[0]?.delta;
+                
+                // TODO: Investigate how to properly transmit chain-of-thought (reasoning_content)
+                // via VSCode LM API. Some models (e.g., DeepSeek) return reasoning in a separate
+                // `reasoning_content` field, but it's unclear how VSCode LM API handles this.
+                // For now, we only process the standard `content` field.
+                
+                const content = delta?.content || '';
                 if (content) {
                     fullContent += content;
                     streamOptions.onChunk?.(content);
