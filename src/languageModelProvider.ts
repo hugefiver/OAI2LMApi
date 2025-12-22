@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, ToolCallChunk } from './openaiClient';
-import { API_KEY_SECRET_KEY } from './constants';
+import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
@@ -42,6 +42,13 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const disposable = vscode.lm.registerLanguageModelChatProvider('oai2lmapi', this);
         this.disposables.push(disposable);
 
+        // Try to load cached models first
+        const cachedModels = this.context.globalState.get<APIModelInfo[]>(CACHED_MODELS_KEY);
+        if (cachedModels && cachedModels.length > 0) {
+            console.log(`OAI2LMApi: Loading ${cachedModels.length} models from cache`);
+            this.updateModelList(cachedModels);
+        }
+
         // Auto-load models if enabled
         const autoLoadModels = config.get<boolean>('autoLoadModels', true);
         if (autoLoadModels) {
@@ -49,10 +56,47 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             await this.loadModels();
         } else {
             console.warn('OAI2LMApi: autoLoadModels is disabled; no models have been loaded automatically.');
-            vscode.window.showWarningMessage(
-                'OAI2LMApi: autoLoadModels is disabled. No models have been loaded automatically; enable autoLoadModels in settings or manually refresh models to use this provider.'
-            );
+            if (!cachedModels || cachedModels.length === 0) {
+                vscode.window.showWarningMessage(
+                    'OAI2LMApi: autoLoadModels is disabled. No models have been loaded automatically; enable autoLoadModels in settings or manually refresh models to use this provider.'
+                );
+            }
         }
+    }
+
+    private updateModelList(apiModels: APIModelInfo[]) {
+        const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const showModelsWithoutToolCalling = config.get<boolean>('showModelsWithoutToolCalling', false);
+
+        // Clear existing models
+        this.modelList = [];
+
+        // Filter and add models
+        let addedCount = 0;
+        let filteredCount = 0;
+        for (const apiModel of apiModels) {
+            // Filter out non-LLM models (embedding, rerank, image, audio, etc.)
+            if (!isLLMModel(apiModel.id)) {
+                filteredCount++;
+                console.log(`OAI2LMApi: Filtered out non-LLM model: ${apiModel.id}`);
+                continue;
+            }
+
+            // Filter out models without tool calling support unless setting is enabled
+            if (!showModelsWithoutToolCalling && !this.modelSupportsToolCalling(apiModel)) {
+                filteredCount++;
+                console.log(`OAI2LMApi: Filtered out model without tool calling: ${apiModel.id}`);
+                continue;
+            }
+
+            this.addModel(apiModel);
+            addedCount++;
+        }
+
+        console.log(`OAI2LMApi: Added ${addedCount} models, filtered ${filteredCount} models`);
+
+        // Notify listeners that models changed
+        this._onDidChangeLanguageModelChatInformation.fire();
     }
 
     async loadModels() {
@@ -61,42 +105,14 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             return;
         }
 
-        const config = vscode.workspace.getConfiguration('oai2lmapi');
-        const showModelsWithoutToolCalling = config.get<boolean>('showModelsWithoutToolCalling', false);
-
         try {
             const apiModels = await this.client.listModels();
             console.log(`OAI2LMApi: Loaded ${apiModels.length} models from API`);
 
-            // Clear existing models
-            this.modelList = [];
+            this.updateModelList(apiModels);
 
-            // Filter and add models
-            let addedCount = 0;
-            let filteredCount = 0;
-            for (const apiModel of apiModels) {
-                // Filter out non-LLM models (embedding, rerank, image, audio, etc.)
-                if (!isLLMModel(apiModel.id)) {
-                    filteredCount++;
-                    console.log(`OAI2LMApi: Filtered out non-LLM model: ${apiModel.id}`);
-                    continue;
-                }
-
-                // Filter out models without tool calling support unless setting is enabled
-                if (!showModelsWithoutToolCalling && !this.modelSupportsToolCalling(apiModel)) {
-                    filteredCount++;
-                    console.log(`OAI2LMApi: Filtered out model without tool calling: ${apiModel.id}`);
-                    continue;
-                }
-
-                this.addModel(apiModel);
-                addedCount++;
-            }
-
-            console.log(`OAI2LMApi: Added ${addedCount} models, filtered ${filteredCount} models`);
-
-            // Notify listeners that models changed
-            this._onDidChangeLanguageModelChatInformation.fire();
+            // Cache the models
+            await this.context.globalState.update(CACHED_MODELS_KEY, apiModels);
         } catch (error) {
             console.error('OAI2LMApi: Failed to load models:', error);
             vscode.window.showErrorMessage(`OAI2LMApi: Failed to load models from API. Please check your endpoint and API key. Error: ${error}`);
