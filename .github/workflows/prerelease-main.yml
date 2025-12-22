@@ -56,18 +56,24 @@ jobs:
       # Versioning strategy:
       # - Pre-releases use EVEN minor versions (e.g., 0.2.x, 0.4.x)
       # - Regular releases use ODD minor versions (e.g., 0.1.x, 0.3.x)
+      # If minor version is odd, auto-increment to make it even for pre-releases.
       # The --pre-release flag handles marking this as a prerelease in the marketplace.
-      - name: Get and validate version
+      - name: Get and adjust version for prerelease
         id: version
         shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
           MINOR=$(node -p "require('./package.json').version.split('.')[1]")
-          # Validate that minor version is even (for pre-releases)
+          PATCH=$(node -p "require('./package.json').version.split('.')[2]")
+          # If minor version is odd, increment it by 1 to make it even
           if [ $((MINOR % 2)) -eq 1 ]; then
-            echo "::error::Pre-release versions must use EVEN minor version (e.g., 0.2.x, 0.4.x). Current version $VERSION has odd minor version."
-            exit 1
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            echo "Minor version was odd, incremented to $MINOR for pre-release"
           fi
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          # Update package.json with the new version
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using pre-release version $VERSION (minor version $MINOR is even ✓)"
 
