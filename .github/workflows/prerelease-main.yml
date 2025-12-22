@@ -83,23 +83,27 @@ jobs:
           extensionFile: ${{ steps.vsix.outputs.filename }}
           preRelease: true
 
-      - name: Update prerelease-main tag
+      # Clean up existing release and tag before recreating (Fix 3)
+      - name: Delete existing prerelease and tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete the release first (if it exists) - this also cleans up assets
+          if gh release view prerelease-main >/dev/null 2>&1; then
+            echo "Deleting existing release..."
+            gh release delete prerelease-main --yes --cleanup-tag
+          fi
+          # Delete remote tag if it still exists (handles case where release doesn't exist but tag does)
+          git push origin :refs/tags/prerelease-main 2>/dev/null || true
+
+      - name: Create and push prerelease-main tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f prerelease-main
-          git push -f origin prerelease-main
-
-      # Delete existing release before creating new one (Fix 3)
-      - name: Delete existing prerelease
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view prerelease-main >/dev/null 2>&1; then
-            gh release delete prerelease-main --yes
-          fi
+          git push origin prerelease-main
 
       - name: Create GitHub Prerelease
         uses: softprops/action-gh-release@v2
