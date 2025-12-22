@@ -52,15 +52,24 @@ jobs:
         run: xvfb-run -a pnpm test
 
       # Get version from package.json for VS Code Marketplace prerelease
-      # VS Code Marketplace only supports major.minor.patch format (no semver pre-release tags)
-      # The --pre-release flag handles marking this as a prerelease in the marketplace
-      - name: Get version
+      # VS Code Marketplace requires distinct versions for pre-releases and regular releases.
+      # Versioning strategy (per VS Code recommendation):
+      # - Pre-releases use ODD minor versions (e.g., 0.1.x, 0.3.x)
+      # - Regular releases use EVEN minor versions (e.g., 0.2.x, 0.4.x)
+      # The --pre-release flag handles marking this as a prerelease in the marketplace.
+      - name: Get and validate version
         id: version
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          MINOR=$(node -p "require('./package.json').version.split('.')[1]")
+          # Validate that minor version is odd (for pre-releases)
+          if [ $((MINOR % 2)) -eq 0 ]; then
+            echo "::error::Pre-release versions must use ODD minor version (e.g., 0.1.x, 0.3.x). Current version $VERSION has even minor version."
+            exit 1
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using version $VERSION"
+          echo "Using pre-release version $VERSION (minor version $MINOR is odd ✓)"
 
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
