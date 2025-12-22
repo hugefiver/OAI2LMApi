@@ -124,7 +124,14 @@ export class OpenAIClient {
             content: msg.content
         }));
 
+        console.log(`OAI2LMApi: streamChatCompletion called for model: ${model}`);
+        console.log(`OAI2LMApi: Sending ${openaiMessages.length} messages`);
+        openaiMessages.forEach((msg, i) => {
+            console.log(`OAI2LMApi: Message ${i}: role=${msg.role}, content length=${msg.content.length}`);
+        });
+
         try {
+            console.log('OAI2LMApi: Creating streaming chat completion...');
             const stream = await this.client.chat.completions.create({
                 model: model,
                 messages: openaiMessages,
@@ -132,26 +139,42 @@ export class OpenAIClient {
                 temperature: 0.7
             });
 
+            console.log('OAI2LMApi: Stream created, starting to consume chunks...');
+            let chunkIndex = 0;
+
             for await (const chunk of stream) {
                 if (streamOptions.signal?.aborted) {
+                    console.log('OAI2LMApi: Stream aborted by signal');
                     break;
                 }
+
+                chunkIndex++;
+                // Log the raw chunk structure for debugging
+                console.log(`OAI2LMApi: Chunk ${chunkIndex} raw:`, JSON.stringify(chunk, null, 2));
 
                 const content = chunk.choices[0]?.delta?.content || '';
                 if (content) {
                     fullContent += content;
+                    console.log(`OAI2LMApi: Chunk ${chunkIndex} content: "${content}"`);
                     streamOptions.onChunk?.(content);
+                } else {
+                    console.log(`OAI2LMApi: Chunk ${chunkIndex} has no content (delta: ${JSON.stringify(chunk.choices[0]?.delta)})`);
                 }
             }
 
+            console.log(`OAI2LMApi: Stream finished. Total chunks: ${chunkIndex}, total content length: ${fullContent.length}`);
             return fullContent;
         } catch (error: any) {
+            console.error('OAI2LMApi: Error in streamChatCompletion:', error);
+            console.error('OAI2LMApi: Error name:', error?.name);
+            console.error('OAI2LMApi: Error message:', error?.message);
+            console.error('OAI2LMApi: Error stack:', error?.stack);
+            
             if (error.name === 'AbortError' || streamOptions.signal?.aborted) {
-                console.log('Stream aborted by user');
+                console.log('OAI2LMApi: Stream aborted by user');
                 return fullContent;
             }
-            console.error('Failed to stream chat completion:', error);
-            throw new Error(`Failed to stream chat completion: ${error}`);
+            throw new Error(`Failed to stream chat completion: ${error?.message || error}`);
         }
     }
 
