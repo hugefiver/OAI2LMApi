@@ -2,7 +2,7 @@
   "name": "oai2lmapi",
   "displayName": "OpenAI to Language Model API Bridge",
   "description": "Connect OpenAI-compatible APIs to VSCode's Language Model API for Copilot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "oai2lmapi",
   "repository": {
     "type": "git",
