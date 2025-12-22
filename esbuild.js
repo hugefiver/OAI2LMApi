@@ -16,6 +16,10 @@ async function main() {
         outfile: 'out/extension.js',
         external: ['vscode'],
         logLevel: 'info',
+        // Size optimization options
+        treeShaking: true,
+        legalComments: 'none',
+        ...(production && { drop: ['console', 'debugger'] }),
     });
     if (watch) {
         await ctx.watch();
