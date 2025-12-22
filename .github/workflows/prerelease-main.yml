@@ -1,0 +1,85 @@
+name: Prerelease Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for creating/updating tags and releases
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Package extension
+        run: pnpm run package
+
+      - name: Get VSIX filename
+        id: vsix
+        shell: bash
+        run: |
+          VSIX_FILE=$(ls *.vsix)
+          echo "filename=$VSIX_FILE" >> $GITHUB_OUTPUT
+
+      - name: Publish to VS Code Marketplace (Preview)
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.VSCE_PAT }}
+          registryUrl: https://marketplace.visualstudio.com
+          extensionFile: ${{ steps.vsix.outputs.filename }}
+          preRelease: true
+
+      - name: Update prerelease-main tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f prerelease-main
+          git push -f origin prerelease-main
+
+      - name: Create/Update GitHub Prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: prerelease-main
+          files: ${{ steps.vsix.outputs.filename }}
+          draft: false
+          prerelease: true
+          name: Prerelease (main)
+          body: |
+            This is an automated prerelease build from the main branch.
+            
+            **Commit:** ${{ github.sha }}
+            **Date:** ${{ github.event.head_commit.timestamp }}
+            
+            This release is automatically updated when the main branch changes.
