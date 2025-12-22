@@ -35,20 +35,65 @@ function normalizeApiEndpoint(endpoint: string): string {
     return endpoint.replace(/\/+$/, '');
 }
 
+/**
+ * Represents a tool call made by the model
+ */
+export interface ToolCall {
+    id: string;
+    type: 'function';
+    function: {
+        name: string;
+        arguments: string;
+    };
+}
+
+/**
+ * Represents a tool definition for the OpenAI API
+ */
+export interface ToolDefinition {
+    type: 'function';
+    function: {
+        name: string;
+        description?: string;
+        parameters?: Record<string, unknown>;
+    };
+}
+
+/**
+ * Tool choice options for the OpenAI API
+ */
+export type ToolChoice = 'none' | 'auto' | 'required' | { type: 'function'; function: { name: string } };
+
 export interface ChatMessage {
-    role: 'system' | 'user' | 'assistant';
-    content: string;
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string | null;
+    tool_calls?: ToolCall[];
+    tool_call_id?: string;
 }
 
 // Type-safe message format for OpenAI API
 interface OpenAIChatMessage {
-    role: 'system' | 'user' | 'assistant';
-    content: string;
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string | null;
+    tool_calls?: ToolCall[];
+    tool_call_id?: string;
+}
+
+/**
+ * Represents a tool call chunk received during streaming
+ */
+export interface ToolCallChunk {
+    id: string;
+    name: string;
+    arguments: string;
 }
 
 export interface StreamOptions {
     onChunk?: (chunk: string) => void;
+    onToolCall?: (toolCall: ToolCallChunk) => void;
     signal?: AbortSignal;
+    tools?: ToolDefinition[];
+    toolChoice?: ToolChoice;
 }
 
 export class OpenAIClient {
@@ -90,10 +135,7 @@ export class OpenAIClient {
         }
     ): Promise<string> {
         // Convert to OpenAI message format
-        const openaiMessages: OpenAIChatMessage[] = messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
+        const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
 
         try {
             const response = await this.client.chat.completions.create({
@@ -119,18 +161,29 @@ export class OpenAIClient {
         let fullContent = '';
 
         // Convert to OpenAI message format
-        const openaiMessages: OpenAIChatMessage[] = messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
+        const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
 
         try {
-            const stream = await this.client.chat.completions.create({
+            // Build request options
+            const requestOptions: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
                 model: model,
                 messages: openaiMessages,
                 stream: true,
                 temperature: 0.7
-            });
+            };
+
+            // Add tools if provided
+            if (streamOptions.tools && streamOptions.tools.length > 0) {
+                requestOptions.tools = streamOptions.tools;
+                if (streamOptions.toolChoice) {
+                    requestOptions.tool_choice = streamOptions.toolChoice;
+                }
+            }
+
+            const stream = await this.client.chat.completions.create(requestOptions);
+
+            // Track tool calls being assembled from streamed chunks
+            const toolCallsInProgress: Map<number, { id: string; name: string; arguments: string }> = new Map();
 
             for await (const chunk of stream) {
                 if (streamOptions.signal?.aborted) {
@@ -144,10 +197,47 @@ export class OpenAIClient {
                 // `reasoning_content` field, but it's unclear how VSCode LM API handles this.
                 // For now, we only process the standard `content` field.
                 
+                // Handle text content
                 const content = delta?.content || '';
                 if (content) {
                     fullContent += content;
                     streamOptions.onChunk?.(content);
+                }
+
+                // Handle tool calls in streaming response
+                if (delta?.tool_calls && streamOptions.onToolCall) {
+                    for (const toolCallDelta of delta.tool_calls) {
+                        const index = toolCallDelta.index;
+                        
+                        // Get or create the tool call being assembled
+                        let toolCall = toolCallsInProgress.get(index);
+                        if (!toolCall) {
+                            toolCall = {
+                                id: toolCallDelta.id || '',
+                                name: toolCallDelta.function?.name || '',
+                                arguments: ''
+                            };
+                            toolCallsInProgress.set(index, toolCall);
+                        }
+
+                        // Update with new data from this chunk
+                        if (toolCallDelta.id) {
+                            toolCall.id = toolCallDelta.id;
+                        }
+                        if (toolCallDelta.function?.name) {
+                            toolCall.name = toolCallDelta.function.name;
+                        }
+                        if (toolCallDelta.function?.arguments) {
+                            toolCall.arguments += toolCallDelta.function.arguments;
+                        }
+
+                        // Report the current state of the tool call
+                        streamOptions.onToolCall({
+                            id: toolCall.id,
+                            name: toolCall.name,
+                            arguments: toolCall.arguments
+                        });
+                    }
                 }
             }
 
@@ -170,6 +260,60 @@ export class OpenAIClient {
             apiKey: config.apiKey,
             baseURL: normalizedEndpoint,
             dangerouslyAllowBrowser: false
+        });
+    }
+
+    /**
+     * Converts ChatMessage array to OpenAI ChatCompletionMessageParam format.
+     * Handles different message roles with their specific type requirements.
+     */
+    private convertMessagesToOpenAIFormat(messages: ChatMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+        return messages.map(msg => {
+            switch (msg.role) {
+                case 'system':
+                    return {
+                        role: 'system' as const,
+                        content: msg.content || ''
+                    };
+                case 'user':
+                    return {
+                        role: 'user' as const,
+                        content: msg.content || ''
+                    };
+                case 'assistant':
+                    // Assistant messages can have tool_calls
+                    if (msg.tool_calls && msg.tool_calls.length > 0) {
+                        return {
+                            role: 'assistant' as const,
+                            content: msg.content,
+                            tool_calls: msg.tool_calls.map(tc => ({
+                                id: tc.id,
+                                type: 'function' as const,
+                                function: {
+                                    name: tc.function.name,
+                                    arguments: tc.function.arguments
+                                }
+                            }))
+                        };
+                    }
+                    return {
+                        role: 'assistant' as const,
+                        content: msg.content || ''
+                    };
+                case 'tool':
+                    // Tool messages must have content (not null) and tool_call_id
+                    return {
+                        role: 'tool' as const,
+                        content: msg.content || '',
+                        tool_call_id: msg.tool_call_id || ''
+                    };
+                default:
+                    // Fallback to user role
+                    return {
+                        role: 'user' as const,
+                        content: msg.content || ''
+                    };
+            }
         });
     }
 }
