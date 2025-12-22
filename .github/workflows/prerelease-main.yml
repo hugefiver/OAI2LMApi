@@ -41,8 +41,32 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Run lint and tests before packaging (Fix 2)
+      - name: Run ESLint
+        run: pnpm run lint
+
+      - name: Compile TypeScript
+        run: pnpm run compile
+
+      - name: Run tests
+        run: xvfb-run -a pnpm test
+
+      # Add timestamp suffix to version for VS Code Marketplace prerelease (Fix 4)
+      - name: Update version with prerelease suffix
+        id: version
+        shell: bash
+        run: |
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          ORIGINAL_VERSION=$(node -p "require('./package.json').version")
+          NEW_VERSION="${ORIGINAL_VERSION}-pre-${TIMESTAMP}"
+          # Update package.json version using npm version (more reliable)
+          npm version "${NEW_VERSION}" --no-git-tag-version --allow-same-version
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Updated version to $NEW_VERSION"
+
+      # Package with --pre-release flag (Fix 1)
       - name: Package extension
-        run: pnpm run package
+        run: pnpm exec vsce package --no-dependencies --pre-release
 
       - name: Get VSIX filename
         id: vsix
@@ -68,7 +92,16 @@ jobs:
           git tag -f prerelease-main
           git push -f origin prerelease-main
 
-      - name: Create/Update GitHub Prerelease
+      # Delete existing release before creating new one (Fix 3)
+      - name: Delete existing prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view prerelease-main >/dev/null 2>&1; then
+            gh release delete prerelease-main --yes
+          fi
+
+      - name: Create GitHub Prerelease
         uses: softprops/action-gh-release@v2
         with:
           tag_name: prerelease-main
@@ -79,6 +112,7 @@ jobs:
           body: |
             This is an automated prerelease build from the main branch.
             
+            **Version:** ${{ steps.version.outputs.version }}
             **Commit:** ${{ github.sha }}
             **Date:** ${{ github.event.head_commit.timestamp }}
             
