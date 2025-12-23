@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, ToolCallChunk } from './openaiClient';
+import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, CompletedToolCall } from './openaiClient';
 import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
 
@@ -259,9 +259,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             });
         }
 
-        // Track tool calls for reporting complete tool calls
-        const toolCallsInProgress: Map<string, { id: string; name: string; arguments: string }> = new Map();
-
         // Stream the response
         await this.client.streamChatCompletion(
             chatMessages,
@@ -270,25 +267,9 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 onChunk: (chunk) => {
                     progress.report(new vscode.LanguageModelTextPart(chunk));
                 },
-                onToolCall: (toolCallChunk: ToolCallChunk) => {
-                    // Track and report tool calls
-                    const existing = toolCallsInProgress.get(toolCallChunk.id);
-                    if (existing) {
-                        // Update existing tool call with new arguments
-                        existing.arguments = toolCallChunk.arguments;
-                    } else {
-                        // New tool call
-                        toolCallsInProgress.set(toolCallChunk.id, {
-                            id: toolCallChunk.id,
-                            name: toolCallChunk.name,
-                            arguments: toolCallChunk.arguments
-                        });
-                    }
-
-                    // Try to parse and report the tool call
-                    // Only report when we have a complete tool call (valid JSON arguments)
-                    const toolCall = toolCallsInProgress.get(toolCallChunk.id)!;
-                    if (toolCall.name && toolCall.arguments) {
+                onToolCallsComplete: (toolCalls: CompletedToolCall[]) => {
+                    // Report all tool calls at once after streaming is complete
+                    for (const toolCall of toolCalls) {
                         try {
                             const parsedArgs = JSON.parse(toolCall.arguments);
                             progress.report(new vscode.LanguageModelToolCallPart(
@@ -297,7 +278,13 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                                 parsedArgs
                             ));
                         } catch {
-                            // Arguments not yet complete JSON, wait for more chunks
+                            // If arguments are not valid JSON, report with empty object
+                            console.warn(`OAI2LMApi: Failed to parse tool call arguments for ${toolCall.name}: ${toolCall.arguments}`);
+                            progress.report(new vscode.LanguageModelToolCallPart(
+                                toolCall.id,
+                                toolCall.name,
+                                {}
+                            ));
                         }
                     }
                 },
