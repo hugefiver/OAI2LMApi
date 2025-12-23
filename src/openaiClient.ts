@@ -88,9 +88,27 @@ export interface ToolCallChunk {
     arguments: string;
 }
 
+/**
+ * Represents a complete tool call after streaming is finished
+ */
+export interface CompletedToolCall {
+    id: string;
+    name: string;
+    arguments: string;
+}
+
 export interface StreamOptions {
     onChunk?: (chunk: string) => void;
+    /**
+     * @deprecated Use onToolCallsComplete for batch reporting of all tool calls
+     */
     onToolCall?: (toolCall: ToolCallChunk) => void;
+    /**
+     * Called once when streaming is complete with all tool calls from this response.
+     * This is the preferred way to handle tool calls as it ensures all tool calls
+     * are reported together in a single batch.
+     */
+    onToolCallsComplete?: (toolCalls: CompletedToolCall[]) => void;
     signal?: AbortSignal;
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
@@ -205,7 +223,7 @@ export class OpenAIClient {
                 }
 
                 // Handle tool calls in streaming response
-                if (delta?.tool_calls && streamOptions.onToolCall) {
+                if (delta?.tool_calls) {
                     for (const toolCallDelta of delta.tool_calls) {
                         const index = toolCallDelta.index;
                         
@@ -231,13 +249,34 @@ export class OpenAIClient {
                             toolCall.arguments += toolCallDelta.function.arguments;
                         }
 
-                        // Report the current state of the tool call
-                        streamOptions.onToolCall({
+                        // Legacy: Report incremental updates if onToolCall is provided
+                        if (streamOptions.onToolCall) {
+                            streamOptions.onToolCall({
+                                id: toolCall.id,
+                                name: toolCall.name,
+                                arguments: toolCall.arguments
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Report all completed tool calls at once after streaming is done
+            if (streamOptions.onToolCallsComplete && toolCallsInProgress.size > 0) {
+                const completedToolCalls: CompletedToolCall[] = [];
+                // Sort by index to maintain order
+                const sortedEntries = Array.from(toolCallsInProgress.entries()).sort((a, b) => a[0] - b[0]);
+                for (const [, toolCall] of sortedEntries) {
+                    if (toolCall.id && toolCall.name) {
+                        completedToolCalls.push({
                             id: toolCall.id,
                             name: toolCall.name,
                             arguments: toolCall.arguments
                         });
                     }
+                }
+                if (completedToolCalls.length > 0) {
+                    streamOptions.onToolCallsComplete(completedToolCalls);
                 }
             }
 

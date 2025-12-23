@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { OpenAIClient, OpenAIConfig, ChatMessage, ToolCall, ToolDefinition, ToolChoice, ToolCallChunk } from '../../openaiClient';
+import { OpenAIClient, OpenAIConfig, ChatMessage, ToolCall, ToolDefinition, ToolChoice, ToolCallChunk, CompletedToolCall } from '../../openaiClient';
 
 suite('OpenAIClient Unit Tests', () => {
 	
@@ -216,6 +216,57 @@ suite('ToolCallChunk Types Unit Tests', () => {
 		// Verify we can parse complete arguments
 		const parsedArgs = JSON.parse(chunk.arguments);
 		assert.strictEqual(parsedArgs.location, 'Tokyo');
+	});
+});
+
+suite('CompletedToolCall Types Unit Tests', () => {
+
+	test('CompletedToolCall should have correct structure', () => {
+		const completedToolCall: CompletedToolCall = {
+			id: 'call_abc123',
+			name: 'get_weather',
+			arguments: '{"location": "Tokyo"}'
+		};
+
+		assert.strictEqual(completedToolCall.id, 'call_abc123');
+		assert.strictEqual(completedToolCall.name, 'get_weather');
+		assert.strictEqual(completedToolCall.arguments, '{"location": "Tokyo"}');
+	});
+
+	test('Multiple CompletedToolCalls can be batched together', () => {
+		// Simulating multiple tool calls returned in a single response
+		const completedToolCalls: CompletedToolCall[] = [
+			{
+				id: 'call_abc123',
+				name: 'get_weather',
+				arguments: '{"location": "Tokyo"}'
+			},
+			{
+				id: 'call_def456',
+				name: 'get_time',
+				arguments: '{"timezone": "Asia/Tokyo"}'
+			},
+			{
+				id: 'call_ghi789',
+				name: 'get_news',
+				arguments: '{"topic": "technology", "country": "Japan"}'
+			}
+		];
+
+		assert.strictEqual(completedToolCalls.length, 3);
+
+		// Verify all tool calls have complete and parseable arguments
+		for (const toolCall of completedToolCalls) {
+			assert.ok(toolCall.id.startsWith('call_'));
+			assert.ok(toolCall.name);
+			const parsedArgs = JSON.parse(toolCall.arguments);
+			assert.ok(typeof parsedArgs === 'object');
+		}
+
+		// Verify specific tool calls
+		assert.strictEqual(completedToolCalls[0].name, 'get_weather');
+		assert.strictEqual(completedToolCalls[1].name, 'get_time');
+		assert.strictEqual(completedToolCalls[2].name, 'get_news');
 	});
 });
 
