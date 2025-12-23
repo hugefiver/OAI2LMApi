@@ -264,10 +264,13 @@ export class OpenAIClient {
             // Report all completed tool calls at once after streaming is done
             if (streamOptions.onToolCallsComplete && toolCallsInProgress.size > 0) {
                 const completedToolCalls: CompletedToolCall[] = [];
+                const seenIds = new Set<string>();
                 // Sort by index to maintain order
                 const sortedEntries = Array.from(toolCallsInProgress.entries()).sort((a, b) => a[0] - b[0]);
                 for (const [, toolCall] of sortedEntries) {
-                    if (toolCall.id && toolCall.name) {
+                    // Deduplicate by tool call ID to prevent duplicate reporting
+                    if (toolCall.id && toolCall.name && !seenIds.has(toolCall.id)) {
+                        seenIds.add(toolCall.id);
                         completedToolCalls.push({
                             id: toolCall.id,
                             name: toolCall.name,
