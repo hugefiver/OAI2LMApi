@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-12-23
+
+### Added
+
+- Model caching functionality to store loaded models in VSCode's GlobalState
+- Automatic loading of cached models on startup when auto-load is disabled
+- Comprehensive `.github/copilot-instructions.md` documentation for AI agents and developers
+- Prerelease workflow for automatic publishing from main branch to VS Code Marketplace preview channel
+- CI/CD optimizations with pnpm caching for faster builds
+
+### Changed
+
+- Refactored model filtering logic into dedicated `updateModelList` method
+- Improved model loading performance with caching support
+- Enhanced release workflow with proper cleanup of existing releases and tags
+
+### Fixed
+
+- Prerelease versioning strategy to ensure unique version numbers with timestamp suffixes
+- Prerelease workflow to properly delete and recreate releases and tags
+- Added `--pre-release` flag when packaging for VS Code Marketplace preview channel
+
 ## [0.1.1] - 2025-12-22
 
 ### Added
