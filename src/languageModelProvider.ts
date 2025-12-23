@@ -259,9 +259,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             });
         }
 
-        // Track reported tool call IDs to prevent duplicates
-        const reportedToolCallIds = new Set<string>();
-
         // Stream the response
         await this.client.streamChatCompletion(
             chatMessages,
@@ -273,12 +270,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 onToolCallsComplete: (toolCalls: CompletedToolCall[]) => {
                     // Report all tool calls at once after streaming is complete
                     for (const toolCall of toolCalls) {
-                        // Skip if already reported (prevent duplicates)
-                        if (reportedToolCallIds.has(toolCall.id)) {
-                            continue;
-                        }
-                        reportedToolCallIds.add(toolCall.id);
-
                         try {
                             const parsedArgs = JSON.parse(toolCall.arguments);
                             progress.report(new vscode.LanguageModelToolCallPart(
@@ -310,7 +301,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
      */
     private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): ChatMessage[] {
         const result: ChatMessage[] = [];
-        const processedToolCallIds = new Set<string>();
 
         for (const msg of messages) {
             const role = this.mapRole(msg.role);
@@ -323,12 +313,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
                 for (const part of msg.content) {
                     if (this.isToolCallPart(part)) {
-                        // Skip duplicate tool calls in message history
-                        if (processedToolCallIds.has(part.callId)) {
-                            continue;
-                        }
-                        processedToolCallIds.add(part.callId);
-                        
                         // This is a tool call from the assistant
                         toolCalls.push({
                             id: part.callId,
