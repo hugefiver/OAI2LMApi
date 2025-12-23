@@ -8,7 +8,9 @@ A VSCode extension that connects OpenAI-compatible APIs to VSCode's Language Mod
 - ✅ **VSCode Language Model API Integration**: Seamlessly integrates with VSCode's built-in language model features
 - ✅ **Streaming Support**: Real-time streaming responses for better user experience
 - ✅ **Automatic Model Loading**: Fetches available models from the API endpoint on startup
+- ✅ **Model Caching**: Loaded models are cached locally for faster startup times
 - ✅ **Secure API Key Storage**: API keys are stored securely using VSCode's SecretStorage
+- ✅ **Tool Calling Support**: Full support for tool/function calling with improved reliability
 - ✅ **Tool Calling Filter**: Optionally filter models by tool/function calling support
 - ✅ **Easy Configuration**: Simple setup through VSCode settings and commands
 
