@@ -1,5 +1,12 @@
 # OAI2LMApi - OpenAI to Language Model API Bridge
 
+[![Build Status](https://github.com/hugefiver/OAI2LMApi/actions/workflows/build-test-package.yml/badge.svg)](https://github.com/hugefiver/OAI2LMApi/actions/workflows/build-test-package.yml)
+[![Version](https://img.shields.io/visual-studio-marketplace/v/oai2lmapi.oai2lmapi)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/oai2lmapi.oai2lmapi)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/oai2lmapi.oai2lmapi)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-Install-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
+[![License](https://img.shields.io/github/license/hugefiver/OAI2LMApi)](https://github.com/hugefiver/OAI2LMApi/blob/main/LICENSE)
+
 A VSCode extension that connects OpenAI-compatible APIs to VSCode's Language Model API, enabling integration with GitHub Copilot Chat and other AI-powered features in VSCode.
 
 ## Features
