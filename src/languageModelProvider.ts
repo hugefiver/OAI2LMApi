@@ -247,8 +247,8 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         // Convert VSCode messages to OpenAI format
         const chatMessages: ChatMessage[] = this.convertMessages(messages);
 
-        // Convert VSCode tools to OpenAI format
-        const tools = this.convertTools(options.tools);
+        // Convert VSCode tools to OpenAI format (pass modelId for special handling)
+        const tools = this.convertTools(options.tools, model.modelId);
         const toolChoice = this.convertToolMode(options.toolMode);
 
         // Derive a reasonable maxTokens for providers that require an explicit budget.
@@ -325,6 +325,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): ChatMessage[] {
         const result: ChatMessage[] = [];
         const processedToolCallIds = new Set<string>();
+        let toolCallIndex = 0;
 
         for (const msg of messages) {
             const role = this.mapRole(msg.role);
@@ -337,15 +338,18 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
                 for (const part of msg.content) {
                     if (this.isToolCallPart(part)) {
+                        // Ensure we have a valid tool call ID
+                        const toolCallId = this.ensureToolCallId(part.callId, part.name, toolCallIndex++);
+                        
                         // Skip duplicate tool calls in message history
-                        if (processedToolCallIds.has(part.callId)) {
+                        if (processedToolCallIds.has(toolCallId)) {
                             continue;
                         }
-                        processedToolCallIds.add(part.callId);
+                        processedToolCallIds.add(toolCallId);
                         
                         // This is a tool call from the assistant
                         toolCalls.push({
-                            id: part.callId,
+                            id: toolCallId,
                             type: 'function',
                             function: {
                                 name: part.name,
@@ -355,8 +359,9 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     } else if (this.isToolResultPart(part)) {
                         // This is a tool result
                         const resultContent = this.extractToolResultContent(part);
+                        const toolCallId = this.ensureToolCallId(part.callId, 'result', toolCallIndex++);
                         toolResults.push({
-                            tool_call_id: part.callId,
+                            tool_call_id: toolCallId,
                             content: resultContent
                         });
                     } else {
@@ -429,6 +434,17 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     }
 
     /**
+     * Generates a unique tool call ID if one is missing or invalid.
+     */
+    private ensureToolCallId(callId: unknown, name: string, index: number): string {
+        if (typeof callId === 'string' && callId.trim().length > 0) {
+            return callId;
+        }
+        // Generate a unique ID based on tool name and index
+        return `call_${name}_${Date.now()}_${index}`;
+    }
+
+    /**
      * Extracts content from a tool result part
      */
     private extractToolResultContent(part: { callId: string; content: unknown[] }): string {
@@ -440,8 +456,9 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
     /**
      * Converts VSCode tools to OpenAI ToolDefinition format
+     * @param modelId - The model ID, used for special handling of certain models
      */
-    private convertTools(tools: readonly vscode.LanguageModelChatTool[] | undefined): ToolDefinition[] | undefined {
+    private convertTools(tools: readonly vscode.LanguageModelChatTool[] | undefined, modelId?: string): ToolDefinition[] | undefined {
         if (!tools || tools.length === 0) {
             return undefined;
         }
@@ -449,6 +466,13 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         let dropped = 0;
         let sanitized = 0;
         const converted: ToolDefinition[] = [];
+
+        // WORKAROUND: Some API gateways (e.g., new-api converting to Gemini/Claude format)
+        // fail when a tool has no parameters (empty properties object).
+        // For models starting with 'gemini-claude' or 'claude', we inject a dummy parameter
+        // to work around this issue. This is a temporary fix until we find a better solution.
+        const needsDummyParameter = modelId && 
+            (modelId.toLowerCase().startsWith('gemini-claude') || modelId.toLowerCase().startsWith('claude'));
 
         for (const tool of tools) {
             const name = (tool.name ?? '').trim();
@@ -463,7 +487,22 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
             if (!isPlainObject(parameters) || Object.keys(parameters).length === 0) {
-                parameters = { type: 'object', properties: {} };
+                // Tool has no parameters
+                if (needsDummyParameter) {
+                    // Inject a dummy parameter for gateway compatibility
+                    parameters = {
+                        type: 'object',
+                        properties: {
+                            _placeholder: {
+                                type: 'string',
+                                description: 'This tool has no parameters. Do not pass any value for this parameter.'
+                            }
+                        },
+                        required: []
+                    };
+                } else {
+                    parameters = { type: 'object', properties: {} };
+                }
                 sanitized++;
             } else {
                 // Ensure schema has a top-level type/properties when it's intended to be an object.
