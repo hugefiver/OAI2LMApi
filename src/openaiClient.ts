@@ -239,16 +239,27 @@ export interface StreamOptions {
     signal?: AbortSignal;
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
+    /** Optional max tokens for completion generation (mapped to OpenAI `max_tokens`). */
+    maxTokens?: number;
 }
 
 export class OpenAIClient {
     private client: OpenAI;
     private config: OpenAIConfig;
 
+    private coerceThinkingText(value: unknown): string | undefined {
+        if (typeof value === 'string') {
+            return value;
+        }
+        if (Array.isArray(value) && value.every(v => typeof v === 'string')) {
+            return (value as string[]).join('');
+        }
+        return undefined;
+    }
+
     constructor(config: OpenAIConfig) {
         this.config = config;
         const normalizedEndpoint = normalizeApiEndpoint(config.apiEndpoint);
-        console.log(`OAI2LMApi: Initializing OpenAI client with endpoint: ${normalizedEndpoint}`);
         this.client = new OpenAI({
             apiKey: config.apiKey,
             baseURL: normalizedEndpoint,
@@ -258,14 +269,19 @@ export class OpenAIClient {
 
     async listModels(): Promise<APIModelInfo[]> {
         try {
-            console.log('OAI2LMApi: Fetching models from API...');
             const response = await this.client.models.list();
             // Cast to APIModelInfo to preserve extended fields from some providers
             const models = response.data.map(model => model as unknown as APIModelInfo);
-            console.log(`OAI2LMApi: Successfully fetched ${models.length} models`);
             return models;
         } catch (error) {
             console.error('OAI2LMApi: Failed to list models:', error);
+            const e = error as any;
+            console.error('OAI2LMApi: listModels error details', {
+                status: e?.status ?? e?.response?.status,
+                code: e?.code ?? e?.error?.code,
+                name: e?.name,
+                message: e?.error?.message ?? e?.message
+            });
             throw new Error(`Failed to fetch models from API: ${error}`);
         }
     }
@@ -294,6 +310,14 @@ export class OpenAIClient {
             return response.choices[0]?.message?.content || '';
         } catch (error) {
             console.error('Failed to create chat completion:', error);
+            const e = error as any;
+            console.error('OAI2LMApi: createChatCompletion error details', {
+                model,
+                status: e?.status ?? e?.response?.status,
+                code: e?.code ?? e?.error?.code,
+                name: e?.name,
+                message: e?.error?.message ?? e?.message
+            });
             throw new Error(`Failed to create chat completion: ${error}`);
         }
     }
@@ -304,6 +328,7 @@ export class OpenAIClient {
         streamOptions: StreamOptions
     ): Promise<string> {
         let fullContent = '';
+        let thinkingChars = 0;
 
         const thinkTagParser = new ThinkTagStreamParser({
             onText: (chunk) => {
@@ -312,6 +337,7 @@ export class OpenAIClient {
             },
             onThinking: streamOptions.onThinkingChunk
                 ? (chunk) => {
+                    thinkingChars += chunk.length;
                     streamOptions.onThinkingChunk?.(chunk);
                 }
                 : undefined
@@ -321,12 +347,17 @@ export class OpenAIClient {
         const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
 
         try {
+            const maxTokens = (typeof streamOptions.maxTokens === 'number' && streamOptions.maxTokens > 0)
+                ? streamOptions.maxTokens
+                : 2048;
+
             // Build request options
             const requestOptions: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
                 model: model,
                 messages: openaiMessages,
                 stream: true,
-                temperature: 0.7
+                temperature: 1.0,
+                max_tokens: maxTokens
             };
 
             // Add tools if provided
@@ -342,21 +373,69 @@ export class OpenAIClient {
             // Track tool calls being assembled from streamed chunks
             const toolCallsInProgress: Map<number, { id: string; name: string; arguments: string }> = new Map();
 
+            let chunkCount = 0;
+            let finishReason: string | null = null;
+
             for await (const chunk of stream) {
+                chunkCount++;
                 if (streamOptions.signal?.aborted) {
                     break;
                 }
 
-                const delta = chunk.choices[0]?.delta;
-                
+                const choice0 = chunk.choices[0];
+                finishReason = (choice0 as any)?.finish_reason ?? finishReason;
+                const delta = choice0?.delta;
+
+                // Some gateways put fields on `choices[0].message` instead of `delta`.
+                const messageAny = (choice0 as any)?.message as Record<string, unknown> | undefined;
+                const messageContent = messageAny?.content;
+                if (typeof messageContent === 'string' && messageContent.length > 0) {
+                    thinkTagParser.ingest(messageContent);
+                }
+
+                const messageReasoningRaw = (messageAny as any)?.reasoning_content ?? (messageAny as any)?.reasoning ?? (messageAny as any)?.thinking;
+                const messageReasoning = this.coerceThinkingText(messageReasoningRaw);
+                if (messageReasoning && messageReasoning.length > 0) {
+                    thinkingChars += messageReasoning.length;
+                    streamOptions.onThinkingChunk?.(messageReasoning);
+                }
+
+                const messageToolCalls = messageAny?.tool_calls;
+                if (Array.isArray(messageToolCalls) && messageToolCalls.length > 0) {
+                    for (let i = 0; i < messageToolCalls.length; i++) {
+                        const tc: any = messageToolCalls[i];
+                        const index = i;
+                        let toolCall = toolCallsInProgress.get(index);
+                        if (!toolCall) {
+                            toolCall = {
+                                id: tc?.id || '',
+                                name: tc?.function?.name || '',
+                                arguments: ''
+                            };
+                            toolCallsInProgress.set(index, toolCall);
+                        }
+                        if (tc?.id) {
+                            toolCall.id = tc.id;
+                        }
+                        if (tc?.function?.name) {
+                            toolCall.name = tc.function.name;
+                        }
+                        if (typeof tc?.function?.arguments === 'string') {
+                            toolCall.arguments = tc.function.arguments;
+                        }
+                    }
+                }
+
                 // Handle thinking/reasoning content (chain-of-thought)
                 // Some models (e.g., DeepSeek) return reasoning in a separate `reasoning_content` field
                 const deltaAny = delta as Record<string, unknown> | undefined;
-                const reasoningContent = deltaAny?.reasoning_content as string | undefined;
-                if (reasoningContent) {
+                const reasoningRaw = (deltaAny as any)?.reasoning_content ?? (deltaAny as any)?.reasoning ?? (deltaAny as any)?.thinking;
+                const reasoningContent = this.coerceThinkingText(reasoningRaw);
+                if (reasoningContent && reasoningContent.length > 0) {
+                    thinkingChars += reasoningContent.length;
                     streamOptions.onThinkingChunk?.(reasoningContent);
                 }
-                
+
                 // Handle text content
                 const content = delta?.content || '';
                 if (content) {
@@ -369,7 +448,7 @@ export class OpenAIClient {
                 if (delta?.tool_calls) {
                     for (const toolCallDelta of delta.tool_calls) {
                         const index = toolCallDelta.index;
-                        
+
                         // Get or create the tool call being assembled
                         let toolCall = toolCallsInProgress.get(index);
                         if (!toolCall) {
@@ -408,8 +487,8 @@ export class OpenAIClient {
             thinkTagParser.flush();
 
             // Report all completed tool calls at once after streaming is done
-            if (streamOptions.onToolCallsComplete && toolCallsInProgress.size > 0) {
-                const completedToolCalls: CompletedToolCall[] = [];
+            const completedToolCalls: CompletedToolCall[] = [];
+            if (toolCallsInProgress.size > 0) {
                 const seenIds = new Set<string>();
                 // Sort by index to maintain order
                 const sortedEntries = Array.from(toolCallsInProgress.entries()).sort((a, b) => a[0] - b[0]);
@@ -424,18 +503,87 @@ export class OpenAIClient {
                         });
                     }
                 }
-                if (completedToolCalls.length > 0) {
-                    streamOptions.onToolCallsComplete(completedToolCalls);
+            }
+            if (streamOptions.onToolCallsComplete && completedToolCalls.length > 0) {
+                streamOptions.onToolCallsComplete(completedToolCalls);
+            }
+
+            // If the stream produced nothing at all (no text/thinking/tool calls), fall back to non-streaming once.
+            if (fullContent.length === 0 && thinkingChars === 0 && completedToolCalls.length === 0 && !streamOptions.signal?.aborted) {
+                console.warn('OAI2LMApi: Empty streaming response detected; falling back to non-streaming', {
+                    model,
+                    chunkCount,
+                    finishReason
+                });
+
+                const response = await this.client.chat.completions.create({
+                    model: model,
+                    messages: openaiMessages,
+                    temperature: 0.7,
+                    max_tokens: maxTokens,
+                    stream: false,
+                    ...(streamOptions.tools && streamOptions.tools.length > 0 ? { tools: streamOptions.tools } : {}),
+                    ...(streamOptions.toolChoice ? { tool_choice: streamOptions.toolChoice } : {})
+                } as any);
+
+                const msgAny = response.choices?.[0]?.message as any;
+                const nonStreamContent = msgAny?.content;
+                if (typeof nonStreamContent === 'string' && nonStreamContent.length > 0) {
+                    thinkTagParser.ingest(nonStreamContent);
                 }
+
+                const nonStreamReasoningRaw = msgAny?.reasoning_content ?? msgAny?.reasoning ?? msgAny?.thinking;
+                const nonStreamReasoning = this.coerceThinkingText(nonStreamReasoningRaw);
+                if (nonStreamReasoning && nonStreamReasoning.length > 0) {
+                    thinkingChars += nonStreamReasoning.length;
+                    streamOptions.onThinkingChunk?.(nonStreamReasoning);
+                }
+
+                const nonStreamToolCalls = msgAny?.tool_calls;
+                if (Array.isArray(nonStreamToolCalls) && nonStreamToolCalls.length > 0 && streamOptions.onToolCallsComplete) {
+                    const mapped: CompletedToolCall[] = nonStreamToolCalls
+                        .map((tc: any) => ({
+                            id: tc?.id || '',
+                            name: tc?.function?.name || '',
+                            arguments: typeof tc?.function?.arguments === 'string' ? tc.function.arguments : ''
+                        }))
+                        .filter((tc: CompletedToolCall) => tc.id && tc.name);
+                    if (mapped.length > 0) {
+                        streamOptions.onToolCallsComplete(mapped);
+                    }
+                }
+
+                thinkTagParser.flush();
             }
 
             return fullContent;
         } catch (error: any) {
-            if (error.name === 'AbortError' || streamOptions.signal?.aborted) {
-                console.log('Stream aborted by user');
+            if (error?.name === 'AbortError' || streamOptions.signal?.aborted) {
                 thinkTagParser.flush();
                 return fullContent;
             }
+
+            const e = error as any;
+            console.error('OAI2LMApi: streamChatCompletion failed', {
+                model,
+                messageCount: openaiMessages.length,
+                toolsCount: streamOptions.tools?.length ?? 0,
+                toolChoice: streamOptions.toolChoice ?? undefined,
+                status: e?.status ?? e?.response?.status,
+                code: e?.code ?? e?.error?.code,
+                name: e?.name,
+                message: e?.error?.message ?? e?.message,
+                stack: e?.stack
+            });
+
+            // Some SDK errors include response body under various fields; try to surface it.
+            if (e?.response?.data !== undefined) {
+                console.error('OAI2LMApi: streamChatCompletion response.data', e.response.data);
+            }
+            if (e?.error !== undefined) {
+                console.error('OAI2LMApi: streamChatCompletion error.error', e.error);
+            }
+
             console.error('Failed to stream chat completion:', error);
             throw new Error(`Failed to stream chat completion: ${error}`);
         }
@@ -444,7 +592,6 @@ export class OpenAIClient {
     updateConfig(config: OpenAIConfig) {
         this.config = config;
         const normalizedEndpoint = normalizeApiEndpoint(config.apiEndpoint);
-        console.log(`OAI2LMApi: Updating OpenAI client with endpoint: ${normalizedEndpoint}`);
         this.client = new OpenAI({
             apiKey: config.apiKey,
             baseURL: normalizedEndpoint,

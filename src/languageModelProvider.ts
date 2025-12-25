@@ -251,6 +251,15 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const tools = this.convertTools(options.tools);
         const toolChoice = this.convertToolMode(options.toolMode);
 
+        // Derive a reasonable maxTokens for providers that require an explicit budget.
+        // VS Code's API surface may vary; probe common fields defensively.
+        const optionsAny = options as any;
+        const budgetFromOptions: unknown = optionsAny?.tokenBudget ?? optionsAny?.maxTokens ?? optionsAny?.maxOutputTokens;
+        const budgetNumber = typeof budgetFromOptions === 'number' && Number.isFinite(budgetFromOptions) ? budgetFromOptions : undefined;
+        const modelBudget = typeof model.maxOutputTokens === 'number' && Number.isFinite(model.maxOutputTokens) ? model.maxOutputTokens : 2048;
+        // Cap to avoid proxies rejecting very large max_tokens.
+        const maxTokens = Math.max(1, Math.min(budgetNumber ?? modelBudget, 8192));
+
         // Create abort controller from cancellation token
         const abortController = new AbortController();
         if (token) {
@@ -303,7 +312,8 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 },
                 signal: abortController.signal,
                 tools,
-                toolChoice
+                toolChoice,
+                maxTokens
             }
         );
     }
@@ -436,14 +446,58 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             return undefined;
         }
 
-        return tools.map(tool => ({
-            type: 'function' as const,
-            function: {
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.inputSchema as Record<string, unknown> | undefined
+        let dropped = 0;
+        let sanitized = 0;
+        const converted: ToolDefinition[] = [];
+
+        for (const tool of tools) {
+            const name = (tool.name ?? '').trim();
+            if (!name) {
+                dropped++;
+                continue;
             }
-        }));
+
+            // Some OpenAI-compatible gateways reject missing/empty `parameters`.
+            // Ensure we always send at least a minimal JSON schema.
+            let parameters: Record<string, unknown> | undefined = tool.inputSchema as Record<string, unknown> | undefined;
+            const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+            if (!isPlainObject(parameters) || Object.keys(parameters).length === 0) {
+                parameters = { type: 'object', properties: {} };
+                sanitized++;
+            } else {
+                // Ensure schema has a top-level type/properties when it's intended to be an object.
+                if (!('type' in parameters)) {
+                    parameters = { ...parameters, type: 'object' };
+                    sanitized++;
+                }
+                if ((parameters as any).type === 'object' && !('properties' in parameters)) {
+                    parameters = { ...parameters, properties: {} };
+                    sanitized++;
+                }
+            }
+
+            const description = (tool.description ?? '').trim();
+            converted.push({
+                type: 'function' as const,
+                function: {
+                    name,
+                    description: description || undefined,
+                    parameters
+                }
+            });
+        }
+
+        // Only warn on dropped tools (empty name). Sanitizing schemas is expected for compatibility.
+        if (dropped > 0) {
+            console.warn('OAI2LMApi: Dropped invalid tools with empty name', {
+                original: tools.length,
+                converted: converted.length,
+                dropped
+            });
+        }
+
+        return converted.length > 0 ? converted : undefined;
     }
 
     /**
