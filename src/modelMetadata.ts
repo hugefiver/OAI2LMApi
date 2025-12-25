@@ -34,6 +34,20 @@ export const DEFAULT_MODEL_METADATA: ModelMetadata = {
     modelType: 'llm'
 };
 
+const md = (
+    maxInputTokens: number,
+    maxOutputTokens: number,
+    supportsToolCalling: boolean,
+    supportsImageInput: boolean,
+    modelType: ModelMetadata['modelType'] = 'llm'
+): ModelMetadata => ({
+    maxInputTokens,
+    maxOutputTokens,
+    supportsToolCalling,
+    supportsImageInput,
+    modelType
+});
+
 /**
  * Model family pattern definition for hierarchical matching.
  * Patterns are matched in order of specificity (most specific first).
@@ -57,53 +71,106 @@ interface ModelFamilyPattern {
  * 3. Patterns support regex for flexible matching
  */
 const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
+    // ============== ByteDance Seed Family ==============
+    {
+        pattern: /(doubao-)?seed/i,
+        metadata: md(262144, 32768, true, true),
+        subPatterns: [
+            { pattern: /seed-1\.6-flash/i, metadata: md(262144, 16384, true, true) },
+            { pattern: /seed-1\.6/i, metadata: md(262144, 32768, true, true) }
+        ]
+    },
+
     // ============== OpenAI GPT-5 Family ==============
     {
         pattern: /gpt-5/i,
-        metadata: { maxInputTokens: 400000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
+        metadata: md(400000, 128000, true, true),
         subPatterns: [
-            { pattern: /gpt-5\.2-pro/i, metadata: { maxInputTokens: 400000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /gpt-5\.2-chat/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /gpt-5\.1-codex/i, metadata: { maxInputTokens: 400000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /gpt-5-nano/i, metadata: { maxInputTokens: 400000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /gpt-5-mini/i, metadata: { maxInputTokens: 400000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /gpt-5-pro/i, metadata: { maxInputTokens: 400000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /gpt-5-codex/i, metadata: { maxInputTokens: 400000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /gpt-5\.2-pro/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5\.2-chat/i, metadata: md(128000, 16384, true, true) },
+            { pattern: /gpt-5\.2/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5\.1-codex-max/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5\.1-codex-mini/i, metadata: md(400000, 100000, true, true) },
+            { pattern: /gpt-5\.1-codex/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5\.1-chat/i, metadata: md(128000, 16384, true, true) },
+            { pattern: /gpt-5\.1/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5-image-mini/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5-image/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5-pro/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5-chat/i, metadata: md(128000, 16384, true, true) },
+            { pattern: /gpt-5-nano/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5-mini/i, metadata: md(400000, 128000, true, true) },
+            { pattern: /gpt-5-codex/i, metadata: md(400000, 128000, true, true) }
         ]
     },
 
     // ============== OpenAI GPT-4.1 Family ==============
     {
         pattern: /gpt-4\.1/i,
-        metadata: { maxInputTokens: 1047576, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
+        metadata: md(1047576, 32768, true, true),
         subPatterns: [
-            { pattern: /gpt-4\.1-nano/i, metadata: { maxInputTokens: 1047576, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /gpt-4\.1-mini/i, metadata: { maxInputTokens: 1047576, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /gpt-4\.1-nano/i, metadata: md(1047576, 32768, true, true) },
+            { pattern: /gpt-4\.1-mini/i, metadata: md(1047576, 32768, true, true) }
         ]
     },
 
     // ============== OpenAI o3/o4 Reasoning Models ==============
     {
-        pattern: /\bo[34]\b/i,
-        metadata: { maxInputTokens: 200000, maxOutputTokens: 100000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
+        pattern: /o[34]/i,
+        metadata: md(200000, 100000, true, true),
         subPatterns: [
-            { pattern: /o4-mini/i, metadata: { maxInputTokens: 200000, maxOutputTokens: 100000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /o3-pro/i, metadata: { maxInputTokens: 200000, maxOutputTokens: 100000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /o3-mini/i, metadata: { maxInputTokens: 200000, maxOutputTokens: 100000, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
+            { pattern: /o4-mini-high/i, metadata: md(200000, 100000, true, true) },
+            { pattern: /o4-mini-deep-research/i, metadata: md(200000, 100000, true, true) },
+            { pattern: /o4-mini/i, metadata: md(200000, 100000, true, true) },
+            { pattern: /o3-pro/i, metadata: md(200000, 100000, true, true) },
+            { pattern: /o3-mini-high/i, metadata: md(200000, 100000, true, false) },
+            { pattern: /o3-mini/i, metadata: md(200000, 100000, true, false) },
+            { pattern: /o3-deep-research/i, metadata: md(200000, 100000, true, true) }
         ]
     },
 
     // ============== OpenAI GPT-4o Family ==============
     {
         pattern: /gpt-4o/i,
-        metadata: { maxInputTokens: 128000, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
+        metadata: md(128000, 16384, true, true),
         subPatterns: [
-            { pattern: /gpt-4o-mini/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /gpt-4o-mini/i, metadata: md(128000, 16384, true, true) },
+            { pattern: /chatgpt-4o/i, metadata: md(128000, 16384, true, true) }
         ]
     },
 
+    // ============== OpenAI GPT-4 Turbo Family ==============
+    {
+        pattern: /gpt-4-turbo/i,
+        metadata: md(128000, 4096, true, true),
+        subPatterns: [
+            { pattern: /gpt-4-turbo-preview/i, metadata: md(128000, 4096, true, false) }
+        ]
+    },
+    
+    // ============== OpenAI GPT-4 Family ==============
+    {
+        pattern: /gpt-4/i,
+        metadata: md(8192, 4096, true, false),
+        subPatterns: [
+            { pattern: /gpt-4-1106-preview/i, metadata: md(128000, 4096, true, false) },
+            { pattern: /gpt-4-0314/i, metadata: md(8192, 4096, true, false) }
+        ]
+    },
+
+    // ============== OpenAI Codex Family ==============
+    { pattern: /codex-mini/i, metadata: md(200000, 100000, true, true) },
+
     // ============== OpenAI GPT-OSS Models ==============
-    { pattern: /gpt-oss/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+    {
+        pattern: /gpt-oss/i,
+        metadata: md(131072, 65536, true, false),
+        subPatterns: [
+            { pattern: /gpt-oss-safeguard-20b/i, metadata: md(131072, 65536, true, false) },
+            { pattern: /gpt-oss-120b/i, metadata: md(131072, 65536, true, false) },
+            { pattern: /gpt-oss-20b/i, metadata: md(131072, 65536, true, false) }
+        ]
+    },
 
     // ============== Anthropic Claude 4 Family ==============
     {
@@ -122,11 +189,13 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
     // ============== Anthropic Claude 3.x Family ==============
     {
         pattern: /claude-3/i,
-        metadata: { maxInputTokens: 200000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
+        metadata: md(200000, 4096, true, true),
         subPatterns: [
-            { pattern: /claude-3\.7-sonnet/i, metadata: { maxInputTokens: 200000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /claude-3\.5-(sonnet|haiku)/i, metadata: { maxInputTokens: 200000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /claude-3-opus/i, metadata: { maxInputTokens: 200000, maxOutputTokens: 4096, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /claude-3\.7-sonnet/i, metadata: md(200000, 128000, true, true) },
+            { pattern: /claude-3\.5-sonnet/i, metadata: md(200000, 8192, true, true) },
+            { pattern: /claude-3\.5-haiku/i, metadata: md(200000, 8192, true, true) },
+            { pattern: /claude-3-opus/i, metadata: md(200000, 4096, true, true) },
+            { pattern: /claude-3-haiku/i, metadata: md(200000, 4096, true, true) }
         ]
     },
 
@@ -135,6 +204,7 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
         pattern: /gemini-3/i,
         metadata: { maxInputTokens: 1048576, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
         subPatterns: [
+            { pattern: /gemini-3-pro-image/i, metadata: { maxInputTokens: 65536, maxOutputTokens: 32768, supportsToolCalling: false, supportsImageInput: true, modelType: 'llm' } },
             { pattern: /gemini-3-pro/i, metadata: { maxInputTokens: 1048576, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
             { pattern: /gemini-3-flash/i, metadata: { maxInputTokens: 1048576, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
         ]
@@ -146,6 +216,7 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
         metadata: { maxInputTokens: 1048576, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
         subPatterns: [
             { pattern: /gemini-2\.5-pro/i, metadata: { maxInputTokens: 1048576, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /gemini-2\.5-flash-image/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 32768, supportsToolCalling: false, supportsImageInput: true, modelType: 'llm' } },
             { pattern: /gemini-2\.5-flash-lite/i, metadata: { maxInputTokens: 1048576, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
             { pattern: /gemini-2\.5-flash/i, metadata: { maxInputTokens: 1048576, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
         ]
@@ -157,8 +228,10 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
     // ============== Google Gemma Family ==============
     {
         pattern: /gemma/i,
-        metadata: { maxInputTokens: 32768, maxOutputTokens: 8192, supportsToolCalling: false, supportsImageInput: false, modelType: 'llm' },
+        metadata: { maxInputTokens: 8192, maxOutputTokens: 8192, supportsToolCalling: false, supportsImageInput: false, modelType: 'llm' },
         subPatterns: [
+            { pattern: /gemma-2-27b/i, metadata: { maxInputTokens: 8192, maxOutputTokens: 8192, supportsToolCalling: false, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /gemma-2-9b/i, metadata: { maxInputTokens: 8192, maxOutputTokens: 8192, supportsToolCalling: false, supportsImageInput: false, modelType: 'llm' } },
             { pattern: /gemma-3n/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 8192, supportsToolCalling: false, supportsImageInput: false, modelType: 'llm' } }
         ]
     },
@@ -190,16 +263,40 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
     // ============== Qwen2.5 Family ==============
     {
         pattern: /qwen2\.5/i,
-        metadata: { maxInputTokens: 131072, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
+        metadata: { maxInputTokens: 32768, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
         subPatterns: [
-            { pattern: /qwen2\.5-coder-32b/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /qwen2\.5-coder-7b/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /qwen2\.5-coder/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /qwen2\.5-vl/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /qwen2\.5-72b/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen2\.5-vl/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /qwen2\.5-coder/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
+        ]
+    },
+
+    // ============== Qwen Family ==============
+    {
+        pattern: /qwen/i,
+        metadata: { maxInputTokens: 131072, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
+        subPatterns: [
+            { pattern: /qwen-coder-(480b|plus)/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 262144, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-coder-(30b|flash)/i, metadata: { maxInputTokens: 160000, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-coder/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-vl-235b/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 262144, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /qwen-vl-32b/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /qwen-vl-30b/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /qwen-vl-8b/i, metadata: { maxInputTokens: 256000, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /qwen-vl/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /qwen-max/i, metadata: { maxInputTokens: 256000, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-next/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-235b/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 262144, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-32b/i, metadata: { maxInputTokens: 40960, maxOutputTokens: 40960, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-30b/i, metadata: { maxInputTokens: 40960, maxOutputTokens: 40960, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-14b/i, metadata: { maxInputTokens: 40960, maxOutputTokens: 40960, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-8b/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 20000, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /qwen-4b/i, metadata: { maxInputTokens: 40960, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
         ]
     },
 
     // ============== QwQ/QvQ Reasoning Models ==============
+    { pattern: /qwq-32b/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
     { pattern: /qwq/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
     { pattern: /qvq/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 16384, supportsToolCalling: false, supportsImageInput: true, modelType: 'llm' } },
 
@@ -208,11 +305,22 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
         pattern: /deepseek/i,
         metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
         subPatterns: [
+            { pattern: /deepseek-v3\.2-exp/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-v3\.2-speciale/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
             { pattern: /deepseek-v3\.2/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 163840, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-v3\.1-terminus/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-v3\.1-nex-n1/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 163840, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
             { pattern: /deepseek-(v3\.1|chat-v3\.1)/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-r1-distill-llama-70b/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-r1-distill-qwen-32b/i, metadata: { maxInputTokens: 64000, maxOutputTokens: 32000, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-r1-distill-qwen-14b/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-r1-0528-qwen3-8b/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
             { pattern: /deepseek-r1-0528/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 163840, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
             { pattern: /deepseek-r1/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /deepseek-prover/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: false, supportsImageInput: false, modelType: 'llm' } }
+            { pattern: /deepseek-prover-v2/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-prover/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: false, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-chat-v3-0324/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /deepseek-chat/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 163840, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
         ]
     },
 
@@ -228,49 +336,46 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
 
     // ============== Meta Llama 3.x Family ==============
     {
-        pattern: /llama-3\.[23]/i,
-        metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
+        pattern: /llama-3(\.[123])?/i,
+        metadata: { maxInputTokens: 128000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
         subPatterns: [
-            { pattern: /llama-3\.3-nemotron/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /llama-3\.[23]-.*-(11b|90b)/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /llama-3\.3-70b/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /llama-3\.2-90b-vision/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /llama-3\.2-11b-vision/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /llama-3\.2-1b/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /llama-3\.1-405b/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /llama-3\.1-70b/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /llama-3\.1-8b/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /llama-3-70b/i, metadata: { maxInputTokens: 8192, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /llama-3-8b/i, metadata: { maxInputTokens: 8192, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /llama-3\.3-nemotron/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
+        ]
+    },
+
+    // ============== Meta Llama Guard Family ==============
+    {
+        pattern: /llama-guard/i,
+        metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'other' },
+        subPatterns: [
+            { pattern: /llama-guard-4-12b/i, metadata: { maxInputTokens: 163840, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: true, modelType: 'other' } },
+            { pattern: /llama-guard-3-8b/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'other' } },
+            { pattern: /llama-guard-2-8b/i, metadata: { maxInputTokens: 8192, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'other' } }
         ]
     },
 
     // ============== Mistral Family ==============
     {
-        pattern: /mistral/i,
-        metadata: { maxInputTokens: 131072, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
+        pattern: /(mistral|mixtral|pixtral|codestral|devstral)/i,
+        metadata: md(32768, 8192, true, false),
         subPatterns: [
-            { pattern: /mistral-large-2512/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /mistral-large/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 128000, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /mistral-medium-3\.1/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /mistral-medium-3/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /mistral-small-3\.2/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /mistral-small/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
-        ]
-    },
-
-    // ============== Mistral Devstral/Codestral Family ==============
-    {
-        pattern: /(devstral|codestral)/i,
-        metadata: { maxInputTokens: 262144, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
-        subPatterns: [
-            { pattern: /devstral-2512/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /devstral-medium/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /devstral-small/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /codestral-2508/i, metadata: { maxInputTokens: 256000, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /codestral/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
-        ]
-    },
-
-    // ============== Ministral Family ==============
-    {
-        pattern: /ministral/i,
-        metadata: { maxInputTokens: 131072, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
-        subPatterns: [
-            { pattern: /ministral-14b/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /ministral-8b/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /ministral-3b/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 65536, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /mistral-large/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /mistral-nemo/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /devstral/i, metadata: md(262144, 32768, true, false) },
+            { pattern: /pixtral/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /mistral-small/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 32768, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /mixtral-8x22b/i, metadata: { maxInputTokens: 65536, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /mixtral-8x7b/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /mistral-7b/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
         ]
     },
 
@@ -288,13 +393,25 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
         ]
     },
 
+    // ============== Moonshot/Kimi Family ==============
+    {
+        pattern: /(kimi|moonshot)/i,
+        metadata: md(262144, 262144, true, false),
+        subPatterns: [
+            { pattern: /kimi-k2/i, metadata: md(262144, 262144, true, false) }
+        ]
+    },
+
     // ============== Amazon Nova Family ==============
     {
         pattern: /nova/i,
         metadata: { maxInputTokens: 1000000, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' },
         subPatterns: [
             { pattern: /nova-premier/i, metadata: { maxInputTokens: 1000000, maxOutputTokens: 32000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /nova-2-lite/i, metadata: { maxInputTokens: 1000000, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
+            { pattern: /nova-2-lite/i, metadata: { maxInputTokens: 1000000, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /nova-lite/i, metadata: { maxInputTokens: 300000, maxOutputTokens: 5120, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
+            { pattern: /nova-micro/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 5120, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /nova-pro/i, metadata: { maxInputTokens: 300000, maxOutputTokens: 5120, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } }
         ]
     },
 
@@ -322,17 +439,6 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
 
     // ============== MiniMax Family ==============
     { pattern: /minimax/i, metadata: { maxInputTokens: 1000000, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-
-    // ============== Moonshot/Kimi Family ==============
-    {
-        pattern: /kimi/i,
-        metadata: { maxInputTokens: 262144, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
-        subPatterns: [
-            { pattern: /kimi-k2-thinking/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 65535, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /kimi-k2/i, metadata: { maxInputTokens: 262144, maxOutputTokens: 262144, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /kimi-dev/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 131072, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
-        ]
-    },
 
     // ============== Z.AI GLM Family ==============
     {
@@ -364,11 +470,12 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
 
     // ============== Microsoft Phi Family ==============
     {
-        pattern: /phi/i,
-        metadata: { maxInputTokens: 32768, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
+        pattern: /phi-3/i,
+        metadata: { maxInputTokens: 128000, maxOutputTokens: 4096, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' },
         subPatterns: [
-            { pattern: /phi-4-reasoning/i, metadata: { maxInputTokens: 32768, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
-            { pattern: /phi-4/i, metadata: { maxInputTokens: 16384, maxOutputTokens: 16384, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
+            { pattern: /phi-3\.5-mini/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 4096, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /phi-3-mini/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 4096, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /phi-3-medium/i, metadata: { maxInputTokens: 128000, maxOutputTokens: 4096, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } }
         ]
     },
 

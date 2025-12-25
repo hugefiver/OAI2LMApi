@@ -227,6 +227,17 @@ Runs on version tags (v*). Publishes to VS Code Marketplace.
 ### Known TODOs
 - `src/openaiClient.ts:195`: Chain-of-thought (reasoning_content) transmission not implemented
 
+# Model Sync Rule
+
+When adding new models to `src/modelMetadata.ts`, you must also check if they are available in `openrouter_models.json`(fetch from `https://openrouter.ai/api/v1/models`).
+1.  **Read `openrouter_models.json`** to get the latest model list.
+2.  **Filter for high-capability models**: Prioritize models with tool calling (`tools` in `supported_parameters`), recent release dates, and large context windows.
+3.  **Update `src/modelMetadata.ts`**:
+    *   Add new `ModelFamilyPattern` entries for new model families.
+    *   Update existing patterns if model capabilities (context length, tool support) have changed.
+    *   Ensure `maxInputTokens`, `maxOutputTokens`, `supportsToolCalling`, and `supportsImageInput` are accurate based on the JSON data.
+4.  **Maintain Hierarchy**: Place more specific patterns (e.g., `gpt-4.1-preview`) before general ones (e.g., `gpt-4`) in the `subPatterns` array or the main list.
+
 ## Validation Checklist
 
 Before submitting a PR, ensure:
