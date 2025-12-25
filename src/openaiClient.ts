@@ -619,18 +619,24 @@ export class OpenAIClient {
                 case 'assistant':
                     // Assistant messages can have tool_calls
                     if (msg.tool_calls && msg.tool_calls.length > 0) {
-                        return {
-                            role: 'assistant' as const,
-                            content: msg.content,
-                            tool_calls: msg.tool_calls.map(tc => ({
-                                id: tc.id,
-                                type: 'function' as const,
-                                function: {
-                                    name: tc.function.name,
-                                    arguments: tc.function.arguments
-                                }
-                            }))
-                        };
+                        // Filter out tool calls without valid IDs to prevent API errors
+                        const validToolCalls = msg.tool_calls.filter(tc => 
+                            tc.id && typeof tc.id === 'string' && tc.id.trim().length > 0
+                        );
+                        if (validToolCalls.length > 0) {
+                            return {
+                                role: 'assistant' as const,
+                                content: msg.content,
+                                tool_calls: validToolCalls.map(tc => ({
+                                    id: tc.id,
+                                    type: 'function' as const,
+                                    function: {
+                                        name: tc.function.name,
+                                        arguments: tc.function.arguments
+                                    }
+                                }))
+                            };
+                        }
                     }
                     return {
                         role: 'assistant' as const,
