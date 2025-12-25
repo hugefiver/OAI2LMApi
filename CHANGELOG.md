@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2025-12-25
+
+### Added
+
+- Streaming-safe `<think>...</think>` parser to route embedded reasoning content to thinking parts when supported.
+- `maxTokens` support for streaming chat completions (mapped to OpenAI `max_tokens`).
+
+### Changed
+
+- Improved streaming compatibility with gateways that emit fields on `choices[0].message` instead of `delta`.
+- Refined tool call aggregation during streaming and reporting at completion.
+
+### Fixed
+
+- Fall back to a single non-streaming request when a streaming response unexpectedly returns no content.
+
 ## [0.2.1] - 2025-12-25
 
 ### Fixed
