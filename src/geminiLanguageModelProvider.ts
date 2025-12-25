@@ -409,10 +409,18 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
     private guessMimeType(uri: string): string {
         const lower = uri.toLowerCase();
-        if (lower.endsWith('.png')) {return 'image/png';}
-        if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {return 'image/jpeg';}
-        if (lower.endsWith('.gif')) {return 'image/gif';}
-        if (lower.endsWith('.webp')) {return 'image/webp';}
+        if (lower.endsWith('.png')) {
+            return 'image/png';
+        }
+        if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+            return 'image/jpeg';
+        }
+        if (lower.endsWith('.gif')) {
+            return 'image/gif';
+        }
+        if (lower.endsWith('.webp')) {
+            return 'image/webp';
+        }
         return 'application/octet-stream';
     }
 
