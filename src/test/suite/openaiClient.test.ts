@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { OpenAIClient, OpenAIConfig, ChatMessage, ToolCall, ToolDefinition, ToolChoice, ToolCallChunk, CompletedToolCall } from '../../openaiClient';
+import { OpenAIClient, OpenAIConfig, ChatMessage, ToolCall, ToolDefinition, ToolChoice, ToolCallChunk, CompletedToolCall, ThinkTagStreamParser } from '../../openaiClient';
 
 suite('OpenAIClient Unit Tests', () => {
 	
@@ -377,5 +377,88 @@ suite('Tool Call Message Conversion Integration Tests', () => {
 		assert.strictEqual(parsed.success, true);
 		assert.strictEqual(parsed.data.items.length, 2);
 		assert.strictEqual(parsed.data.metadata.total, 2);
+	});
+});
+
+suite('ThinkTagStreamParser Unit Tests', () => {
+	
+	test('Should route <think>...</think> to thinking and strip from visible text', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		parser.ingest('<think>abc</think>hello');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'abc');
+		assert.strictEqual(textChunks.join(''), 'hello');
+	});
+
+	test('Should handle tags split across streamed chunks', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		parser.ingest('<th');
+		parser.ingest('ink>abc</th');
+		parser.ingest('ink>hi');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'abc');
+		assert.strictEqual(textChunks.join(''), 'hi');
+	});
+
+	test('Should support multiple <think> blocks in one stream', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		parser.ingest('a<think>b</think>c<think>d</think>e');
+		parser.flush();
+
+		assert.strictEqual(textChunks.join(''), 'ace');
+		assert.strictEqual(thinkingChunks.join(''), 'bd');
+	});
+
+	test('Should be case-insensitive for <think> tags', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		parser.ingest('<THINK>abc</THINK>hi');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'abc');
+		assert.strictEqual(textChunks.join(''), 'hi');
+	});
+
+	test('Should pass through content unchanged if no thinking handler is provided', () => {
+		const textChunks: string[] = [];
+		const input = '<think>abc</think>hello';
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c)
+		});
+
+		parser.ingest(input);
+		parser.flush();
+
+		assert.strictEqual(textChunks.join(''), input);
 	});
 });

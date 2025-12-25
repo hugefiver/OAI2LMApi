@@ -97,6 +97,128 @@ export interface CompletedToolCall {
     arguments: string;
 }
 
+/**
+ * Parses model output that embeds chain-of-thought inside <think>...</think> tags.
+ *
+ * Some OpenAI-compatible providers/models do not use a separate `reasoning_content` field,
+ * and instead prepend the assistant content with <think> blocks.
+ *
+ * This parser is streaming-safe: tags may be split across chunks.
+ *
+ * Behavior:
+ * - If `onThinking` is provided, content inside <think>...</think> is sent to `onThinking`
+ *   and is NOT forwarded to `onText`.
+ * - If `onThinking` is not provided, all input is forwarded to `onText` unchanged.
+ */
+export class ThinkTagStreamParser {
+    private carry = '';
+    private inThink = false;
+
+    private readonly startTagLower = '<think>';
+    private readonly endTagLower = '</think>';
+
+    constructor(
+        private readonly handlers: {
+            onText?: (chunk: string) => void;
+            onThinking?: (chunk: string) => void;
+        }
+    ) {}
+
+    ingest(fragment: string): void {
+        if (!fragment) {
+            return;
+        }
+
+        // If the consumer doesn't support thinking parts, do not strip tags.
+        if (!this.handlers.onThinking) {
+            this.handlers.onText?.(fragment);
+            return;
+        }
+
+        let text = this.carry + fragment;
+        this.carry = '';
+
+        while (text.length > 0) {
+            const lower = text.toLowerCase();
+
+            if (this.inThink) {
+                const endIdx = lower.indexOf(this.endTagLower);
+                if (endIdx === -1) {
+                    const split = this.splitKeepingPossibleTagPrefix(text, this.endTagLower);
+                    if (split.emit) {
+                        this.handlers.onThinking?.(split.emit);
+                    }
+                    this.carry = split.carry;
+                    return;
+                }
+
+                const thinkingPart = text.slice(0, endIdx);
+                if (thinkingPart) {
+                    this.handlers.onThinking?.(thinkingPart);
+                }
+
+                text = text.slice(endIdx + this.endTagLower.length);
+                this.inThink = false;
+                continue;
+            }
+
+            const startIdx = lower.indexOf(this.startTagLower);
+            if (startIdx === -1) {
+                const split = this.splitKeepingPossibleTagPrefix(text, this.startTagLower);
+                if (split.emit) {
+                    this.handlers.onText?.(split.emit);
+                }
+                this.carry = split.carry;
+                return;
+            }
+
+            const visiblePart = text.slice(0, startIdx);
+            if (visiblePart) {
+                this.handlers.onText?.(visiblePart);
+            }
+
+            text = text.slice(startIdx + this.startTagLower.length);
+            this.inThink = true;
+        }
+    }
+
+    flush(): void {
+        if (!this.carry) {
+            return;
+        }
+
+        // If no thinking handler, carry would never be used, but be safe.
+        if (!this.handlers.onThinking) {
+            this.handlers.onText?.(this.carry);
+            this.carry = '';
+            return;
+        }
+
+        if (this.inThink) {
+            this.handlers.onThinking?.(this.carry);
+        } else {
+            this.handlers.onText?.(this.carry);
+        }
+        this.carry = '';
+    }
+
+    private splitKeepingPossibleTagPrefix(text: string, tagLower: string): { emit: string; carry: string } {
+        const lower = text.toLowerCase();
+        const max = Math.min(tagLower.length - 1, text.length);
+
+        for (let k = max; k > 0; k--) {
+            if (tagLower.startsWith(lower.slice(-k))) {
+                return {
+                    emit: text.slice(0, text.length - k),
+                    carry: text.slice(text.length - k)
+                };
+            }
+        }
+
+        return { emit: text, carry: '' };
+    }
+}
+
 export interface StreamOptions {
     onChunk?: (chunk: string) => void;
     /**
@@ -183,6 +305,18 @@ export class OpenAIClient {
     ): Promise<string> {
         let fullContent = '';
 
+        const thinkTagParser = new ThinkTagStreamParser({
+            onText: (chunk) => {
+                fullContent += chunk;
+                streamOptions.onChunk?.(chunk);
+            },
+            onThinking: streamOptions.onThinkingChunk
+                ? (chunk) => {
+                    streamOptions.onThinkingChunk?.(chunk);
+                }
+                : undefined
+        });
+
         // Convert to OpenAI message format
         const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
 
@@ -226,8 +360,9 @@ export class OpenAIClient {
                 // Handle text content
                 const content = delta?.content || '';
                 if (content) {
-                    fullContent += content;
-                    streamOptions.onChunk?.(content);
+                    // Some models embed thinking in <think>...</think> inside the normal content stream.
+                    // Parse and route those parts to onThinkingChunk when available.
+                    thinkTagParser.ingest(content);
                 }
 
                 // Handle tool calls in streaming response
@@ -269,6 +404,9 @@ export class OpenAIClient {
                 }
             }
 
+            // Flush any pending partial tag/text at end of stream.
+            thinkTagParser.flush();
+
             // Report all completed tool calls at once after streaming is done
             if (streamOptions.onToolCallsComplete && toolCallsInProgress.size > 0) {
                 const completedToolCalls: CompletedToolCall[] = [];
@@ -295,6 +433,7 @@ export class OpenAIClient {
         } catch (error: any) {
             if (error.name === 'AbortError' || streamOptions.signal?.aborted) {
                 console.log('Stream aborted by user');
+                thinkTagParser.flush();
                 return fullContent;
             }
             console.error('Failed to stream chat completion:', error);
