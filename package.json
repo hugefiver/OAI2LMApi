@@ -25,6 +25,11 @@
         "vendor": "oai2lmapi",
         "displayName": "OpenAI to Language Model API Bridge",
         "managementCommand": "oai2lmapi.manage"
+      },
+      {
+        "vendor": "gemini",
+        "displayName": "Google Gemini",
+        "managementCommand": "oai2lmapi.manage"
       }
     ],
     "commands": [
@@ -43,6 +48,14 @@
       {
         "command": "oai2lmapi.clearApiKey",
         "title": "OAI2LMApi: Clear API Key"
+      },
+      {
+        "command": "oai2lmapi.setGeminiApiKey",
+        "title": "OAI2LMApi: Set Gemini API Key"
+      },
+      {
+        "command": "oai2lmapi.clearGeminiApiKey",
+        "title": "OAI2LMApi: Clear Gemini API Key"
       }
     ],
     "configuration": {
@@ -68,6 +81,23 @@
           "type": "boolean",
           "default": false,
           "description": "Show models that do not support tool/function calling. By default, only models with tool calling support are displayed."
+        },
+        "oai2lmapi.geminiApiEndpoint": {
+          "type": "string",
+          "default": "https://generativelanguage.googleapis.com/v1beta",
+          "description": "Google Gemini API endpoint URL"
+        },
+        "oai2lmapi.geminiThinkingLevel": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high"],
+          "default": "none",
+          "enumDescriptions": [
+            "No thinking/reasoning tokens",
+            "Low thinking budget (1024 tokens)",
+            "Medium thinking budget (8192 tokens)",
+            "High thinking budget (24576 tokens)"
+          ],
+          "description": "Gemini thinking/reasoning level for chain-of-thought. Higher levels provide more detailed reasoning but use more tokens."
         }
       }
     }
