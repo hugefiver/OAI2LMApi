@@ -237,7 +237,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         model: ModelInformation,
         messages: readonly vscode.LanguageModelChatRequestMessage[],
         options: vscode.ProvideLanguageModelChatResponseOptions,
-        progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+        progress: vscode.Progress<vscode.ExLanguageModelResponsePart>,
         token: vscode.CancellationToken
     ): Promise<void> {
         if (!this.client) {
