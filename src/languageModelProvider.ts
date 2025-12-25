@@ -270,6 +270,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 onChunk: (chunk) => {
                     progress.report(new vscode.LanguageModelTextPart(chunk));
                 },
+                onThinkingChunk: (chunk) => {
+                    // Report thinking/reasoning content using LanguageModelThinkingPart
+                    progress.report(new vscode.LanguageModelThinkingPart(chunk));
+                },
                 onToolCallsComplete: (toolCalls: CompletedToolCall[]) => {
                     // Report all tool calls at once after streaming is complete
                     for (const toolCall of toolCalls) {

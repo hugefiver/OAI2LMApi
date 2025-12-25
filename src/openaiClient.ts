@@ -100,6 +100,11 @@ export interface CompletedToolCall {
 export interface StreamOptions {
     onChunk?: (chunk: string) => void;
     /**
+     * Called when a thinking/reasoning content chunk is received.
+     * Some models (e.g., DeepSeek) return chain-of-thought reasoning in a separate field.
+     */
+    onThinkingChunk?: (chunk: string) => void;
+    /**
      * @deprecated Use onToolCallsComplete for batch reporting of all tool calls
      */
     onToolCall?: (toolCall: ToolCallChunk) => void;
@@ -210,10 +215,13 @@ export class OpenAIClient {
 
                 const delta = chunk.choices[0]?.delta;
                 
-                // TODO: Investigate how to properly transmit chain-of-thought (reasoning_content)
-                // via VSCode LM API. Some models (e.g., DeepSeek) return reasoning in a separate
-                // `reasoning_content` field, but it's unclear how VSCode LM API handles this.
-                // For now, we only process the standard `content` field.
+                // Handle thinking/reasoning content (chain-of-thought)
+                // Some models (e.g., DeepSeek) return reasoning in a separate `reasoning_content` field
+                const deltaAny = delta as Record<string, unknown> | undefined;
+                const reasoningContent = deltaAny?.reasoning_content as string | undefined;
+                if (reasoningContent) {
+                    streamOptions.onThinkingChunk?.(reasoningContent);
+                }
                 
                 // Handle text content
                 const content = delta?.content || '';
