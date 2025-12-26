@@ -52,7 +52,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
         // Register the provider with a unique ID
         console.log('GeminiProvider: Registering language model provider');
-        const disposable = vscode.lm.registerLanguageModelChatProvider('gemini', this);
+        const disposable = vscode.lm.registerLanguageModelChatProvider('gemini-lmapi', this);
         this.disposables.push(disposable);
         this._initialized = true;
 
