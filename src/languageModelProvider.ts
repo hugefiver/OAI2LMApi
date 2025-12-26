@@ -369,7 +369,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                             // If callId is missing/empty, log a warning and generate a fallback ID
                             // This should not happen in normal operation as VSCode should provide the callId
                             console.warn('OAI2LMApi: Tool result missing callId, generating fallback ID. This may cause API errors with some providers.');
-                            toolCallId = `call_result_${Date.now()}_${toolCallIndex++}`;
+                            toolCallId = `call_fallback_${Date.now()}_${toolCallIndex++}`;
                         }
                         
                         toolResults.push({
