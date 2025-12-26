@@ -27,8 +27,8 @@
         "managementCommand": "oai2lmapi.manage"
       },
       {
-        "vendor": "gemini",
-        "displayName": "Google Gemini",
+        "vendor": "gemini2lmapi",
+        "displayName": "Gemini to Language Model API Bridge",
         "managementCommand": "oai2lmapi.manage"
       }
     ],
