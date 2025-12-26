@@ -12,6 +12,7 @@ import {
 } from './geminiClient';
 import { GEMINI_API_KEY_SECRET_KEY, GEMINI_CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata } from './modelMetadata';
+import { stripSchemaField } from './schemaUtils';
 
 /**
  * Model override configuration from user settings.
@@ -643,6 +644,8 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             if (!parameters || Object.keys(parameters).length === 0) {
                 parameters = { type: 'object', properties: {} };
             } else {
+                // Strip $schema field which Gemini API doesn't accept
+                parameters = stripSchemaField(parameters);
                 if (!('type' in parameters)) {
                     parameters = { ...parameters, type: 'object' };
                 }

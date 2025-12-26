@@ -10,6 +10,7 @@ import {
     supportsTextGeneration,
     supportsGeminiFunctionCalling
 } from '../../geminiClient';
+import { stripSchemaField } from '../../schemaUtils';
 
 suite('GeminiClient Unit Tests', () => {
 
@@ -666,5 +667,156 @@ suite('Wildcard Pattern Matching Tests', () => {
         assert.strictEqual(matchesWildcardPattern('model(v1)', 'model(v1)'), true);
         assert.strictEqual(matchesWildcardPattern('model[v1]', 'model[v1]'), true);
         assert.strictEqual(matchesWildcardPattern('model(v1)', 'model*'), true);
+    });
+});
+
+suite('stripSchemaField Helper Function Tests', () => {
+
+    test('should remove $schema at root level', () => {
+        const input = {
+            '$schema': 'http://json-schema.org/draft-07/schema#',
+            'type': 'object',
+            'properties': {
+                'name': { 'type': 'string' }
+            }
+        };
+        const result = stripSchemaField(input);
+        assert.strictEqual('$schema' in result, false);
+        assert.strictEqual(result.type, 'object');
+        assert.deepStrictEqual(result.properties, { 'name': { 'type': 'string' } });
+    });
+
+    test('should remove $schema from nested objects', () => {
+        const input = {
+            'type': 'object',
+            'properties': {
+                'nested': {
+                    '$schema': 'http://json-schema.org/draft-07/schema#',
+                    'type': 'object',
+                    'description': 'A nested object'
+                }
+            }
+        };
+        const result = stripSchemaField(input);
+        const nested = (result.properties as Record<string, unknown>).nested as Record<string, unknown>;
+        assert.strictEqual('$schema' in nested, false);
+        assert.strictEqual(nested.type, 'object');
+        assert.strictEqual(nested.description, 'A nested object');
+    });
+
+    test('should remove $schema from objects within arrays', () => {
+        const input = {
+            'oneOf': [
+                { '$schema': 'test', 'type': 'string' },
+                { 'type': 'number' }
+            ]
+        };
+        const result = stripSchemaField(input);
+        const arr = result.oneOf as Array<Record<string, unknown>>;
+        assert.strictEqual('$schema' in arr[0], false);
+        assert.strictEqual(arr[0].type, 'string');
+        assert.strictEqual(arr[1].type, 'number');
+    });
+
+    test('should handle empty objects', () => {
+        const input = {};
+        const result = stripSchemaField(input);
+        assert.deepStrictEqual(result, {});
+    });
+
+    test('should handle null values in properties', () => {
+        const input = {
+            'type': 'object',
+            'default': null,
+            'properties': {
+                'nullField': null
+            }
+        };
+        const result = stripSchemaField(input);
+        assert.strictEqual(result.default, null);
+        assert.strictEqual((result.properties as Record<string, unknown>).nullField, null);
+    });
+
+    test('should preserve all other fields', () => {
+        const input = {
+            '$schema': 'http://json-schema.org/draft-07/schema#',
+            'type': 'object',
+            'required': ['name', 'age'],
+            'properties': {
+                'name': { 'type': 'string', 'description': 'Name field' },
+                'age': { 'type': 'integer', 'minimum': 0 }
+            },
+            'additionalProperties': false
+        };
+        const result = stripSchemaField(input);
+        assert.strictEqual('$schema' in result, false);
+        assert.strictEqual(result.type, 'object');
+        assert.deepStrictEqual(result.required, ['name', 'age']);
+        assert.strictEqual(result.additionalProperties, false);
+        
+        const props = result.properties as Record<string, Record<string, unknown>>;
+        assert.strictEqual(props.name.type, 'string');
+        assert.strictEqual(props.name.description, 'Name field');
+        assert.strictEqual(props.age.type, 'integer');
+        assert.strictEqual(props.age.minimum, 0);
+    });
+
+    test('should handle arrays with primitive values', () => {
+        const input = {
+            'enum': ['a', 'b', 'c'],
+            'examples': [1, 2, 3]
+        };
+        const result = stripSchemaField(input);
+        assert.deepStrictEqual(result.enum, ['a', 'b', 'c']);
+        assert.deepStrictEqual(result.examples, [1, 2, 3]);
+    });
+
+    test('should handle deeply nested $schema fields', () => {
+        const input = {
+            'type': 'object',
+            'properties': {
+                'level1': {
+                    'type': 'object',
+                    'properties': {
+                        'level2': {
+                            '$schema': 'deep-schema',
+                            'type': 'string'
+                        }
+                    }
+                }
+            }
+        };
+        const result = stripSchemaField(input);
+        const level1 = (result.properties as Record<string, unknown>).level1 as Record<string, unknown>;
+        const level2 = (level1.properties as Record<string, unknown>).level2 as Record<string, unknown>;
+        assert.strictEqual('$schema' in level2, false);
+        assert.strictEqual(level2.type, 'string');
+    });
+
+    test('should handle multiple $schema fields at different levels', () => {
+        const input = {
+            '$schema': 'root-schema',
+            'type': 'object',
+            'properties': {
+                'child': {
+                    '$schema': 'child-schema',
+                    'type': 'string'
+                }
+            },
+            'definitions': {
+                'def1': {
+                    '$schema': 'def-schema',
+                    'type': 'number'
+                }
+            }
+        };
+        const result = stripSchemaField(input);
+        assert.strictEqual('$schema' in result, false);
+        
+        const child = (result.properties as Record<string, unknown>).child as Record<string, unknown>;
+        assert.strictEqual('$schema' in child, false);
+        
+        const def1 = (result.definitions as Record<string, unknown>).def1 as Record<string, unknown>;
+        assert.strictEqual('$schema' in def1, false);
     });
 });
