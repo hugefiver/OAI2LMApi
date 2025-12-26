@@ -234,7 +234,10 @@ function normalizeApiEndpoint(endpoint: string): string {
  * Parses model name from full resource path.
  * e.g., "models/gemini-2.0-flash" -> "gemini-2.0-flash"
  */
-function parseModelName(fullName: string): string {
+function parseModelName(fullName: string | null | undefined): string {
+    if (!fullName) {
+        return '';
+    }
     if (fullName.startsWith('models/')) {
         return fullName.substring(7);
     }
@@ -748,7 +751,8 @@ export function getGeminiModelId(model: GeminiModelInfo): string {
  * Helper function to check if a Gemini model supports text generation
  */
 export function supportsTextGeneration(model: GeminiModelInfo): boolean {
-    return model.supportedGenerationMethods.includes('generateContent');
+    return Array.isArray(model.supportedGenerationMethods) && 
+           model.supportedGenerationMethods.includes('generateContent');
 }
 
 /**
@@ -769,7 +773,11 @@ export function supportsGeminiFunctionCalling(model: GeminiModelInfo): boolean {
     }
 
     // Fall back to heuristics based on model name and generation methods
-    const modelId = getGeminiModelId(model).toLowerCase();
+    const modelId = getGeminiModelId(model);
+    if (!modelId) {
+        return false;
+    }
+    const lowerModelId = modelId.toLowerCase();
     
     // Models that don't support function calling
     const nonFunctionCallingPatterns = [
@@ -781,8 +789,8 @@ export function supportsGeminiFunctionCalling(model: GeminiModelInfo): boolean {
     ];
     
     const isExcluded = nonFunctionCallingPatterns.some(pattern => 
-        modelId.includes(pattern)
+        lowerModelId.includes(pattern)
     );
 
-    return model.supportedGenerationMethods.includes('generateContent') && !isExcluded;
+    return supportsTextGeneration(model) && !isExcluded;
 }
