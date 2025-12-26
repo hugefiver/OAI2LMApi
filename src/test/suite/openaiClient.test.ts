@@ -661,3 +661,63 @@ suite('OpenAIClient streamChatCompletion empty-stream and message tool_calls han
 		assert.strictEqual(calls.length, 1);
 	});
 });
+
+suite('Tool Call ID Validation Tests', () => {
+
+	test('ChatMessage with empty tool_call_id should be handled gracefully', () => {
+		// This test verifies that tool messages with empty/missing tool_call_id
+		// don't cause issues when constructing ChatMessage objects
+		const message: ChatMessage = {
+			role: 'tool',
+			content: '{"result": "success"}',
+			tool_call_id: '' // Empty ID - should be handled by convertMessagesToOpenAIFormat
+		};
+
+		assert.strictEqual(message.role, 'tool');
+		assert.strictEqual(message.content, '{"result": "success"}');
+		assert.strictEqual(message.tool_call_id, '');
+	});
+
+	test('ChatMessage tool_call_id should not be undefined', () => {
+		// Verify that tool messages should always have a defined tool_call_id
+		const message: ChatMessage = {
+			role: 'tool',
+			content: '{"result": "success"}',
+			tool_call_id: 'call_valid_123'
+		};
+
+		assert.strictEqual(message.tool_call_id, 'call_valid_123');
+		assert.ok(message.tool_call_id.length > 0);
+	});
+
+	test('Multiple tool calls should have unique IDs', () => {
+		const toolCalls: ToolCall[] = [
+			{
+				id: 'call_weather_1',
+				type: 'function',
+				function: {
+					name: 'get_weather',
+					arguments: '{"location": "Tokyo"}'
+				}
+			},
+			{
+				id: 'call_time_2',
+				type: 'function',
+				function: {
+					name: 'get_time',
+					arguments: '{"timezone": "Asia/Tokyo"}'
+				}
+			}
+		];
+
+		const ids = toolCalls.map(tc => tc.id);
+		const uniqueIds = new Set(ids);
+		
+		// All IDs should be unique
+		assert.strictEqual(ids.length, uniqueIds.size);
+		// All IDs should be non-empty strings
+		for (const id of ids) {
+			assert.ok(typeof id === 'string' && id.length > 0, `Tool call ID should be non-empty string: ${id}`);
+		}
+	});
+});

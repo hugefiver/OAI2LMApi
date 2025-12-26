@@ -325,6 +325,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): ChatMessage[] {
         const result: ChatMessage[] = [];
         const processedToolCallIds = new Set<string>();
+        // Map from tool call ID to tool name, used for tracking and fallback lookup
+        const toolCallIdToName = new Map<string, string>();
+        // Map from tool name to list of tool call IDs (for fallback when callId is missing from results)
+        const toolNameToIds = new Map<string, string[]>();
         let toolCallIndex = 0;
 
         for (const msg of messages) {
@@ -347,6 +351,13 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                         }
                         processedToolCallIds.add(toolCallId);
                         
+                        // Track the mapping from ID to name
+                        toolCallIdToName.set(toolCallId, part.name);
+                        if (!toolNameToIds.has(part.name)) {
+                            toolNameToIds.set(part.name, []);
+                        }
+                        toolNameToIds.get(part.name)!.push(toolCallId);
+                        
                         // This is a tool call from the assistant
                         toolCalls.push({
                             id: toolCallId,
@@ -359,7 +370,19 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     } else if (this.isToolResultPart(part)) {
                         // This is a tool result
                         const resultContent = this.extractToolResultContent(part);
-                        const toolCallId = this.ensureToolCallId(part.callId, 'result', toolCallIndex++);
+                        // Use the callId directly - it should match a previously seen tool call
+                        const callId = part.callId;
+                        let toolCallId: string;
+                        
+                        if (typeof callId === 'string' && callId.trim().length > 0) {
+                            toolCallId = callId;
+                        } else {
+                            // If callId is missing/empty, log a warning and generate a fallback ID
+                            // This should not happen in normal operation as VSCode should provide the callId
+                            console.warn('OAI2LMApi: Tool result missing callId, generating fallback ID. This may cause API errors with some providers.');
+                            toolCallId = `call_result_${Date.now()}_${toolCallIndex++}`;
+                        }
+                        
                         toolResults.push({
                             tool_call_id: toolCallId,
                             content: resultContent

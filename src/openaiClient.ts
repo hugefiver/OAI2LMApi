@@ -643,11 +643,19 @@ export class OpenAIClient {
                         content: msg.content || ''
                     };
                 case 'tool':
-                    // Tool messages must have content (not null) and tool_call_id
+                    // Tool messages must have content (not null) and a valid tool_call_id
+                    // Some APIs (e.g., Claude via OpenAI-compatible proxies) require non-empty tool_call_id
+                    let toolCallId = msg.tool_call_id;
+                    if (!toolCallId || typeof toolCallId !== 'string' || toolCallId.trim().length === 0) {
+                        // Log warning as this may cause issues with some API providers
+                        console.warn('OAI2LMApi: Tool message missing valid tool_call_id, using fallback. This may cause API errors with some providers.');
+                        // Generate a fallback ID - while not ideal, it prevents API format errors
+                        toolCallId = `call_fallback_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                    }
                     return {
                         role: 'tool' as const,
                         content: msg.content || '',
-                        tool_call_id: msg.tool_call_id || ''
+                        tool_call_id: toolCallId
                     };
                 default:
                     // Fallback to user role
