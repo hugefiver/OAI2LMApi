@@ -378,7 +378,8 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                             // Use the same ID that was assigned to the corresponding tool call
                             toolCallId = callIdMapping.get(originalCallId)!;
                         } else {
-                            // No mapping found by callId, use original ID if valid, otherwise generate fallback
+                            // No mapping found by callId - this can happen if tool call was missing or had different callId
+                            console.warn('OAI2LMApi: Tool result missing mapping for callId, using fallback. This may cause API errors with some providers.');
                             // Note: toolCallIndex is only incremented when generating a new ID,
                             // to keep index values consistent for future lookups
                             toolCallId = this.ensureToolCallId(originalCallId, 'result', toolCallIndex++);

@@ -636,7 +636,10 @@ export class OpenAIClient {
         };
         
         // First pass: collect all tool call IDs and their mappings
-        // This ensures tool results can look up the same IDs by their original callId
+        // This ensures tool results can look up the same IDs by their original callId.
+        // ASSUMPTION: Tool call messages (assistant role with tool_calls) always precede
+        // their corresponding tool result messages (tool role) in the message array.
+        // This is the expected order per OpenAI API semantics.
         let toolCallIndex = 0;
         for (const msg of messages) {
             if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
@@ -644,13 +647,15 @@ export class OpenAIClient {
                     const indexKey = `__index_${toolCallIndex++}`;
                     const originalId = tc.id;
                     if (originalId && typeof originalId === 'string' && originalId.trim().length > 0) {
-                        // Store mapping from valid ID for tool result lookup
-                        // (tool results reference the original ID, which needs to map to the same value)
+                        // Store mapping from valid ID for tool result lookup.
+                        // We store originalId -> originalId so that tool results can look up by their
+                        // tool_call_id and always get a consistent value (even if it's the same ID).
+                        // This simplifies the lookup logic in the second pass.
                         toolCallIdMapping.set(originalId, originalId);
                         // Also store index-based mapping for second pass iteration
                         toolCallIdMapping.set(indexKey, originalId);
                     } else {
-                        // Generate fallback ID and store in mapping (side effect only - return value not used here)
+                        // Generate and store fallback ID in mapping for second pass (return value stored via side effect)
                         getOrCreateToolCallId(undefined, indexKey);
                     }
                 }
@@ -708,7 +713,9 @@ export class OpenAIClient {
                         console.warn('OAI2LMApi: Tool message missing valid tool_call_id, using fallback. This may cause API errors with some providers.');
                         toolCallId = generateFallbackId();
                     } else {
-                        // Look up mapping in case original ID was replaced with fallback
+                        // Look up mapping in case original ID was replaced with fallback.
+                        // Note: For valid IDs, the mapping returns the same value (originalId -> originalId),
+                        // which is a slight overhead but keeps the lookup logic simple and consistent.
                         const mappedId = toolCallIdMapping.get(toolCallId);
                         if (mappedId) {
                             toolCallId = mappedId;
