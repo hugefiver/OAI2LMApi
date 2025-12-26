@@ -21,21 +21,26 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
     private disposables: vscode.Disposable[] = [];
     private modelList: GeminiModelInformation[] = [];
     private _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
+    private _initialized = false;
 
     readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
     constructor(private context: vscode.ExtensionContext) {}
 
-    async initialize(): Promise<boolean> {
+    /**
+     * Initialize the provider. Returns void for consistency with OpenAILanguageModelProvider.
+     * The provider is not registered if no API key is configured.
+     */
+    async initialize(): Promise<void> {
         const config = vscode.workspace.getConfiguration('oai2lmapi');
-        const apiEndpoint = config.get<string>('geminiApiEndpoint', 'https://generativelanguage.googleapis.com/v1beta');
+        const apiEndpoint = config.get<string>('geminiApiEndpoint', 'https://generativelanguage.googleapis.com');
 
         // Retrieve Gemini API key from SecretStorage
         const apiKey = await this.context.secrets.get(GEMINI_API_KEY_SECRET_KEY);
 
         if (!apiKey) {
             console.log('GeminiProvider: API key not configured, provider will not be enabled');
-            return false;
+            return;
         }
 
         console.log(`GeminiProvider: Initializing with endpoint: ${apiEndpoint}`);
@@ -49,6 +54,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         console.log('GeminiProvider: Registering language model provider');
         const disposable = vscode.lm.registerLanguageModelChatProvider('gemini', this);
         this.disposables.push(disposable);
+        this._initialized = true;
 
         // Try to load cached models first
         const cachedModels = this.context.globalState.get<GeminiModelInfo[]>(GEMINI_CACHED_MODELS_KEY);
@@ -70,8 +76,13 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                 );
             }
         }
+    }
 
-        return true;
+    /**
+     * Check if the provider is initialized and active.
+     */
+    get isInitialized(): boolean {
+        return this._initialized;
     }
 
     private updateModelList(apiModels: GeminiModelInfo[]) {
@@ -130,16 +141,16 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         // Remove 'models/' prefix if present
         const name = modelId.replace(/^models\//, '');
         
-        // Common Gemini family patterns
+        // Common Gemini family patterns (version-specific first, then generic fallbacks)
         const patterns = [
-            /^(gemini-2\.5|gemini-2\.0|gemini-1\.5|gemini-1\.0|gemini)/i,
-            /^(gemma-3|gemma-2|gemma)/i,
+            /^(gemini-3|gemini-2\.5|gemini-2\.0|gemini-1\.5|gemini-1\.0)/i,
+            /^gemini/i, // Fallback for other Gemini versions
         ];
 
         for (const pattern of patterns) {
             const match = name.match(pattern);
             if (match) {
-                return match[1].toLowerCase();
+                return match[1] ? match[1].toLowerCase() : 'gemini';
             }
         }
 
@@ -169,8 +180,9 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
     }
 
     private supportsVision(modelId: string): boolean {
-        // Most Gemini models support vision
+        // Most Gemini models support vision (reference: modelMetadata.ts)
         const visionModels = [
+            'gemini-3',
             'gemini-2.5',
             'gemini-2.0',
             'gemini-1.5',
@@ -201,19 +213,23 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         }
 
         // Convert VSCode messages to Gemini format
-        const { contents, systemInstruction } = this.convertMessages(messages);
+        const { contents, systemInstruction, toolCallNames } = this.convertMessages(messages);
 
         // Convert VSCode tools to Gemini format
         const tools = this.convertTools(options.tools);
         const toolMode = this.convertToolMode(options.toolMode);
 
-        // Get thinking level from configuration
-        const config = vscode.workspace.getConfiguration('oai2lmapi');
-        const thinkingLevel = config.get<'none' | 'low' | 'medium' | 'high'>('geminiThinkingLevel', 'none');
-
-        // Get maxTokens
-        const optionsAny = options as any;
-        const budgetFromOptions: unknown = optionsAny?.tokenBudget ?? optionsAny?.maxTokens ?? optionsAny?.maxOutputTokens;
+        // Get maxTokens from options
+        type TokenBudgetOptions = {
+            tokenBudget?: number;
+            maxTokens?: number;
+            maxOutputTokens?: number;
+        };
+        const optionsWithBudget = options as Partial<TokenBudgetOptions>;
+        const budgetFromOptions: unknown =
+            optionsWithBudget.tokenBudget ??
+            optionsWithBudget.maxTokens ??
+            optionsWithBudget.maxOutputTokens;
         const budgetNumber = typeof budgetFromOptions === 'number' && Number.isFinite(budgetFromOptions) ? budgetFromOptions : undefined;
         const modelBudget = typeof model.maxOutputTokens === 'number' && Number.isFinite(model.maxOutputTokens) ? model.maxOutputTokens : 8192;
         const maxTokens = budgetNumber ?? modelBudget;
@@ -229,6 +245,9 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         // Track reported tool call IDs
         const reportedToolCallIds = new Set<string>();
 
+        // Store tool call names for function response lookup
+        this._toolCallNames = toolCallNames;
+
         await this.client.streamChatCompletion(
             contents,
             model.modelId,
@@ -238,13 +257,14 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                     progress.report(new vscode.LanguageModelTextPart(chunk));
                 },
                 onThinkingChunk: (chunk, thoughtSignature) => {
-                    // Report thinking content
+                    // Report thinking content with optional signature
                     const metadata = thoughtSignature ? { thoughtSignature } : undefined;
                     progress.report(new vscode.LanguageModelThinkingPart(chunk, undefined, metadata));
                 },
                 onToolCallsComplete: (toolCalls: GeminiCompletedToolCall[]) => {
                     for (const toolCall of toolCalls) {
                         if (reportedToolCallIds.has(toolCall.id)) {
+                            console.warn(`GeminiProvider: Duplicate tool call id '${toolCall.id}' for tool '${toolCall.name}', ignoring subsequent occurrence.`);
                             continue;
                         }
                         reportedToolCallIds.add(toolCall.id);
@@ -256,8 +276,8 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                                 toolCall.name,
                                 parsedArgs
                             ));
-                        } catch {
-                            console.warn(`GeminiProvider: Failed to parse tool call arguments for ${toolCall.name}`);
+                        } catch (error) {
+                            console.warn(`GeminiProvider: Failed to parse tool call arguments for ${toolCall.name}:`, error);
                             progress.report(new vscode.LanguageModelToolCallPart(
                                 toolCall.id,
                                 toolCall.name,
@@ -269,23 +289,28 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                 signal: abortController.signal,
                 tools,
                 toolMode,
-                maxTokens,
-                thinkingLevel
+                maxTokens
             }
         );
     }
+
+    // Map of tool call IDs to function names, used for function responses
+    private _toolCallNames: Map<string, string> = new Map();
 
     /**
      * Converts VSCode messages to Gemini format.
      * Gemini uses a different structure with 'user' and 'model' roles.
      * System instructions are handled separately.
+     * Also extracts tool call IDs to function name mappings for function responses.
      */
     private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): {
         contents: GeminiContent[];
         systemInstruction: string | undefined;
+        toolCallNames: Map<string, string>;
     } {
         const contents: GeminiContent[] = [];
         let systemInstruction: string | undefined;
+        const toolCallNames = new Map<string, string>();
 
         for (const msg of messages) {
             const role = this.mapRole(msg.role);
@@ -300,7 +325,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             }
 
             const geminiRole = role === 'assistant' ? 'model' : 'user';
-            const parts = this.convertContentParts(msg);
+            const parts = this.convertContentParts(msg, toolCallNames);
 
             if (parts.length > 0) {
                 contents.push({
@@ -310,26 +335,26 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             }
         }
 
-        return { contents, systemInstruction };
+        return { contents, systemInstruction, toolCallNames };
     }
 
     /**
      * Convert message content to Gemini parts
      */
-    private convertContentParts(msg: vscode.LanguageModelChatRequestMessage): GeminiPart[] {
+    private convertContentParts(msg: vscode.LanguageModelChatRequestMessage, toolCallNames: Map<string, string>): GeminiPart[] {
         const parts: GeminiPart[] = [];
 
         if (typeof msg.content === 'string') {
             parts.push({ text: msg.content });
         } else if (Array.isArray(msg.content)) {
             for (const part of msg.content) {
-                const converted = this.convertPart(part);
+                const converted = this.convertPart(part, toolCallNames);
                 if (converted) {
                     parts.push(converted);
                 }
             }
         } else if (msg.content && typeof msg.content === 'object') {
-            const converted = this.convertPart(msg.content);
+            const converted = this.convertPart(msg.content, toolCallNames);
             if (converted) {
                 parts.push(converted);
             }
@@ -339,9 +364,14 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
     }
 
     /**
-     * Convert a single content part to Gemini format
+     * Convert a single content part to Gemini format.
+     * 
+     * Note: For tool result parts, we attempt to look up the original function name
+     * from the toolCallNames map using the callId. If not found, we use the callId
+     * as the function name, which may cause issues with Gemini's function response
+     * matching. Ensure that tool calls are properly tracked in the conversation.
      */
-    private convertPart(part: unknown): GeminiPart | null {
+    private convertPart(part: unknown, toolCallNames: Map<string, string>): GeminiPart | null {
         if (!part || typeof part !== 'object') {
             return null;
         }
@@ -357,11 +387,14 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             return { text: partObj.text };
         }
 
-        // Tool call part (from assistant)
+        // Tool call part (from assistant) - record the callId -> name mapping
         if ('callId' in partObj && 'name' in partObj && 'input' in partObj) {
+            const callId = partObj.callId as string;
+            const name = partObj.name as string;
+            toolCallNames.set(callId, name);
             return {
                 functionCall: {
-                    name: partObj.name as string,
+                    name: name,
                     args: partObj.input as Record<string, unknown>
                 }
             };
@@ -369,12 +402,13 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
         // Tool result part (user providing function response)
         if ('callId' in partObj && 'content' in partObj && !('name' in partObj)) {
+            const callId = partObj.callId as string;
             const resultContent = this.extractToolResultContent(partObj);
-            // For Gemini, we need to provide a functionResponse
-            // The name needs to be retrieved from context, but we use a placeholder
+            // Look up the function name from our stored mappings or instance map
+            const functionName = toolCallNames.get(callId) || this._toolCallNames.get(callId) || callId;
             return {
                 functionResponse: {
-                    name: 'function_response',
+                    name: functionName,
                     response: { result: resultContent }
                 }
             };
@@ -383,7 +417,6 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         // Image/data part
         if ('uri' in partObj && typeof partObj.uri === 'string') {
             const uri = partObj.uri as string;
-            const mimeType = (partObj.mimeType as string) || this.guessMimeType(uri);
             
             // Handle base64 data URIs
             if (uri.startsWith('data:')) {
@@ -482,6 +515,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         for (const tool of tools) {
             const name = (tool.name ?? '').trim();
             if (!name) {
+                console.warn('GeminiProvider: Skipping tool with invalid name (empty or whitespace only).', {
+                    originalName: tool.name,
+                    description: tool.description
+                });
                 continue;
             }
 
@@ -494,7 +531,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                 if (!('type' in parameters)) {
                     parameters = { ...parameters, type: 'object' };
                 }
-                if ((parameters as any).type === 'object' && !('properties' in parameters)) {
+                if ((parameters as Record<string, unknown>).type === 'object' && !('properties' in parameters)) {
                     parameters = { ...parameters, properties: {} };
                 }
             }
@@ -539,21 +576,50 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         }
     }
 
+    /**
+     * Count tokens using Gemini's countTokens API.
+     * Falls back to estimation if the API is unavailable.
+     */
     async provideTokenCount(
         model: GeminiModelInformation,
         text: string | vscode.LanguageModelChatRequestMessage,
         token: vscode.CancellationToken
     ): Promise<number> {
-        // Simple estimation: ~4 characters per token
-        let textContent: string;
+        if (!this.client) {
+            return this.estimateTokens(text);
+        }
 
+        // Convert to Gemini content format
+        let contents: GeminiContent[];
+        if (typeof text === 'string') {
+            contents = [{ role: 'user', parts: [{ text }] }];
+        } else {
+            const { contents: convertedContents } = this.convertMessages([text]);
+            contents = convertedContents;
+        }
+
+        try {
+            const count = await this.client.countTokens(contents, model.modelId);
+            return count;
+        } catch {
+            // Fall back to estimation
+            return this.estimateTokens(text);
+        }
+    }
+
+    /**
+     * Estimate token count based on text length.
+     * Uses ~3 characters per token as a rough approximation.
+     */
+    private estimateTokens(text: string | vscode.LanguageModelChatRequestMessage): number {
+        let textContent: string;
         if (typeof text === 'string') {
             textContent = text;
         } else {
             textContent = this.extractTextContent(text);
         }
-
-        return Math.ceil(textContent.length / 4);
+        // Rough estimation: ~3 characters per token (compromise between English and CJK)
+        return Math.ceil(textContent.length / 3);
     }
 
     dispose(): void {
@@ -563,5 +629,6 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         }
         this.disposables = [];
         this.modelList = [];
+        this._initialized = false;
     }
 }

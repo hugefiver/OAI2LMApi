@@ -112,8 +112,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration('oai2lmapi')) {
                 console.log('OAI2LMApi configuration changed, reinitializing...');
-                await reinitializeProvider(context);
-                await reinitializeGeminiProvider(context);
+                await reinitializeAllProviders(context);
             }
         })
     );
@@ -182,21 +181,28 @@ async function initializeProvider(context: vscode.ExtensionContext): Promise<voi
 async function initializeGeminiProvider(context: vscode.ExtensionContext): Promise<void> {
     try {
         geminiProvider = new GeminiLanguageModelProvider(context);
-        const initialized = await geminiProvider.initialize();
-        if (!initialized) {
-            // Provider was not initialized (no API key), dispose it
+        await geminiProvider.initialize();
+        // Check if provider is actually initialized (has API key)
+        if (!geminiProvider.isInitialized) {
             geminiProvider.dispose();
             geminiProvider = undefined;
             console.log('GeminiProvider: Not initialized (no API key configured)');
         }
     } catch (error) {
         console.error('GeminiProvider: Failed to initialize:', error);
-        // Only show error if it's not a "no API key" situation
         if (geminiProvider) {
             geminiProvider.dispose();
             geminiProvider = undefined;
         }
     }
+}
+
+/**
+ * Reinitialize all providers. Used when configuration changes.
+ */
+async function reinitializeAllProviders(context: vscode.ExtensionContext): Promise<void> {
+    await reinitializeProvider(context);
+    await reinitializeGeminiProvider(context);
 }
 
 async function reinitializeProvider(context: vscode.ExtensionContext): Promise<void> {

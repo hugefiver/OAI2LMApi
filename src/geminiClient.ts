@@ -27,6 +27,8 @@ export interface GeminiModelInfo {
     inputTokenLimit?: number;
     outputTokenLimit?: number;
     supportedGenerationMethods: string[];
+    /** Supported actions - used to determine function calling support */
+    supportedActions?: string[];
 }
 
 /**
@@ -105,6 +107,7 @@ export interface GeminiGenerationConfig {
     responseSchema?: Record<string, unknown>;
     thinkingConfig?: {
         thinkingBudget?: number;
+        thinkingLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'NONE';
         includeThoughts?: boolean;
     };
 }
@@ -193,6 +196,19 @@ export interface GeminiCompletedToolCall {
 }
 
 /**
+ * Thinking configuration for Gemini API.
+ * Supports both thinkingBudget (number of tokens) and thinkingLevel (low/medium/high/auto).
+ */
+export interface GeminiThinkingConfig {
+    /** Number of tokens for thinking budget. If provided, takes precedence over thinkingLevel. */
+    thinkingBudget?: number;
+    /** Thinking level: 'low', 'medium', 'high', 'auto', or 'none' */
+    thinkingLevel?: 'none' | 'low' | 'medium' | 'high' | 'auto';
+    /** Whether to include thoughts in the response. */
+    includeThoughts?: boolean;
+}
+
+/**
  * Stream options for Gemini streaming
  */
 export interface GeminiStreamOptions {
@@ -203,7 +219,8 @@ export interface GeminiStreamOptions {
     tools?: GeminiFunctionDeclaration[];
     toolMode?: 'auto' | 'required' | 'none';
     maxTokens?: number;
-    thinkingLevel?: 'none' | 'low' | 'medium' | 'high';
+    /** Thinking configuration. Can be a budget number, a level string, or a full config object. */
+    thinking?: number | string | GeminiThinkingConfig;
 }
 
 /**
@@ -225,23 +242,90 @@ function parseModelName(fullName: string): string {
 }
 
 /**
- * Maps thinkingLevel to thinkingBudget tokens.
- * Reference: https://ai.google.dev/gemini-api/docs/thinking
+ * Parses thinking configuration from various input formats.
+ * 
+ * @param thinking - Can be:
+ *   - A number: Used as thinkingBudget directly
+ *   - A string: 'low', 'medium', 'high', 'auto', or 'none' for thinkingLevel
+ *   - An object: { thinkingBudget?: number, thinkingLevel?: string, includeThoughts?: boolean }
+ * 
+ * @returns The thinkingConfig object for Gemini API, or undefined if thinking is disabled.
  */
-function getThinkingBudget(level: 'none' | 'low' | 'medium' | 'high' | undefined): number | undefined {
-    if (!level || level === 'none') {
+function parseThinkingConfig(thinking: number | string | GeminiThinkingConfig | undefined): GeminiGenerationConfig['thinkingConfig'] | undefined {
+    if (thinking === undefined || thinking === null) {
         return undefined;
     }
-    switch (level) {
-        case 'low':
-            return 1024;
-        case 'medium':
-            return 8192;
-        case 'high':
-            return 24576;
-        default:
+
+    // If it's a number, use it as thinkingBudget
+    if (typeof thinking === 'number') {
+        if (thinking <= 0) {
             return undefined;
+        }
+        return {
+            thinkingBudget: thinking,
+            includeThoughts: true
+        };
     }
+
+    // If it's a string, map to thinkingLevel
+    if (typeof thinking === 'string') {
+        const level = thinking.toLowerCase();
+        if (level === 'none' || level === '') {
+            return undefined;
+        }
+        const levelMap: Record<string, 'LOW' | 'MEDIUM' | 'HIGH' | undefined> = {
+            'low': 'LOW',
+            'medium': 'MEDIUM',
+            'high': 'HIGH',
+            'auto': undefined // auto means let API decide
+        };
+        const mappedLevel = levelMap[level];
+        if (level === 'auto') {
+            return { includeThoughts: true };
+        }
+        if (mappedLevel) {
+            return {
+                thinkingLevel: mappedLevel,
+                includeThoughts: true
+            };
+        }
+        return undefined;
+    }
+
+    // If it's an object, process thinkingConfig
+    if (typeof thinking === 'object') {
+        const config = thinking as GeminiThinkingConfig;
+        
+        // If thinkingBudget is provided as a number, use it
+        if (typeof config.thinkingBudget === 'number' && config.thinkingBudget > 0) {
+            return {
+                thinkingBudget: config.thinkingBudget,
+                includeThoughts: config.includeThoughts ?? true
+            };
+        }
+
+        // Otherwise, use thinkingLevel
+        if (config.thinkingLevel && config.thinkingLevel !== 'none') {
+            const levelMap: Record<string, 'LOW' | 'MEDIUM' | 'HIGH' | undefined> = {
+                'low': 'LOW',
+                'medium': 'MEDIUM',
+                'high': 'HIGH',
+                'auto': undefined
+            };
+            const mappedLevel = levelMap[config.thinkingLevel];
+            if (config.thinkingLevel === 'auto') {
+                return { includeThoughts: config.includeThoughts ?? true };
+            }
+            if (mappedLevel) {
+                return {
+                    thinkingLevel: mappedLevel,
+                    includeThoughts: config.includeThoughts ?? true
+                };
+            }
+        }
+    }
+
+    return undefined;
 }
 
 export class GeminiClient {
@@ -252,17 +336,45 @@ export class GeminiClient {
     }
 
     /**
-     * List available models from the Gemini API
+     * List available models from the Gemini API.
+     * First tries /v1beta/models, then falls back to /v1/models (OpenAI compatible).
      */
     async listModels(): Promise<GeminiModelInfo[]> {
         const endpoint = normalizeApiEndpoint(this.config.apiEndpoint);
-        const url = `${endpoint}/models?key=${this.config.apiKey}`;
-
+        
+        // Try v1beta first (Gemini native)
+        const v1betaUrl = endpoint.includes('/v1beta') 
+            ? `${endpoint}/models` 
+            : `${endpoint}/v1beta/models`;
+        
         try {
-            const response = await fetch(url, {
+            const response = await fetch(v1betaUrl, {
                 method: 'GET',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': this.config.apiKey
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json() as { models: GeminiModelInfo[] };
+                return data.models || [];
+            }
+            
+            // If v1beta fails, try v1/models (OpenAI compatible format)
+            console.log('GeminiClient: v1beta/models failed, trying v1/models fallback');
+        } catch (error) {
+            console.debug('GeminiClient: v1beta/models request failed:', error);
+        }
+
+        // Fallback to /v1/models (OpenAI compatible)
+        const v1Url = `${endpoint}/v1/models`;
+        try {
+            const response = await fetch(v1Url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.config.apiKey}`
                 }
             });
 
@@ -271,16 +383,23 @@ export class GeminiClient {
                 throw new Error(`Failed to list models: ${response.status} ${response.statusText} - ${errorText}`);
             }
 
-            const data = await response.json() as { models: GeminiModelInfo[] };
-            return data.models || [];
+            // OpenAI format response
+            const data = await response.json() as { data: Array<{ id: string; object: string }> };
+            // Convert to GeminiModelInfo format
+            return (data.data || []).map(m => ({
+                name: `models/${m.id}`,
+                displayName: m.id,
+                supportedGenerationMethods: ['generateContent']
+            }));
         } catch (error) {
-            console.error('GeminiClient: Failed to list models:', error);
+            console.error('GeminiClient: Failed to list models from both endpoints:', error);
             throw error;
         }
     }
 
     /**
-     * Stream chat completion from Gemini API
+     * Stream chat completion from Gemini API.
+     * Uses X-Goog-Api-Key header for authentication (more secure than URL query parameter).
      */
     async streamChatCompletion(
         contents: GeminiContent[],
@@ -290,7 +409,10 @@ export class GeminiClient {
     ): Promise<string> {
         const endpoint = normalizeApiEndpoint(this.config.apiEndpoint);
         const modelPath = model.startsWith('models/') ? model : `models/${model}`;
-        const url = `${endpoint}/${modelPath}:streamGenerateContent?key=${this.config.apiKey}&alt=sse`;
+        
+        // Build URL - use v1beta if not already specified in endpoint
+        const baseUrl = endpoint.includes('/v1beta') ? endpoint : `${endpoint}/v1beta`;
+        const url = `${baseUrl}/${modelPath}:streamGenerateContent?alt=sse`;
 
         const request: GeminiGenerateContentRequest = {
             contents
@@ -335,13 +457,10 @@ export class GeminiClient {
             generationConfig.maxOutputTokens = options.maxTokens;
         }
 
-        // Add thinking config if thinkingLevel is specified
-        const thinkingBudget = getThinkingBudget(options.thinkingLevel);
-        if (thinkingBudget !== undefined) {
-            generationConfig.thinkingConfig = {
-                thinkingBudget,
-                includeThoughts: true
-            };
+        // Add thinking config
+        const thinkingConfig = parseThinkingConfig(options.thinking);
+        if (thinkingConfig) {
+            generationConfig.thinkingConfig = thinkingConfig;
         }
 
         if (Object.keys(generationConfig).length > 0) {
@@ -351,12 +470,14 @@ export class GeminiClient {
         let fullContent = '';
         const toolCalls: GeminiCompletedToolCall[] = [];
         let toolCallIndex = 0;
+        let currentThoughtSignature: string | undefined;
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': this.config.apiKey
                 },
                 body: JSON.stringify(request),
                 signal: options.signal
@@ -387,46 +508,56 @@ export class GeminiClient {
 
                 buffer += decoder.decode(value, { stream: true });
 
-                // Process SSE events
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                // Process SSE events - handle double-newline event separators
+                // SSE format: events separated by double newlines, each line can be "data: ..."
+                const events = buffer.split(/\n\n/);
+                buffer = events.pop() || ''; // Keep incomplete event in buffer
 
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const jsonStr = line.substring(6).trim();
-                        if (!jsonStr || jsonStr === '[DONE]') {
-                            continue;
-                        }
+                for (const event of events) {
+                    const lines = event.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.substring(6).trim();
+                            if (!jsonStr || jsonStr === '[DONE]') {
+                                continue;
+                            }
 
-                        try {
-                            const chunk: GeminiStreamChunk = JSON.parse(jsonStr);
-                            const candidate = chunk.candidates?.[0];
-                            const parts = candidate?.content?.parts;
+                            try {
+                                const chunk: GeminiStreamChunk = JSON.parse(jsonStr);
+                                const candidate = chunk.candidates?.[0];
+                                const parts = candidate?.content?.parts;
 
-                            if (parts) {
-                                for (const part of parts) {
-                                    if (part.thought && part.text) {
-                                        // This is thinking/reasoning content
-                                        options.onThinkingChunk?.(part.text, undefined);
-                                    } else if (part.text && !part.thought) {
-                                        // Regular text content
-                                        fullContent += part.text;
-                                        options.onChunk?.(part.text);
-                                    } else if (part.functionCall) {
-                                        // Tool/function call
-                                        const funcCall = part.functionCall;
-                                        const callId = `gemini_call_${toolCallIndex++}`;
-                                        toolCalls.push({
-                                            id: callId,
-                                            name: funcCall.name,
-                                            arguments: JSON.stringify(funcCall.args)
-                                        });
+                                // Extract thoughtSignature from chunk metadata if available
+                                const chunkAny = chunk as Record<string, unknown>;
+                                if (chunkAny.thoughtSignature && typeof chunkAny.thoughtSignature === 'string') {
+                                    currentThoughtSignature = chunkAny.thoughtSignature;
+                                }
+
+                                if (parts) {
+                                    for (const part of parts) {
+                                        if (part.thought && part.text) {
+                                            // This is thinking/reasoning content
+                                            options.onThinkingChunk?.(part.text, currentThoughtSignature);
+                                        } else if (part.text && !part.thought) {
+                                            // Regular text content
+                                            fullContent += part.text;
+                                            options.onChunk?.(part.text);
+                                        } else if (part.functionCall) {
+                                            // Tool/function call
+                                            const funcCall = part.functionCall;
+                                            const callId = `gemini_call_${toolCallIndex++}`;
+                                            toolCalls.push({
+                                                id: callId,
+                                                name: funcCall.name,
+                                                arguments: JSON.stringify(funcCall.args)
+                                            });
+                                        }
                                     }
                                 }
+                            } catch (parseError) {
+                                // Ignore parse errors for incomplete JSON
+                                console.debug('GeminiClient: Failed to parse chunk:', parseError);
                             }
-                        } catch (parseError) {
-                            // Ignore parse errors for incomplete JSON
-                            console.debug('GeminiClient: Failed to parse chunk:', parseError);
                         }
                     }
                 }
@@ -449,7 +580,8 @@ export class GeminiClient {
     }
 
     /**
-     * Non-streaming chat completion (fallback)
+     * Non-streaming chat completion.
+     * Uses X-Goog-Api-Key header for authentication (more secure than URL query parameter).
      */
     async generateContent(
         contents: GeminiContent[],
@@ -459,12 +591,15 @@ export class GeminiClient {
             tools?: GeminiFunctionDeclaration[];
             toolMode?: 'auto' | 'required' | 'none';
             maxTokens?: number;
-            thinkingLevel?: 'none' | 'low' | 'medium' | 'high';
+            thinking?: number | string | GeminiThinkingConfig;
         }
     ): Promise<GeminiGenerateContentResponse> {
         const endpoint = normalizeApiEndpoint(this.config.apiEndpoint);
         const modelPath = model.startsWith('models/') ? model : `models/${model}`;
-        const url = `${endpoint}/${modelPath}:generateContent?key=${this.config.apiKey}`;
+        
+        // Build URL - use v1beta if not already specified in endpoint
+        const baseUrl = endpoint.includes('/v1beta') ? endpoint : `${endpoint}/v1beta`;
+        const url = `${baseUrl}/${modelPath}:generateContent`;
 
         const request: GeminiGenerateContentRequest = {
             contents
@@ -505,12 +640,9 @@ export class GeminiClient {
             generationConfig.maxOutputTokens = options.maxTokens;
         }
 
-        const thinkingBudget = getThinkingBudget(options?.thinkingLevel);
-        if (thinkingBudget !== undefined) {
-            generationConfig.thinkingConfig = {
-                thinkingBudget,
-                includeThoughts: true
-            };
+        const thinkingConfig = parseThinkingConfig(options?.thinking);
+        if (thinkingConfig) {
+            generationConfig.thinkingConfig = thinkingConfig;
         }
 
         if (Object.keys(generationConfig).length > 0) {
@@ -520,7 +652,8 @@ export class GeminiClient {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': this.config.apiKey
             },
             body: JSON.stringify(request)
         });
@@ -531,6 +664,72 @@ export class GeminiClient {
         }
 
         return await response.json() as GeminiGenerateContentResponse;
+    }
+
+    /**
+     * Count tokens using Gemini's countTokens API.
+     */
+    async countTokens(
+        contents: GeminiContent[],
+        model: string,
+        systemInstruction?: string
+    ): Promise<number> {
+        const endpoint = normalizeApiEndpoint(this.config.apiEndpoint);
+        const modelPath = model.startsWith('models/') ? model : `models/${model}`;
+        
+        // Build URL - use v1beta if not already specified in endpoint
+        const baseUrl = endpoint.includes('/v1beta') ? endpoint : `${endpoint}/v1beta`;
+        const url = `${baseUrl}/${modelPath}:countTokens`;
+
+        const request: { contents: GeminiContent[]; systemInstruction?: { parts: GeminiTextPart[] } } = {
+            contents
+        };
+
+        if (systemInstruction) {
+            request.systemInstruction = {
+                parts: [{ text: systemInstruction }]
+            };
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': this.config.apiKey
+                },
+                body: JSON.stringify(request)
+            });
+
+            if (!response.ok) {
+                // Fall back to estimation if API fails
+                console.debug('GeminiClient: countTokens API failed, using estimation');
+                return this.estimateTokens(contents);
+            }
+
+            const data = await response.json() as { totalTokens: number };
+            return data.totalTokens || 0;
+        } catch (error) {
+            console.debug('GeminiClient: countTokens request failed:', error);
+            return this.estimateTokens(contents);
+        }
+    }
+
+    /**
+     * Estimate token count based on text length.
+     * Fallback when countTokens API is unavailable.
+     */
+    private estimateTokens(contents: GeminiContent[]): number {
+        let totalChars = 0;
+        for (const content of contents) {
+            for (const part of content.parts) {
+                if ('text' in part && typeof part.text === 'string') {
+                    totalChars += part.text.length;
+                }
+            }
+        }
+        // Rough estimation: ~4 characters per token for English, ~2 for CJK
+        return Math.ceil(totalChars / 3);
     }
 
     updateConfig(config: GeminiConfig): void {
@@ -553,13 +752,37 @@ export function supportsTextGeneration(model: GeminiModelInfo): boolean {
 }
 
 /**
- * Helper function to check if a Gemini model supports function calling
+ * Helper function to check if a Gemini model supports function calling.
+ * 
+ * Checks in order:
+ * 1. If API provides supportedActions, look for 'functionCalling' or 'tools'
+ * 2. If model supports generateContent, assume function calling is supported
+ *    (except for known non-function-calling models like embedding, aqa, imagen)
  */
 export function supportsGeminiFunctionCalling(model: GeminiModelInfo): boolean {
-    // Models that support generateContent typically support function calling
-    // We can refine this based on model name patterns
-    const modelId = getGeminiModelId(model);
-    return model.supportedGenerationMethods.includes('generateContent') &&
-           !modelId.includes('embedding') &&
-           !modelId.includes('aqa');
+    // Check if API explicitly provides function calling capability
+    if (model.supportedActions && model.supportedActions.length > 0) {
+        return model.supportedActions.some(action => 
+            action.toLowerCase().includes('function') || 
+            action.toLowerCase().includes('tool')
+        );
+    }
+
+    // Fall back to heuristics based on model name and generation methods
+    const modelId = getGeminiModelId(model).toLowerCase();
+    
+    // Models that don't support function calling
+    const nonFunctionCallingPatterns = [
+        'embedding',
+        'aqa',
+        'imagen',
+        'veo',
+        'musicfx'
+    ];
+    
+    const isExcluded = nonFunctionCallingPatterns.some(pattern => 
+        modelId.includes(pattern)
+    );
+
+    return model.supportedGenerationMethods.includes('generateContent') && !isExcluded;
 }

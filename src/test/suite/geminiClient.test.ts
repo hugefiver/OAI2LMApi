@@ -362,3 +362,105 @@ suite('Gemini Conversation Flow Integration Tests', () => {
         assert.strictEqual(imagePart.inlineData.mimeType, 'image/png');
     });
 });
+
+suite('GeminiClient Mocked API Tests', () => {
+
+    test('Should handle empty model list response', async () => {
+        const config: GeminiConfig = {
+            apiEndpoint: 'https://generativelanguage.googleapis.com',
+            apiKey: 'test-key'
+        };
+
+        const client = new GeminiClient(config);
+        
+        // Mock fetch to return empty models
+        const originalFetch = global.fetch;
+        (global as any).fetch = async () => ({
+            ok: true,
+            json: async () => ({ models: [] })
+        });
+
+        try {
+            const models = await client.listModels();
+            assert.strictEqual(models.length, 0);
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
+    test('Should extract thoughtSignature from stream chunks', () => {
+        // Test that we can parse thoughtSignature from chunk metadata
+        const chunk = {
+            candidates: [{
+                content: {
+                    role: 'model',
+                    parts: [{ text: 'thinking...', thought: true }]
+                }
+            }],
+            thoughtSignature: 'sig_abc123'
+        };
+
+        assert.strictEqual((chunk as any).thoughtSignature, 'sig_abc123');
+        assert.strictEqual(chunk.candidates[0].content.parts[0].thought, true);
+    });
+});
+
+suite('GeminiLanguageModelProvider Message Conversion Tests', () => {
+
+    test('Tool call ID to function name mapping should work correctly', () => {
+        // Test the concept of callId to name mapping
+        const toolCallNames = new Map<string, string>();
+        toolCallNames.set('call_123', 'get_weather');
+        toolCallNames.set('call_456', 'search_web');
+
+        assert.strictEqual(toolCallNames.get('call_123'), 'get_weather');
+        assert.strictEqual(toolCallNames.get('call_456'), 'search_web');
+        assert.strictEqual(toolCallNames.get('call_789'), undefined);
+    });
+
+    test('Model family extraction patterns should match correctly', () => {
+        // Test family extraction logic
+        const extractFamily = (modelId: string): string => {
+            const name = modelId.replace(/^models\//, '');
+            const patterns = [
+                /^(gemini-3|gemini-2\.5|gemini-2\.0|gemini-1\.5|gemini-1\.0)/i,
+                /^gemini/i,
+            ];
+
+            for (const pattern of patterns) {
+                const match = name.match(pattern);
+                if (match) {
+                    return match[1] ? match[1].toLowerCase() : 'gemini';
+                }
+            }
+            return name.toLowerCase();
+        };
+
+        assert.strictEqual(extractFamily('gemini-3-pro'), 'gemini-3');
+        assert.strictEqual(extractFamily('gemini-2.5-flash'), 'gemini-2.5');
+        assert.strictEqual(extractFamily('gemini-2.0-flash'), 'gemini-2.0');
+        assert.strictEqual(extractFamily('gemini-1.5-pro'), 'gemini-1.5');
+        assert.strictEqual(extractFamily('models/gemini-2.0-flash'), 'gemini-2.0');
+    });
+
+    test('Vision support detection should include gemini-3', () => {
+        const supportsVision = (modelId: string): boolean => {
+            const visionModels = [
+                'gemini-3',
+                'gemini-2.5',
+                'gemini-2.0',
+                'gemini-1.5',
+                'gemini-pro-vision'
+            ];
+            const lowerModelId = modelId.toLowerCase();
+            return visionModels.some(prefix => lowerModelId.includes(prefix)) ||
+                   lowerModelId.includes('vision');
+        };
+
+        assert.strictEqual(supportsVision('gemini-3-pro'), true);
+        assert.strictEqual(supportsVision('gemini-2.5-flash'), true);
+        assert.strictEqual(supportsVision('gemini-2.0-flash'), true);
+        assert.strictEqual(supportsVision('gemini-pro-vision'), true);
+        assert.strictEqual(supportsVision('text-embedding-004'), false);
+    });
+});

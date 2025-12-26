@@ -84,20 +84,42 @@
         },
         "oai2lmapi.geminiApiEndpoint": {
           "type": "string",
-          "default": "https://generativelanguage.googleapis.com/v1beta",
-          "description": "Google Gemini API endpoint URL"
+          "default": "https://generativelanguage.googleapis.com",
+          "description": "Google Gemini API endpoint URL (without version suffix)"
         },
-        "oai2lmapi.geminiThinkingLevel": {
-          "type": "string",
-          "enum": ["none", "low", "medium", "high"],
-          "default": "none",
-          "enumDescriptions": [
-            "No thinking/reasoning tokens",
-            "Low thinking budget (1024 tokens)",
-            "Medium thinking budget (8192 tokens)",
-            "High thinking budget (24576 tokens)"
-          ],
-          "description": "Gemini thinking/reasoning level for chain-of-thought. Higher levels provide more detailed reasoning but use more tokens."
+        "oai2lmapi.modelOverrides": {
+          "type": "object",
+          "default": {},
+          "description": "Per-model configuration overrides. Keys are model name patterns (supports wildcards like 'gemini-*'), values are objects with optional: maxInputTokens, maxOutputTokens, supportsToolCalling, supportsImageInput, temperature, thinkingLevel (number for budget, or 'low'/'medium'/'high'/'auto').",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "maxInputTokens": {
+                "type": "number",
+                "description": "Override max input tokens for matching models"
+              },
+              "maxOutputTokens": {
+                "type": "number",
+                "description": "Override max output tokens for matching models"
+              },
+              "supportsToolCalling": {
+                "type": "boolean",
+                "description": "Override tool calling support for matching models"
+              },
+              "supportsImageInput": {
+                "type": "boolean",
+                "description": "Override image input support for matching models"
+              },
+              "temperature": {
+                "type": "number",
+                "description": "Default temperature for matching models"
+              },
+              "thinkingLevel": {
+                "type": ["string", "number"],
+                "description": "Thinking level: number for token budget, or 'low'/'medium'/'high'/'auto'/'none'"
+              }
+            }
+          }
         }
       }
     }
