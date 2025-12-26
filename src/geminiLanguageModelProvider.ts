@@ -17,7 +17,7 @@ import { getModelMetadata } from './modelMetadata';
  * Model override configuration from user settings.
  *
  * Note:
- * - This interface mirrors the `oai2lmapi.geminiModelOverrides` schema in package.json.
+ * - This interface mirrors the `oai2lmapi.modelOverrides` schema in package.json.
  * - The `temperature` and `thinkingLevel` properties are currently not applied by
  *   this provider's getModelOverride logic; they are exposed here to keep the
  *   Gemini configuration aligned with other providers and reserved for potential
