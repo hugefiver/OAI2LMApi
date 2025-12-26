@@ -25,6 +25,11 @@
         "vendor": "oai2lmapi",
         "displayName": "OpenAI to Language Model API Bridge",
         "managementCommand": "oai2lmapi.manage"
+      },
+      {
+        "vendor": "gemini",
+        "displayName": "Google Gemini",
+        "managementCommand": "oai2lmapi.manage"
       }
     ],
     "commands": [
@@ -43,6 +48,14 @@
       {
         "command": "oai2lmapi.clearApiKey",
         "title": "OAI2LMApi: Clear API Key"
+      },
+      {
+        "command": "oai2lmapi.setGeminiApiKey",
+        "title": "OAI2LMApi: Set Gemini API Key"
+      },
+      {
+        "command": "oai2lmapi.clearGeminiApiKey",
+        "title": "OAI2LMApi: Clear Gemini API Key"
       }
     ],
     "configuration": {
@@ -68,6 +81,45 @@
           "type": "boolean",
           "default": false,
           "description": "Show models that do not support tool/function calling. By default, only models with tool calling support are displayed."
+        },
+        "oai2lmapi.geminiApiEndpoint": {
+          "type": "string",
+          "default": "https://generativelanguage.googleapis.com",
+          "description": "Google Gemini API endpoint URL (without version suffix)"
+        },
+        "oai2lmapi.modelOverrides": {
+          "type": "object",
+          "default": {},
+          "description": "Per-model configuration overrides. Keys are model name patterns (supports wildcards like 'gemini-*'), values are objects with optional: maxInputTokens, maxOutputTokens, supportsToolCalling, supportsImageInput, temperature, thinkingLevel (number for budget, or 'low'/'medium'/'high'/'auto').",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "maxInputTokens": {
+                "type": "number",
+                "description": "Override max input tokens for matching models"
+              },
+              "maxOutputTokens": {
+                "type": "number",
+                "description": "Override max output tokens for matching models"
+              },
+              "supportsToolCalling": {
+                "type": "boolean",
+                "description": "Override tool calling support for matching models"
+              },
+              "supportsImageInput": {
+                "type": "boolean",
+                "description": "Override image input support for matching models"
+              },
+              "temperature": {
+                "type": "number",
+                "description": "Default temperature for matching models"
+              },
+              "thinkingLevel": {
+                "type": ["string", "number"],
+                "description": "Thinking level: number for token budget, or 'low'/'medium'/'high'/'auto'/'none'"
+              }
+            }
+          }
         }
       }
     }

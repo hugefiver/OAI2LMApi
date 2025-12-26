@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { OpenAILanguageModelProvider } from './languageModelProvider';
-import { API_KEY_SECRET_KEY } from './constants';
+import { GeminiLanguageModelProvider } from './geminiLanguageModelProvider';
+import { API_KEY_SECRET_KEY, GEMINI_API_KEY_SECRET_KEY } from './constants';
 
 let languageModelProvider: OpenAILanguageModelProvider | undefined;
+let geminiProvider: GeminiLanguageModelProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('OAI2LMApi extension is now active');
@@ -10,11 +12,19 @@ export function activate(context: vscode.ExtensionContext) {
     // Register commands FIRST to ensure they are always available
     // This prevents "command not found" errors even if initialization fails
     const refreshCommand = vscode.commands.registerCommand('oai2lmapi.refreshModels', async () => {
+        let refreshed = false;
         if (languageModelProvider) {
             await languageModelProvider.loadModels();
+            refreshed = true;
+        }
+        if (geminiProvider) {
+            await geminiProvider.loadModels();
+            refreshed = true;
+        }
+        if (refreshed) {
             vscode.window.showInformationMessage('Models refreshed successfully');
         } else {
-            vscode.window.showWarningMessage('OAI2LMApi: Provider not initialized. Please configure API key first.');
+            vscode.window.showWarningMessage('OAI2LMApi: No providers initialized. Please configure API keys first.');
         }
     });
 
@@ -58,14 +68,51 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    context.subscriptions.push(refreshCommand, manageCommand, setApiKeyCommand, clearApiKeyCommand);
+    // Gemini-specific commands
+    const setGeminiApiKeyCommand = vscode.commands.registerCommand('oai2lmapi.setGeminiApiKey', async () => {
+        const apiKey = await vscode.window.showInputBox({
+            prompt: 'Enter your Google Gemini API key',
+            password: true,
+            ignoreFocusOut: true,
+            placeHolder: 'AIza...'
+        });
+        
+        if (apiKey !== undefined) {
+            await context.secrets.store(GEMINI_API_KEY_SECRET_KEY, apiKey);
+            vscode.window.showInformationMessage('Gemini API key saved securely');
+            
+            // Reinitialize the Gemini provider with the new key
+            await reinitializeGeminiProvider(context);
+        }
+    });
+
+    const clearGeminiApiKeyCommand = vscode.commands.registerCommand('oai2lmapi.clearGeminiApiKey', async () => {
+        const confirm = await vscode.window.showWarningMessage(
+            'Are you sure you want to clear the Gemini API key?',
+            { modal: true },
+            'Yes'
+        );
+        
+        if (confirm === 'Yes') {
+            await context.secrets.delete(GEMINI_API_KEY_SECRET_KEY);
+            vscode.window.showInformationMessage('Gemini API key cleared');
+            
+            // Dispose the Gemini provider
+            if (geminiProvider) {
+                geminiProvider.dispose();
+                geminiProvider = undefined;
+            }
+        }
+    });
+
+    context.subscriptions.push(refreshCommand, manageCommand, setApiKeyCommand, clearApiKeyCommand, setGeminiApiKeyCommand, clearGeminiApiKeyCommand);
 
     // Watch for configuration changes (excluding apiKey which is now in SecretStorage)
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration('oai2lmapi')) {
                 console.log('OAI2LMApi configuration changed, reinitializing...');
-                await reinitializeProvider(context);
+                await reinitializeAllProviders(context);
             }
         })
     );
@@ -85,8 +132,12 @@ async function initializeAsync(context: vscode.ExtensionContext): Promise<void> 
         // Migrate plaintext API key to SecretStorage if exists
         await migrateApiKeyToSecretStorage(context);
 
-        // Create and register the language model provider
+        // Create and register the OpenAI-compatible language model provider
         await initializeProvider(context);
+
+        // Create and register the Gemini language model provider
+        // This will only be enabled if a Gemini API key is configured
+        await initializeGeminiProvider(context);
     } catch (error) {
         console.error('OAI2LMApi: Background initialization failed:', error);
         // Surface critical initialization failures to the user
@@ -127,6 +178,33 @@ async function initializeProvider(context: vscode.ExtensionContext): Promise<voi
     }
 }
 
+async function initializeGeminiProvider(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        geminiProvider = new GeminiLanguageModelProvider(context);
+        await geminiProvider.initialize();
+        // Check if provider is actually initialized (has API key)
+        if (!geminiProvider.isInitialized) {
+            geminiProvider.dispose();
+            geminiProvider = undefined;
+            console.log('GeminiProvider: Not initialized (no API key configured)');
+        }
+    } catch (error) {
+        console.error('GeminiProvider: Failed to initialize:', error);
+        if (geminiProvider) {
+            geminiProvider.dispose();
+            geminiProvider = undefined;
+        }
+    }
+}
+
+/**
+ * Reinitialize all providers. Used when configuration changes.
+ */
+async function reinitializeAllProviders(context: vscode.ExtensionContext): Promise<void> {
+    await reinitializeProvider(context);
+    await reinitializeGeminiProvider(context);
+}
+
 async function reinitializeProvider(context: vscode.ExtensionContext): Promise<void> {
     if (languageModelProvider) {
         languageModelProvider.dispose();
@@ -135,9 +213,21 @@ async function reinitializeProvider(context: vscode.ExtensionContext): Promise<v
     await initializeProvider(context);
 }
 
+async function reinitializeGeminiProvider(context: vscode.ExtensionContext): Promise<void> {
+    if (geminiProvider) {
+        geminiProvider.dispose();
+        geminiProvider = undefined;
+    }
+    await initializeGeminiProvider(context);
+}
+
 export function deactivate() {
     if (languageModelProvider) {
         languageModelProvider.dispose();
         languageModelProvider = undefined;
+    }
+    if (geminiProvider) {
+        geminiProvider.dispose();
+        geminiProvider = undefined;
     }
 }
