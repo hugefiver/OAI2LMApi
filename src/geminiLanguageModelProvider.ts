@@ -287,8 +287,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         // Check for wildcard patterns (case-insensitive)
         for (const pattern of Object.keys(overrides)) {
             if (pattern.includes('*')) {
-                // Convert wildcard pattern to regex
-                // Only lowercase the modelId, not the pattern, for case-insensitive matching
+                // Convert wildcard pattern to regex; 'i' flag below handles case-insensitive matching
                 const regexPattern = pattern
                     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
                     .replace(/\\\*/g, '.*'); // Convert \* back to .*
