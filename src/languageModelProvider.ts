@@ -359,19 +359,8 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     } else if (this.isToolResultPart(part)) {
                         // This is a tool result
                         const resultContent = this.extractToolResultContent(part);
-                        // Use the callId directly - it should match a previously seen tool call
-                        const callId = part.callId;
-                        let toolCallId: string;
-                        
-                        if (typeof callId === 'string' && callId.trim().length > 0) {
-                            toolCallId = callId;
-                        } else {
-                            // If callId is missing/empty, log a warning and generate a fallback ID
-                            // This should not happen in normal operation as VSCode should provide the callId
-                            console.warn('OAI2LMApi: Tool result missing callId, generating fallback ID. This may cause API errors with some providers.');
-                            toolCallId = `call_fallback_${Date.now()}_${toolCallIndex++}`;
-                        }
-                        
+                        // Ensure we have a valid tool call ID, consistent with tool calls
+                        const toolCallId = this.ensureToolCallId(part.callId, 'result', toolCallIndex++);
                         toolResults.push({
                             tool_call_id: toolCallId,
                             content: resultContent
