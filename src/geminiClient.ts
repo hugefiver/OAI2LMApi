@@ -16,19 +16,23 @@ export interface GeminiConfig {
 }
 
 /**
- * Model information returned from the Gemini /models API
+ * Model information returned from the Gemini /models API.
+ * Note: Some Gemini endpoints may return null or missing values for many fields.
  */
 export interface GeminiModelInfo {
-    name: string;
-    baseModelId?: string;
-    version?: string;
-    displayName: string;
-    description?: string;
-    inputTokenLimit?: number;
-    outputTokenLimit?: number;
-    supportedGenerationMethods: string[];
+    /** Model resource name (e.g., "models/gemini-2.0-flash"). May be null in some API responses. */
+    name?: string | null;
+    baseModelId?: string | null;
+    version?: string | null;
+    /** Display name for the model. May be null in some API responses. */
+    displayName?: string | null;
+    description?: string | null;
+    inputTokenLimit?: number | null;
+    outputTokenLimit?: number | null;
+    /** Supported generation methods. May be null in some API responses. */
+    supportedGenerationMethods?: string[] | null;
     /** Supported actions - used to determine function calling support */
-    supportedActions?: string[];
+    supportedActions?: string[] | null;
 }
 
 /**
@@ -741,18 +745,46 @@ export class GeminiClient {
 }
 
 /**
- * Helper function to extract model ID from Gemini model info
+ * Helper function to extract model ID from Gemini model info.
+ * Falls back to displayName if name is missing.
  */
 export function getGeminiModelId(model: GeminiModelInfo): string {
-    return parseModelName(model.name);
+    // Try name first, then fall back to displayName
+    const name = parseModelName(model.name) || parseModelName(model.displayName);
+    return name;
 }
 
 /**
- * Helper function to check if a Gemini model supports text generation
+ * Helper function to check if a Gemini model supports text generation.
+ * If supportedGenerationMethods is null/undefined, uses model name heuristics.
  */
 export function supportsTextGeneration(model: GeminiModelInfo): boolean {
-    return Array.isArray(model.supportedGenerationMethods) && 
-           model.supportedGenerationMethods.includes('generateContent');
+    // If the API provides supportedGenerationMethods, use it
+    if (Array.isArray(model.supportedGenerationMethods)) {
+        return model.supportedGenerationMethods.includes('generateContent');
+    }
+    
+    // If supportedGenerationMethods is null/undefined, use name-based heuristics
+    const modelId = getGeminiModelId(model);
+    if (!modelId) {
+        return false;
+    }
+    
+    const lowerModelId = modelId.toLowerCase();
+    
+    // Known non-text-generation model patterns
+    const nonTextPatterns = [
+        'embedding',
+        'aqa',
+        'imagen',
+        'veo',
+        'musicfx'
+    ];
+    
+    const isExcluded = nonTextPatterns.some(pattern => lowerModelId.includes(pattern));
+    
+    // Assume Gemini models support text generation unless excluded
+    return lowerModelId.includes('gemini') && !isExcluded;
 }
 
 /**
@@ -765,7 +797,7 @@ export function supportsTextGeneration(model: GeminiModelInfo): boolean {
  */
 export function supportsGeminiFunctionCalling(model: GeminiModelInfo): boolean {
     // Check if API explicitly provides function calling capability
-    if (model.supportedActions && model.supportedActions.length > 0) {
+    if (Array.isArray(model.supportedActions) && model.supportedActions.length > 0) {
         return model.supportedActions.some(action => 
             action.toLowerCase().includes('function') || 
             action.toLowerCase().includes('tool')
