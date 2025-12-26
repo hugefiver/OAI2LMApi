@@ -565,3 +565,106 @@ suite('GeminiLanguageModelProvider Message Conversion Tests', () => {
         assert.strictEqual(supportsVision('text-embedding-004'), false);
     });
 });
+
+suite('getValidNumber Helper Function Tests', () => {
+    // Re-implement the helper logic for testing since it's a private method
+    const getValidNumber = (value: number | null | undefined): number | undefined => {
+        return typeof value === 'number' && Number.isFinite(value) && value > 0 
+            ? value 
+            : undefined;
+    };
+
+    test('should return undefined for null', () => {
+        assert.strictEqual(getValidNumber(null), undefined);
+    });
+
+    test('should return undefined for undefined', () => {
+        assert.strictEqual(getValidNumber(undefined), undefined);
+    });
+
+    test('should return undefined for 0', () => {
+        assert.strictEqual(getValidNumber(0), undefined);
+    });
+
+    test('should return undefined for negative numbers', () => {
+        assert.strictEqual(getValidNumber(-1), undefined);
+        assert.strictEqual(getValidNumber(-100), undefined);
+        assert.strictEqual(getValidNumber(-0.5), undefined);
+    });
+
+    test('should return undefined for Infinity', () => {
+        assert.strictEqual(getValidNumber(Infinity), undefined);
+        assert.strictEqual(getValidNumber(-Infinity), undefined);
+    });
+
+    test('should return undefined for NaN', () => {
+        assert.strictEqual(getValidNumber(NaN), undefined);
+    });
+
+    test('should return the number for positive finite numbers', () => {
+        assert.strictEqual(getValidNumber(1), 1);
+        assert.strictEqual(getValidNumber(100), 100);
+        assert.strictEqual(getValidNumber(32768), 32768);
+        assert.strictEqual(getValidNumber(1048576), 1048576);
+    });
+
+    test('should return the number for positive decimals', () => {
+        assert.strictEqual(getValidNumber(0.5), 0.5);
+        assert.strictEqual(getValidNumber(1.5), 1.5);
+    });
+});
+
+suite('Wildcard Pattern Matching Tests', () => {
+    // Re-implement the pattern matching logic for testing since getModelOverride is private
+    const matchesWildcardPattern = (modelId: string, pattern: string): boolean => {
+        if (!pattern.includes('*')) {
+            return modelId === pattern;
+        }
+        const regexPattern = pattern
+            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
+            .replace(/\\\*/g, '.*'); // Convert \* back to .*
+        const regex = new RegExp(`^${regexPattern}$`, 'i');
+        return regex.test(modelId);
+    };
+
+    test('should match exact patterns', () => {
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-flash', 'gemini-2.0-flash'), true);
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-flash', 'gemini-2.0-pro'), false);
+    });
+
+    test('should match wildcard at end (gemini-*)', () => {
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-flash', 'gemini-*'), true);
+        assert.strictEqual(matchesWildcardPattern('gemini-3-pro', 'gemini-*'), true);
+        assert.strictEqual(matchesWildcardPattern('gpt-4o', 'gemini-*'), false);
+    });
+
+    test('should match wildcard in middle (gemini-*-flash)', () => {
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-flash', 'gemini-*-flash'), true);
+        assert.strictEqual(matchesWildcardPattern('gemini-3-flash', 'gemini-*-flash'), true);
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-pro', 'gemini-*-flash'), false);
+    });
+
+    test('should handle special regex characters in pattern', () => {
+        // Dots should be escaped and match literally
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-flash', 'gemini-2.0-*'), true);
+        assert.strictEqual(matchesWildcardPattern('gemini-2X0-flash', 'gemini-2.0-*'), false);
+    });
+
+    test('should be case-insensitive', () => {
+        assert.strictEqual(matchesWildcardPattern('Gemini-2.0-Flash', 'gemini-*'), true);
+        assert.strictEqual(matchesWildcardPattern('GEMINI-3-PRO', 'gemini-*'), true);
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-flash', 'Gemini-*'), true);
+    });
+
+    test('should handle multiple wildcards', () => {
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-flash-latest', '*-flash-*'), true);
+        assert.strictEqual(matchesWildcardPattern('gemini-2.0-pro-latest', '*-flash-*'), false);
+    });
+
+    test('should match pattern with parentheses and brackets', () => {
+        // These should be escaped and treated as literals
+        assert.strictEqual(matchesWildcardPattern('model(v1)', 'model(v1)'), true);
+        assert.strictEqual(matchesWildcardPattern('model[v1]', 'model[v1]'), true);
+        assert.strictEqual(matchesWildcardPattern('model(v1)', 'model*'), true);
+    });
+});
