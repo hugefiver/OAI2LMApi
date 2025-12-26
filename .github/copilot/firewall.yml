@@ -1,0 +1,9 @@
+# Firewall configuration for GitHub Copilot coding agent
+# This file specifies hosts that the agent is allowed to access during execution.
+# See: https://docs.github.com/en/copilot/customizing-copilot/customizing-or-disabling-the-firewall-for-copilot-coding-agent
+
+allowed-hosts:
+  # VSCode download server - required for @vscode/test-electron to download VSCode for testing
+  - "update.code.visualstudio.com"
+  # Azure CDN for VSCode binaries
+  - "*.vo.msecnd.net"
