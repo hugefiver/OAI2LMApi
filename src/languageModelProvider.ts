@@ -325,10 +325,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): ChatMessage[] {
         const result: ChatMessage[] = [];
         const processedToolCallIds = new Set<string>();
-        // Map from tool call ID to tool name, used for tracking and fallback lookup
-        const toolCallIdToName = new Map<string, string>();
-        // Map from tool name to list of tool call IDs (for fallback when callId is missing from results)
-        const toolNameToIds = new Map<string, string[]>();
         let toolCallIndex = 0;
 
         for (const msg of messages) {
@@ -350,13 +346,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                             continue;
                         }
                         processedToolCallIds.add(toolCallId);
-                        
-                        // Track the mapping from ID to name
-                        toolCallIdToName.set(toolCallId, part.name);
-                        if (!toolNameToIds.has(part.name)) {
-                            toolNameToIds.set(part.name, []);
-                        }
-                        toolNameToIds.get(part.name)!.push(toolCallId);
                         
                         // This is a tool call from the assistant
                         toolCalls.push({
