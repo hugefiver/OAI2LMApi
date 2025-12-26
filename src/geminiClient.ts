@@ -787,8 +787,15 @@ export function supportsTextGeneration(model: GeminiModelInfo): boolean {
     
     const isExcluded = nonTextPatterns.some(pattern => lowerModelId.includes(pattern));
     
-    // Assume Gemini models support text generation unless excluded
-    return lowerModelId.includes('gemini') && !isExcluded;
+    // Assume Gemini models support text generation unless excluded, but log that this is heuristic
+    const inferredSupportsText = lowerModelId.includes('gemini') && !isExcluded;
+    console.warn(
+        '[OAI2LMApi][Gemini] supportsTextGeneration falling back to heuristic for model',
+        modelId,
+        '- inferred supports text generation =',
+        inferredSupportsText
+    );
+    return inferredSupportsText;
 }
 
 /**

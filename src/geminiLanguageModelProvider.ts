@@ -15,13 +15,26 @@ import { getModelMetadata } from './modelMetadata';
 
 /**
  * Model override configuration from user settings.
+ *
+ * Note:
+ * - This interface mirrors the `oai2lmapi.modelOverrides` schema in package.json.
+ * - The `temperature` and `thinkingLevel` properties are currently not applied by
+ *   this provider's getModelOverride logic; they are exposed here to keep the
+ *   Gemini configuration aligned with other providers and reserved for potential
+ *   future use.
  */
 interface ModelOverrideConfig {
     maxInputTokens?: number;
     maxOutputTokens?: number;
     supportsToolCalling?: boolean;
     supportsImageInput?: boolean;
+    /**
+     * Reserved for future use; currently not applied by getModelOverride.
+     */
     temperature?: number;
+    /**
+     * Reserved for future use; currently not applied by getModelOverride.
+     */
     thinkingLevel?: string | number;
 }
 
@@ -195,8 +208,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         // Get metadata from the model metadata registry as fallback
         const registryMetadata = getModelMetadata(modelId);
         
-        // Build model info, preferring API values, then registry, then defaults
-        // Priority: API response > registry metadata > hardcoded defaults
+        // Build model info with different priority orders:
+        // - Numeric limits: API response > registry metadata > hardcoded defaults
+        // - Boolean capabilities (supportsImageInput): explicit registry value > API heuristics
+        //   This allows registry metadata to override potentially inaccurate name-based heuristics
         const apiToolCalling = supportsGeminiFunctionCalling(apiModel);
         const apiVision = this.supportsVision(modelId);
         
@@ -207,16 +222,21 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             ?? registryMetadata.maxOutputTokens 
             ?? 8192;
         let supportsToolCalling = apiToolCalling;
-        let supportsImageInput = apiVision || registryMetadata.supportsImageInput;
+        // For image input, prefer explicit registry metadata over API name-based heuristics
+        let supportsImageInput = typeof registryMetadata.supportsImageInput === 'boolean'
+            ? registryMetadata.supportsImageInput
+            : apiVision;
 
         // Apply user-configured model overrides
         const override = this.getModelOverride(modelId);
         if (override) {
-            if (typeof override.maxInputTokens === 'number') {
-                maxInputTokens = override.maxInputTokens;
+            const validInputTokens = this.getValidNumber(override.maxInputTokens);
+            if (validInputTokens !== undefined) {
+                maxInputTokens = validInputTokens;
             }
-            if (typeof override.maxOutputTokens === 'number') {
-                maxOutputTokens = override.maxOutputTokens;
+            const validOutputTokens = this.getValidNumber(override.maxOutputTokens);
+            if (validOutputTokens !== undefined) {
+                maxOutputTokens = validOutputTokens;
             }
             if (typeof override.supportsToolCalling === 'boolean') {
                 supportsToolCalling = override.supportsToolCalling;
@@ -256,7 +276,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
     /**
      * Gets model override configuration for a given model ID.
-     * Supports wildcard patterns like 'gemini-*'.
+     * Supports wildcard patterns like 'gemini-*' with case-insensitive matching.
      */
     private getModelOverride(modelId: string): ModelOverrideConfig | undefined {
         const config = vscode.workspace.getConfiguration('oai2lmapi');
@@ -267,17 +287,15 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             return overrides[modelId];
         }
         
-        // Check for wildcard patterns
-        const lowerModelId = modelId.toLowerCase();
+        // Check for wildcard patterns (case-insensitive)
         for (const pattern of Object.keys(overrides)) {
             if (pattern.includes('*')) {
-                // Convert wildcard pattern to regex
+                // Convert wildcard pattern to regex; 'i' flag below handles case-insensitive matching
                 const regexPattern = pattern
-                    .toLowerCase()
                     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
                     .replace(/\\\*/g, '.*'); // Convert \* back to .*
                 const regex = new RegExp(`^${regexPattern}$`, 'i');
-                if (regex.test(lowerModelId)) {
+                if (regex.test(modelId)) {
                     return overrides[pattern];
                 }
             }
