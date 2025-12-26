@@ -246,7 +246,11 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         const reportedToolCallIds = new Set<string>();
 
         // Store tool call names for function response lookup
-        this._toolCallNames = toolCallNames;
+        // Clear previous state to avoid persistence across requests
+        this._toolCallNames.clear();
+        for (const [id, name] of toolCallNames) {
+            this._toolCallNames.set(id, name);
+        }
 
         await this.client.streamChatCompletion(
             contents,
@@ -561,7 +565,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
     /**
      * Count tokens using Gemini's countTokens API.
-     * Falls back to estimation if the API is unavailable.
+     * Falls back to approximate token counting based on text length if the API is unavailable.
      */
     async provideTokenCount(
         model: GeminiModelInformation,
@@ -585,7 +589,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             const count = await this.client.countTokens(contents, model.modelId);
             return count;
         } catch (error) {
-            console.warn('[GeminiLanguageModelProvider] Failed to count tokens via Gemini API, falling back to estimation.', {
+            console.error('[GeminiLanguageModelProvider] Failed to count tokens via Gemini API, falling back to estimation.', {
                 modelId: model.modelId,
                 inputType: typeof text,
                 error
