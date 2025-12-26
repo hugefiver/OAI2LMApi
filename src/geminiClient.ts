@@ -545,7 +545,7 @@ export class GeminiClient {
                                         } else if (part.functionCall) {
                                             // Tool/function call
                                             const funcCall = part.functionCall;
-                                            const callId = `gemini_call_${toolCallIndex++}`;
+                                            const callId = `gemini_call_${Date.now()}_${toolCallIndex++}_${Math.random().toString(36).slice(2, 8)}`;
                                             toolCalls.push({
                                                 id: callId,
                                                 name: funcCall.name,
@@ -555,8 +555,8 @@ export class GeminiClient {
                                     }
                                 }
                             } catch (parseError) {
-                                // Ignore parse errors for incomplete JSON
-                                console.debug('GeminiClient: Failed to parse chunk:', parseError);
+                                // Log parse errors - could indicate API response format issues
+                                console.warn('GeminiClient: Failed to parse chunk:', parseError);
                             }
                         }
                     }
@@ -703,14 +703,14 @@ export class GeminiClient {
 
             if (!response.ok) {
                 // Fall back to estimation if API fails
-                console.debug('GeminiClient: countTokens API failed, using estimation');
+                console.warn('GeminiClient: countTokens API failed, using estimation');
                 return this.estimateTokens(contents);
             }
 
             const data = await response.json() as { totalTokens: number };
             return data.totalTokens || 0;
         } catch (error) {
-            console.debug('GeminiClient: countTokens request failed:', error);
+            console.warn('GeminiClient: countTokens request failed:', error);
             return this.estimateTokens(contents);
         }
     }
@@ -728,7 +728,7 @@ export class GeminiClient {
                 }
             }
         }
-        // Rough estimation: ~4 characters per token for English, ~2 for CJK
+        // Rough estimation: ~3 characters per token (compromise between English and CJK)
         return Math.ceil(totalChars / 3);
     }
 

@@ -440,23 +440,6 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         return null;
     }
 
-    private guessMimeType(uri: string): string {
-        const lower = uri.toLowerCase();
-        if (lower.endsWith('.png')) {
-            return 'image/png';
-        }
-        if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
-            return 'image/jpeg';
-        }
-        if (lower.endsWith('.gif')) {
-            return 'image/gif';
-        }
-        if (lower.endsWith('.webp')) {
-            return 'image/webp';
-        }
-        return 'application/octet-stream';
-    }
-
     private extractToolResultContent(part: Record<string, unknown>): string {
         const content = part.content;
         if (Array.isArray(content)) {
@@ -601,7 +584,12 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         try {
             const count = await this.client.countTokens(contents, model.modelId);
             return count;
-        } catch {
+        } catch (error) {
+            console.warn('[GeminiLanguageModelProvider] Failed to count tokens via Gemini API, falling back to estimation.', {
+                modelId: model.modelId,
+                inputType: typeof text,
+                error
+            });
             // Fall back to estimation
             return this.estimateTokens(text);
         }
