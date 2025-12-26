@@ -10,6 +10,7 @@ import {
     supportsTextGeneration,
     supportsGeminiFunctionCalling
 } from '../../geminiClient';
+import { stripSchemaField } from '../../schemaUtils';
 
 suite('GeminiClient Unit Tests', () => {
 
@@ -670,28 +671,6 @@ suite('Wildcard Pattern Matching Tests', () => {
 });
 
 suite('stripSchemaField Helper Function Tests', () => {
-    // Re-implement the helper logic for testing since it's a private method
-    const stripSchemaField = (obj: Record<string, unknown>): Record<string, unknown> => {
-        const result: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(obj)) {
-            if (key === '$schema') {
-                continue;
-            }
-            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-                result[key] = stripSchemaField(value as Record<string, unknown>);
-            } else if (Array.isArray(value)) {
-                result[key] = value.map(item => {
-                    if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
-                        return stripSchemaField(item as Record<string, unknown>);
-                    }
-                    return item;
-                });
-            } else {
-                result[key] = value;
-            }
-        }
-        return result;
-    };
 
     test('should remove $schema at root level', () => {
         const input = {
