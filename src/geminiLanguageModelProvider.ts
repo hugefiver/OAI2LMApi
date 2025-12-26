@@ -180,7 +180,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
     }
 
     private supportsVision(modelId: string): boolean {
-        // Most Gemini models support vision (reference: modelMetadata.ts)
+        // Most Gemini models support vision by default
         const visionModels = [
             'gemini-3',
             'gemini-2.5',
