@@ -94,6 +94,16 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         let addedCount = 0;
         let filteredCount = 0;
         for (const apiModel of apiModels) {
+            // Filter out models with missing or empty names
+            if (!apiModel.name) {
+                filteredCount++;
+                console.log('GeminiProvider: Filtered out model with missing name', { 
+                    displayName: apiModel.displayName,
+                    baseModelId: apiModel.baseModelId
+                });
+                continue;
+            }
+
             // Filter out non-text-generation models
             if (!supportsTextGeneration(apiModel)) {
                 filteredCount++;
@@ -179,7 +189,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         console.log(`GeminiProvider: Added model: ${modelInfo.id} (family: ${family})`);
     }
 
-    private supportsVision(modelId: string): boolean {
+    private supportsVision(modelId: string | null | undefined): boolean {
+        if (!modelId) {
+            return false;
+        }
         // Most Gemini models support vision by default
         const visionModels = [
             'gemini-3',
