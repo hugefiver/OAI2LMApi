@@ -208,8 +208,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         // Get metadata from the model metadata registry as fallback
         const registryMetadata = getModelMetadata(modelId);
         
-        // Build model info, preferring API values, then registry, then defaults
-        // Priority: API response > registry metadata > hardcoded defaults
+        // Build model info with different priority orders:
+        // - Numeric limits: API response > registry metadata > hardcoded defaults
+        // - Boolean capabilities (supportsImageInput): explicit registry value > API heuristics
+        //   This allows registry metadata to override potentially inaccurate name-based heuristics
         const apiToolCalling = supportsGeminiFunctionCalling(apiModel);
         const apiVision = this.supportsVision(modelId);
         
@@ -220,6 +222,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             ?? registryMetadata.maxOutputTokens 
             ?? 8192;
         let supportsToolCalling = apiToolCalling;
+        // For image input, prefer explicit registry metadata over API name-based heuristics
         let supportsImageInput = typeof registryMetadata.supportsImageInput === 'boolean'
             ? registryMetadata.supportsImageInput
             : apiVision;
