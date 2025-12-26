@@ -746,12 +746,16 @@ export class GeminiClient {
 
 /**
  * Helper function to extract model ID from Gemini model info.
- * Falls back to displayName if name is missing.
+ * Falls back to displayName if name is missing or empty.
  */
 export function getGeminiModelId(model: GeminiModelInfo): string {
-    // Try name first, then fall back to displayName
-    const name = parseModelName(model.name) || parseModelName(model.displayName);
-    return name;
+    // Try name first
+    const nameFromName = parseModelName(model.name);
+    if (nameFromName) {
+        return nameFromName;
+    }
+    // Fall back to displayName
+    return parseModelName(model.displayName);
 }
 
 /**
