@@ -661,3 +661,227 @@ suite('OpenAIClient streamChatCompletion empty-stream and message tool_calls han
 		assert.strictEqual(calls.length, 1);
 	});
 });
+
+suite('Tool Call ID Validation Tests', () => {
+
+	test('ChatMessage with empty tool_call_id should be handled gracefully', () => {
+		// This test verifies that tool messages with empty/missing tool_call_id
+		// don't cause issues when constructing ChatMessage objects
+		const message: ChatMessage = {
+			role: 'tool',
+			content: '{"result": "success"}',
+			tool_call_id: '' // Empty ID - should be handled by convertMessagesToOpenAIFormat
+		};
+
+		assert.strictEqual(message.role, 'tool');
+		assert.strictEqual(message.content, '{"result": "success"}');
+		assert.strictEqual(message.tool_call_id, '');
+	});
+
+	test('ChatMessage tool_call_id should not be undefined', () => {
+		// Verify that tool messages should always have a defined tool_call_id
+		const message: ChatMessage = {
+			role: 'tool',
+			content: '{"result": "success"}',
+			tool_call_id: 'call_valid_123'
+		};
+
+		assert.strictEqual(message.tool_call_id, 'call_valid_123');
+		assert.ok(message.tool_call_id.length > 0);
+	});
+
+	test('Multiple tool calls should have unique IDs', () => {
+		const toolCalls: ToolCall[] = [
+			{
+				id: 'call_weather_1',
+				type: 'function',
+				function: {
+					name: 'get_weather',
+					arguments: '{"location": "Tokyo"}'
+				}
+			},
+			{
+				id: 'call_time_2',
+				type: 'function',
+				function: {
+					name: 'get_time',
+					arguments: '{"timezone": "Asia/Tokyo"}'
+				}
+			}
+		];
+
+		const ids = toolCalls.map(tc => tc.id);
+		const uniqueIds = new Set(ids);
+		
+		// All IDs should be unique
+		assert.strictEqual(ids.length, uniqueIds.size);
+		// All IDs should be non-empty strings
+		for (const id of ids) {
+			assert.ok(typeof id === 'string' && id.length > 0, `Tool call ID should be non-empty string: ${id}`);
+		}
+	});
+
+	test('convertMessagesToOpenAIFormat should generate fallback IDs for tool messages with empty tool_call_id', async () => {
+		// This test verifies that the actual fix works by testing streamChatCompletion
+		// with a tool message that has an empty tool_call_id
+		const config: OpenAIConfig = {
+			apiEndpoint: 'https://example.com/v1',
+			apiKey: 'test-key'
+		};
+
+		const client = new OpenAIClient(config);
+		let capturedMessages: any[] = [];
+
+		// Mock the client to capture the messages being sent
+		(client as any).client = {
+			chat: {
+				completions: {
+					create: async (opts: any) => {
+						capturedMessages = opts.messages;
+						// Return a minimal stream that completes immediately
+						return (async function* () {
+							yield {
+								choices: [{
+									delta: { content: 'ok' },
+									finish_reason: 'stop'
+								}]
+							};
+						})();
+					}
+				}
+			}
+		};
+
+		// Call streamChatCompletion with a tool message that has empty tool_call_id
+		await client.streamChatCompletion(
+			[
+				{ role: 'user', content: 'What is the weather?' },
+				{
+					role: 'assistant',
+					content: null,
+					tool_calls: [{
+						id: 'call_original_123',
+						type: 'function',
+						function: { name: 'get_weather', arguments: '{"location":"Tokyo"}' }
+					}]
+				},
+				{
+					role: 'tool',
+					content: '{"temp": 25}',
+					tool_call_id: '' // Empty ID - should be replaced with fallback
+				}
+			],
+			'test-model',
+			{ maxTokens: 100 }
+		);
+
+		// Verify the tool message got a fallback ID (not empty string)
+		const toolMessage = capturedMessages.find((m: any) => m.role === 'tool');
+		assert.ok(toolMessage, 'Tool message should be present');
+		assert.ok(toolMessage.tool_call_id, 'Tool message should have a tool_call_id');
+		assert.ok(toolMessage.tool_call_id.length > 0, 'Tool message tool_call_id should not be empty');
+		assert.ok(toolMessage.tool_call_id.startsWith('call_fallback_'), 'Fallback ID should have expected prefix');
+	});
+
+	test('convertMessagesToOpenAIFormat should preserve valid tool_call_ids', async () => {
+		const config: OpenAIConfig = {
+			apiEndpoint: 'https://example.com/v1',
+			apiKey: 'test-key'
+		};
+
+		const client = new OpenAIClient(config);
+		let capturedMessages: any[] = [];
+
+		(client as any).client = {
+			chat: {
+				completions: {
+					create: async (opts: any) => {
+						capturedMessages = opts.messages;
+						return (async function* () {
+							yield {
+								choices: [{
+									delta: { content: 'ok' },
+									finish_reason: 'stop'
+								}]
+							};
+						})();
+					}
+				}
+			}
+		};
+
+		const validToolCallId = 'call_valid_abc123';
+		await client.streamChatCompletion(
+			[
+				{ role: 'user', content: 'What is the weather?' },
+				{
+					role: 'tool',
+					content: '{"temp": 25}',
+					tool_call_id: validToolCallId
+				}
+			],
+			'test-model',
+			{ maxTokens: 100 }
+		);
+
+		const toolMessage = capturedMessages.find((m: any) => m.role === 'tool');
+		assert.ok(toolMessage, 'Tool message should be present');
+		assert.strictEqual(toolMessage.tool_call_id, validToolCallId, 'Valid tool_call_id should be preserved');
+	});
+
+	test('Multiple tool messages with empty IDs should get unique fallback IDs', async () => {
+		const config: OpenAIConfig = {
+			apiEndpoint: 'https://example.com/v1',
+			apiKey: 'test-key'
+		};
+
+		const client = new OpenAIClient(config);
+		let capturedMessages: any[] = [];
+
+		(client as any).client = {
+			chat: {
+				completions: {
+					create: async (opts: any) => {
+						capturedMessages = opts.messages;
+						return (async function* () {
+							yield {
+								choices: [{
+									delta: { content: 'ok' },
+									finish_reason: 'stop'
+								}]
+							};
+						})();
+					}
+				}
+			}
+		};
+
+		await client.streamChatCompletion(
+			[
+				{ role: 'user', content: 'What is the weather and time?' },
+				{
+					role: 'tool',
+					content: '{"temp": 25}',
+					tool_call_id: '' // First empty ID
+				},
+				{
+					role: 'tool',
+					content: '{"time": "12:00"}',
+					tool_call_id: '' // Second empty ID
+				}
+			],
+			'test-model',
+			{ maxTokens: 100 }
+		);
+
+		const toolMessages = capturedMessages.filter((m: any) => m.role === 'tool');
+		assert.strictEqual(toolMessages.length, 2, 'Should have two tool messages');
+		
+		// Both should have fallback IDs
+		assert.ok(toolMessages[0].tool_call_id.startsWith('call_fallback_'), 'First tool message should have fallback ID');
+		assert.ok(toolMessages[1].tool_call_id.startsWith('call_fallback_'), 'Second tool message should have fallback ID');
+		
+		// IDs should be unique
+		assert.notStrictEqual(toolMessages[0].tool_call_id, toolMessages[1].tool_call_id, 'Fallback IDs should be unique');
+	});
+});
