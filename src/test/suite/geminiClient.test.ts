@@ -96,6 +96,107 @@ suite('Gemini Model Info Helper Functions', () => {
     });
 });
 
+suite('Gemini Model Info with Null/Missing Fields', () => {
+
+    test('getGeminiModelId should fallback to displayName when name is null', () => {
+        const model: GeminiModelInfo = {
+            name: null,
+            displayName: 'gemini-3-pro-preview',
+            supportedGenerationMethods: null
+        };
+        assert.strictEqual(getGeminiModelId(model), 'gemini-3-pro-preview');
+    });
+
+    test('getGeminiModelId should fallback to displayName when name is undefined', () => {
+        const model: GeminiModelInfo = {
+            displayName: 'gemini-3-flash',
+            supportedGenerationMethods: null
+        };
+        assert.strictEqual(getGeminiModelId(model), 'gemini-3-flash');
+    });
+
+    test('getGeminiModelId should return empty string when both name and displayName are null', () => {
+        const model: GeminiModelInfo = {
+            name: null,
+            displayName: null,
+            supportedGenerationMethods: null
+        };
+        assert.strictEqual(getGeminiModelId(model), '');
+    });
+
+    test('supportsTextGeneration should use heuristics when supportedGenerationMethods is null', () => {
+        // Gemini model should be assumed to support text generation
+        const geminiModel: GeminiModelInfo = {
+            name: 'models/gemini-3-pro-preview',
+            displayName: 'gemini-3-pro-preview',
+            supportedGenerationMethods: null
+        };
+        assert.strictEqual(supportsTextGeneration(geminiModel), true);
+    });
+
+    test('supportsTextGeneration should return false for embedding model when supportedGenerationMethods is null', () => {
+        // Embedding model should not be assumed to support text generation
+        const embeddingModel: GeminiModelInfo = {
+            name: 'models/text-embedding-004',
+            displayName: 'Text Embedding 004',
+            supportedGenerationMethods: null
+        };
+        assert.strictEqual(supportsTextGeneration(embeddingModel), false);
+    });
+
+    test('supportsTextGeneration should return false when name and displayName are both null', () => {
+        const model: GeminiModelInfo = {
+            name: null,
+            displayName: null,
+            supportedGenerationMethods: null
+        };
+        assert.strictEqual(supportsTextGeneration(model), false);
+    });
+
+    test('supportsGeminiFunctionCalling should work with null supportedGenerationMethods', () => {
+        const model: GeminiModelInfo = {
+            name: 'models/gemini-3-pro-preview',
+            displayName: 'gemini-3-pro-preview',
+            supportedGenerationMethods: null
+        };
+        // Should use heuristics and return true for gemini models
+        assert.strictEqual(supportsGeminiFunctionCalling(model), true);
+    });
+
+    test('supportsGeminiFunctionCalling should check supportedActions even when supportedGenerationMethods is null', () => {
+        const model: GeminiModelInfo = {
+            name: 'models/gemini-3-pro-preview',
+            displayName: 'gemini-3-pro-preview',
+            supportedGenerationMethods: null,
+            supportedActions: ['functionCalling']
+        };
+        assert.strictEqual(supportsGeminiFunctionCalling(model), true);
+    });
+
+    test('should handle model with all null fields from problematic API response', () => {
+        // This is the exact scenario from the issue
+        const model: GeminiModelInfo = {
+            name: 'gemini-3-pro-preview',
+            baseModelId: null,
+            version: null,
+            displayName: 'gemini-3-pro-preview',
+            description: null,
+            inputTokenLimit: null,
+            outputTokenLimit: null,
+            supportedGenerationMethods: null
+        };
+        
+        // Should be able to get model ID
+        assert.strictEqual(getGeminiModelId(model), 'gemini-3-pro-preview');
+        
+        // Should support text generation (heuristic: it's a gemini model)
+        assert.strictEqual(supportsTextGeneration(model), true);
+        
+        // Should support function calling (heuristic: it's a gemini model that supports text gen)
+        assert.strictEqual(supportsGeminiFunctionCalling(model), true);
+    });
+});
+
 suite('Gemini Content Types Unit Tests', () => {
 
     test('GeminiContent with text parts should have correct structure', () => {

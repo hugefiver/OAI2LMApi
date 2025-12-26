@@ -11,6 +11,19 @@ import {
     supportsGeminiFunctionCalling
 } from './geminiClient';
 import { GEMINI_API_KEY_SECRET_KEY, GEMINI_CACHED_MODELS_KEY } from './constants';
+import { getModelMetadata } from './modelMetadata';
+
+/**
+ * Model override configuration from user settings.
+ */
+interface ModelOverrideConfig {
+    maxInputTokens?: number;
+    maxOutputTokens?: number;
+    supportsToolCalling?: boolean;
+    supportsImageInput?: boolean;
+    temperature?: number;
+    thinkingLevel?: string | number;
+}
 
 interface GeminiModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -94,8 +107,11 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         let addedCount = 0;
         let filteredCount = 0;
         for (const apiModel of apiModels) {
-            // Filter out models with missing or empty names
-            if (!apiModel.name) {
+            // Get model ID (falls back to displayName if name is missing)
+            const modelId = getGeminiModelId(apiModel);
+            
+            // Filter out models with no identifiable name
+            if (!modelId) {
                 filteredCount++;
                 console.log('GeminiProvider: Filtered out model with missing name', { 
                     displayName: apiModel.displayName,
@@ -107,14 +123,14 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             // Filter out non-text-generation models
             if (!supportsTextGeneration(apiModel)) {
                 filteredCount++;
-                console.log(`GeminiProvider: Filtered out non-text model: ${apiModel.name}`);
+                console.log(`GeminiProvider: Filtered out non-text model: ${modelId}`);
                 continue;
             }
 
             // Filter out models without function calling unless setting is enabled
             if (!showModelsWithoutToolCalling && !supportsGeminiFunctionCalling(apiModel)) {
                 filteredCount++;
-                console.log(`GeminiProvider: Filtered out model without function calling: ${apiModel.name}`);
+                console.log(`GeminiProvider: Filtered out model without function calling: ${modelId}`);
                 continue;
             }
 
@@ -169,7 +185,46 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
     private addModel(apiModel: GeminiModelInfo) {
         const modelId = getGeminiModelId(apiModel);
+        if (!modelId) {
+            console.log('GeminiProvider: Skipping model with no identifiable name');
+            return;
+        }
+        
         const family = this.extractModelFamily(modelId);
+        
+        // Get metadata from the model metadata registry as fallback
+        const registryMetadata = getModelMetadata(modelId);
+        
+        // Build model info, preferring API values, then registry, then defaults
+        // Priority: API response > registry metadata > hardcoded defaults
+        const apiToolCalling = supportsGeminiFunctionCalling(apiModel);
+        const apiVision = this.supportsVision(modelId);
+        
+        let maxInputTokens = this.getValidNumber(apiModel.inputTokenLimit) 
+            ?? registryMetadata.maxInputTokens 
+            ?? 32768;
+        let maxOutputTokens = this.getValidNumber(apiModel.outputTokenLimit) 
+            ?? registryMetadata.maxOutputTokens 
+            ?? 8192;
+        let supportsToolCalling = apiToolCalling;
+        let supportsImageInput = apiVision || registryMetadata.supportsImageInput;
+
+        // Apply user-configured model overrides
+        const override = this.getModelOverride(modelId);
+        if (override) {
+            if (typeof override.maxInputTokens === 'number') {
+                maxInputTokens = override.maxInputTokens;
+            }
+            if (typeof override.maxOutputTokens === 'number') {
+                maxOutputTokens = override.maxOutputTokens;
+            }
+            if (typeof override.supportsToolCalling === 'boolean') {
+                supportsToolCalling = override.supportsToolCalling;
+            }
+            if (typeof override.supportsImageInput === 'boolean') {
+                supportsImageInput = override.supportsImageInput;
+            }
+        }
 
         const modelInfo: GeminiModelInformation = {
             modelId: modelId,
@@ -177,16 +232,58 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             family: family,
             name: apiModel.displayName || modelId,
             version: apiModel.version || '1.0',
-            maxInputTokens: apiModel.inputTokenLimit || 32768,
-            maxOutputTokens: apiModel.outputTokenLimit || 8192,
+            maxInputTokens,
+            maxOutputTokens,
             capabilities: {
-                toolCalling: supportsGeminiFunctionCalling(apiModel),
-                imageInput: this.supportsVision(modelId)
+                toolCalling: supportsToolCalling,
+                imageInput: supportsImageInput
             }
         };
 
         this.modelList.push(modelInfo);
-        console.log(`GeminiProvider: Added model: ${modelInfo.id} (family: ${family})`);
+        const hasOverride = override ? ' (with overrides)' : '';
+        console.log(`GeminiProvider: Added model: ${modelInfo.id} (family: ${family})${hasOverride}`);
+    }
+
+    /**
+     * Gets a valid number from a potentially null/undefined value.
+     */
+    private getValidNumber(value: number | null | undefined): number | undefined {
+        return typeof value === 'number' && Number.isFinite(value) && value > 0 
+            ? value 
+            : undefined;
+    }
+
+    /**
+     * Gets model override configuration for a given model ID.
+     * Supports wildcard patterns like 'gemini-*'.
+     */
+    private getModelOverride(modelId: string): ModelOverrideConfig | undefined {
+        const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const overrides = config.get<Record<string, ModelOverrideConfig>>('modelOverrides', {});
+        
+        // Check for exact match first
+        if (overrides[modelId]) {
+            return overrides[modelId];
+        }
+        
+        // Check for wildcard patterns
+        const lowerModelId = modelId.toLowerCase();
+        for (const pattern of Object.keys(overrides)) {
+            if (pattern.includes('*')) {
+                // Convert wildcard pattern to regex
+                const regexPattern = pattern
+                    .toLowerCase()
+                    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
+                    .replace(/\\\*/g, '.*'); // Convert \* back to .*
+                const regex = new RegExp(`^${regexPattern}$`, 'i');
+                if (regex.test(lowerModelId)) {
+                    return overrides[pattern];
+                }
+            }
+        }
+        
+        return undefined;
     }
 
     private supportsVision(modelId: string | null | undefined): boolean {
