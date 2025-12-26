@@ -643,6 +643,8 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             if (!parameters || Object.keys(parameters).length === 0) {
                 parameters = { type: 'object', properties: {} };
             } else {
+                // Strip $schema field which Gemini API doesn't accept
+                parameters = this.stripSchemaField(parameters);
                 if (!('type' in parameters)) {
                     parameters = { ...parameters, type: 'object' };
                 }
@@ -659,6 +661,32 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         }
 
         return converted.length > 0 ? converted : undefined;
+    }
+
+    /**
+     * Recursively strip $schema field from JSON schema objects.
+     * Gemini API doesn't accept $schema field in function parameters.
+     */
+    private stripSchemaField(obj: Record<string, unknown>): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (key === '$schema') {
+                continue;
+            }
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                result[key] = this.stripSchemaField(value as Record<string, unknown>);
+            } else if (Array.isArray(value)) {
+                result[key] = value.map(item => {
+                    if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+                        return this.stripSchemaField(item as Record<string, unknown>);
+                    }
+                    return item;
+                });
+            } else {
+                result[key] = value;
+            }
+        }
+        return result;
     }
 
     /**
