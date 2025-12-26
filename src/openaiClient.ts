@@ -651,7 +651,7 @@ export class OpenAIClient {
                         // Log warning as this may cause issues with some API providers
                         console.warn('OAI2LMApi: Tool message missing valid tool_call_id, using fallback. This may cause API errors with some providers.');
                         // Generate a fallback ID using counter + timestamp for uniqueness
-                        toolCallId = `call_fallback_${Date.now()}_${fallbackIdCounter++}`;
+                        toolCallId = `call_result_${Date.now()}_${fallbackIdCounter++}`;
                     }
                     return {
                         role: 'tool' as const,
