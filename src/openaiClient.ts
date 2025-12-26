@@ -650,8 +650,9 @@ export class OpenAIClient {
                     if (!toolCallId || typeof toolCallId !== 'string' || toolCallId.trim().length === 0) {
                         // Log warning as this may cause issues with some API providers
                         console.warn('OAI2LMApi: Tool message missing valid tool_call_id, using fallback. This may cause API errors with some providers.');
-                        // Generate a fallback ID using counter + timestamp for uniqueness
-                        toolCallId = `call_result_${Date.now()}_${fallbackIdCounter++}`;
+                        // Generate a fallback ID using counter + timestamp + random component for uniqueness
+                        // Random component ensures uniqueness even if called multiple times in same millisecond
+                        toolCallId = `call_fallback_${Date.now()}_${fallbackIdCounter++}_${Math.random().toString(36).slice(2, 9)}`;
                     }
                     return {
                         role: 'tool' as const,

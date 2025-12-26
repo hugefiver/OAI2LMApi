@@ -441,8 +441,9 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         if (typeof callId === 'string' && callId.trim().length > 0) {
             return callId;
         }
-        // Generate a unique ID based on tool name and index
-        return `call_${name}_${Date.now()}_${index}`;
+        // Generate a unique ID using timestamp + index + random component for uniqueness
+        // Random component ensures uniqueness even if called multiple times in same millisecond
+        return `call_fallback_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 9)}`;
     }
 
     /**
