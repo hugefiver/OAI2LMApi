@@ -605,6 +605,61 @@ export class OpenAIClient {
      */
     private convertMessagesToOpenAIFormat(messages: ChatMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
         let fallbackIdCounter = 0;
+        // Map from original tool call ID (or index-based key) to assigned fallback ID
+        // This ensures tool results use the same IDs as their corresponding tool calls
+        const toolCallIdMapping = new Map<string, string>();
+        
+        /**
+         * Generates a unique fallback ID for tool calls.
+         */
+        const generateFallbackId = (): string => {
+            return `call_fallback_${Date.now()}_${fallbackIdCounter++}_${Math.random().toString(36).slice(2, 9)}`;
+        };
+        
+        /**
+         * Gets or generates a valid tool call ID.
+         * Uses the original ID if valid, otherwise looks up or generates a fallback ID.
+         */
+        const getOrCreateToolCallId = (originalId: string | undefined, indexKey: string): string => {
+            // If original ID is valid, use it
+            if (originalId && typeof originalId === 'string' && originalId.trim().length > 0) {
+                return originalId;
+            }
+            // Look up existing fallback ID
+            if (toolCallIdMapping.has(indexKey)) {
+                return toolCallIdMapping.get(indexKey)!;
+            }
+            // Generate and store new fallback ID
+            const fallbackId = generateFallbackId();
+            toolCallIdMapping.set(indexKey, fallbackId);
+            return fallbackId;
+        };
+        
+        // First pass: collect all tool call IDs and their mappings
+        // This ensures tool results can look up the same IDs by their original callId
+        let toolCallIndex = 0;
+        for (const msg of messages) {
+            if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+                for (const tc of msg.tool_calls) {
+                    const indexKey = `__index_${toolCallIndex++}`;
+                    const originalId = tc.id;
+                    if (originalId && typeof originalId === 'string' && originalId.trim().length > 0) {
+                        // Store mapping from valid ID for tool result lookup
+                        // (tool results reference the original ID, which needs to map to the same value)
+                        toolCallIdMapping.set(originalId, originalId);
+                        // Also store index-based mapping for second pass iteration
+                        toolCallIdMapping.set(indexKey, originalId);
+                    } else {
+                        // Generate fallback ID and store in mapping (side effect only - return value not used here)
+                        getOrCreateToolCallId(undefined, indexKey);
+                    }
+                }
+            }
+        }
+        
+        // Reset index for second pass
+        toolCallIndex = 0;
+        
         return messages.map(msg => {
             switch (msg.role) {
                 case 'system':
@@ -620,24 +675,25 @@ export class OpenAIClient {
                 case 'assistant':
                     // Assistant messages can have tool_calls
                     if (msg.tool_calls && msg.tool_calls.length > 0) {
-                        // Filter out tool calls without valid IDs to prevent API errors
-                        const validToolCalls = msg.tool_calls.filter(tc => 
-                            tc.id && typeof tc.id === 'string' && tc.id.trim().length > 0
-                        );
-                        if (validToolCalls.length > 0) {
+                        const toolCalls = msg.tool_calls.map(tc => {
+                            const indexKey = `__index_${toolCallIndex++}`;
+                            const finalId = getOrCreateToolCallId(tc.id, indexKey);
+                            
                             return {
-                                role: 'assistant' as const,
-                                content: msg.content,
-                                tool_calls: validToolCalls.map(tc => ({
-                                    id: tc.id,
-                                    type: 'function' as const,
-                                    function: {
-                                        name: tc.function.name,
-                                        arguments: tc.function.arguments
-                                    }
-                                }))
+                                id: finalId,
+                                type: 'function' as const,
+                                function: {
+                                    name: tc.function.name,
+                                    arguments: tc.function.arguments
+                                }
                             };
-                        }
+                        });
+                        
+                        return {
+                            role: 'assistant' as const,
+                            content: msg.content,
+                            tool_calls: toolCalls
+                        };
                     }
                     return {
                         role: 'assistant' as const,
@@ -650,9 +706,13 @@ export class OpenAIClient {
                     if (!toolCallId || typeof toolCallId !== 'string' || toolCallId.trim().length === 0) {
                         // Log warning as this may cause issues with some API providers
                         console.warn('OAI2LMApi: Tool message missing valid tool_call_id, using fallback. This may cause API errors with some providers.');
-                        // Generate a fallback ID using counter + timestamp + random component for uniqueness
-                        // Random component ensures uniqueness even if called multiple times in same millisecond
-                        toolCallId = `call_fallback_${Date.now()}_${fallbackIdCounter++}_${Math.random().toString(36).slice(2, 9)}`;
+                        toolCallId = generateFallbackId();
+                    } else {
+                        // Look up mapping in case original ID was replaced with fallback
+                        const mappedId = toolCallIdMapping.get(toolCallId);
+                        if (mappedId) {
+                            toolCallId = mappedId;
+                        }
                     }
                     return {
                         role: 'tool' as const,
