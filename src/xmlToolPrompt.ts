@@ -296,3 +296,109 @@ export interface ParsedToolCall {
     name: string;
     arguments: Record<string, unknown>;
 }
+
+/**
+ * Streaming XML tool call parser that detects and emits complete tool calls
+ * incrementally as they appear in the stream, rather than waiting for the
+ * entire response to complete.
+ * 
+ * This enables real-time tool call detection during streaming while still
+ * requiring complete XML blocks before emitting each tool call.
+ */
+export class XmlToolCallStreamParser {
+    private buffer: string = '';
+    private readonly availableTools: string[];
+    private readonly emittedToolCallIds = new Set<string>();
+    private readonly toolPatterns: Array<{ name: string; regex: RegExp }>;
+    
+    /**
+     * Creates a new streaming XML tool call parser.
+     * 
+     * @param availableTools - List of available tool names to look for
+     */
+    constructor(availableTools: string[]) {
+        this.availableTools = availableTools;
+        // Pre-compile regex patterns for each tool
+        this.toolPatterns = availableTools.map(toolName => ({
+            name: toolName,
+            // Use non-global regex for incremental parsing to avoid state issues
+            regex: new RegExp(`<${escapeRegex(toolName)}>([\\s\\S]*?)<\\/${escapeRegex(toolName)}>`),
+        }));
+    }
+    
+    /**
+     * Adds a chunk of text to the buffer and returns any newly detected
+     * complete tool calls.
+     * 
+     * @param chunk - New text chunk from the stream
+     * @returns Array of newly detected tool calls (may be empty)
+     */
+    addChunk(chunk: string): ParsedToolCall[] {
+        this.buffer += chunk;
+        return this.extractCompletedToolCalls();
+    }
+    
+    /**
+     * Finalizes parsing and returns any remaining tool calls.
+     * Call this after the stream is complete to ensure all tool calls are captured.
+     * 
+     * @returns Array of any remaining tool calls
+     */
+    finalize(): ParsedToolCall[] {
+        return this.extractCompletedToolCalls();
+    }
+    
+    /**
+     * Gets the current buffer content (for debugging or fallback processing).
+     */
+    getBuffer(): string {
+        return this.buffer;
+    }
+    
+    /**
+     * Gets any text that is not part of a tool call (for displaying to user).
+     * This extracts text outside of any detected tool call XML blocks.
+     */
+    getNonToolCallText(): string {
+        let text = this.buffer;
+        // Remove all tool call XML blocks
+        for (const { name: toolName } of this.toolPatterns) {
+            const globalRegex = new RegExp(`<${escapeRegex(toolName)}>[\\s\\S]*?<\\/${escapeRegex(toolName)}>`, 'g');
+            text = text.replace(globalRegex, '');
+        }
+        return text.trim();
+    }
+    
+    /**
+     * Extracts any complete tool calls from the current buffer.
+     * Only returns tool calls that haven't been emitted before.
+     */
+    private extractCompletedToolCalls(): ParsedToolCall[] {
+        const newToolCalls: ParsedToolCall[] = [];
+        
+        for (const { name: toolName, regex } of this.toolPatterns) {
+            // Find all matches using global regex
+            const globalRegex = new RegExp(`<${escapeRegex(toolName)}>([\\s\\S]*?)<\\/${escapeRegex(toolName)}>`, 'g');
+            let match;
+            
+            while ((match = globalRegex.exec(this.buffer)) !== null) {
+                const content = match[1];
+                const args = parseXmlParameters(content);
+                const toolCall: ParsedToolCall = {
+                    id: generateToolCallId(),
+                    name: toolName,
+                    arguments: args
+                };
+                
+                // Create a unique signature for this tool call to avoid duplicates
+                const signature = `${toolName}:${JSON.stringify(args)}`;
+                if (!this.emittedToolCallIds.has(signature)) {
+                    this.emittedToolCallIds.add(signature);
+                    newToolCalls.push(toolCall);
+                }
+            }
+        }
+        
+        return newToolCalls;
+    }
+}

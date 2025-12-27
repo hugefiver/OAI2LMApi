@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, CompletedToolCall } from './openaiClient';
 import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
-import { generateXmlToolPrompt, parseXmlToolCalls, formatToolCallAsXml, formatToolResultAsText } from './xmlToolPrompt';
+import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
@@ -306,8 +306,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         // Track reported tool call IDs to prevent duplicates
         const reportedToolCallIds = new Set<string>();
 
-        // For prompt-based tool calling, collect all text chunks to parse XML tool calls
-        let fullResponseText = '';
+        // For prompt-based tool calling, use streaming parser to detect tool calls incrementally
+        const streamParser = usePromptBasedToolCalling && availableToolNames.length > 0 
+            ? new XmlToolCallStreamParser(availableToolNames) 
+            : null;
 
         // Stream the response
         await this.client.streamChatCompletion(
@@ -315,9 +317,22 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             model.modelId,
             {
                 onChunk: (chunk) => {
-                    if (usePromptBasedToolCalling) {
-                        // Collect text for XML parsing; do not stream raw XML chunks to the user
-                        fullResponseText += chunk;
+                    if (streamParser) {
+                        // Add chunk to parser and emit any newly detected tool calls immediately
+                        const newToolCalls = streamParser.addChunk(chunk);
+                        for (const toolCall of newToolCalls) {
+                            if (reportedToolCallIds.has(toolCall.id)) {
+                                continue;
+                            }
+                            reportedToolCallIds.add(toolCall.id);
+                            
+                            progress.report(new vscode.LanguageModelToolCallPart(
+                                toolCall.id,
+                                toolCall.name,
+                                toolCall.arguments
+                            ));
+                            console.log(`OAI2LMApi: Streaming XML tool call detected: ${toolCall.name}`);
+                        }
                     } else {
                         progress.report(new vscode.LanguageModelTextPart(chunk));
                     }
@@ -360,10 +375,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             }
         );
 
-        // After streaming, parse XML tool calls if using prompt-based tool calling
-        if (usePromptBasedToolCalling && fullResponseText && availableToolNames.length > 0) {
-            const parsedToolCalls = parseXmlToolCalls(fullResponseText, availableToolNames);
-            for (const toolCall of parsedToolCalls) {
+        // After streaming, finalize the parser to catch any remaining tool calls
+        if (streamParser) {
+            const remainingToolCalls = streamParser.finalize();
+            for (const toolCall of remainingToolCalls) {
                 if (reportedToolCallIds.has(toolCall.id)) {
                     continue;
                 }
@@ -374,7 +389,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     toolCall.name,
                     toolCall.arguments
                 ));
-                console.log(`OAI2LMApi: Parsed XML tool call: ${toolCall.name}`);
+                console.log(`OAI2LMApi: Finalized XML tool call: ${toolCall.name}`);
             }
         }
     }

@@ -307,4 +307,95 @@ Line 3</content></write_file>`;
 
     });
 
+    // ============== XmlToolCallStreamParser Tests ==============
+
+    suite('XmlToolCallStreamParser', () => {
+        
+        test('Should detect tool call incrementally as stream completes', () => {
+            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
+            const parser = new XmlToolCallStreamParser(['read_file']);
+            
+            // Simulate streaming chunks
+            let result = parser.addChunk('<read_');
+            assert.strictEqual(result.length, 0, 'Should not detect incomplete tag');
+            
+            result = parser.addChunk('file><path>');
+            assert.strictEqual(result.length, 0, 'Should not detect incomplete content');
+            
+            result = parser.addChunk('/test.txt</path>');
+            assert.strictEqual(result.length, 0, 'Should not detect without closing tag');
+            
+            result = parser.addChunk('</read_file>');
+            assert.strictEqual(result.length, 1, 'Should detect complete tool call');
+            assert.strictEqual(result[0].name, 'read_file');
+            assert.strictEqual(result[0].arguments.path, '/test.txt');
+        });
+        
+        test('Should not emit duplicate tool calls', () => {
+            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
+            const parser = new XmlToolCallStreamParser(['test_tool']);
+            
+            // Add complete tool call
+            let result = parser.addChunk('<test_tool><param>value</param></test_tool>');
+            assert.strictEqual(result.length, 1);
+            
+            // Adding more text should not re-emit the same tool call
+            result = parser.addChunk(' some more text');
+            assert.strictEqual(result.length, 0, 'Should not re-emit same tool call');
+            
+            // Finalize should also not re-emit
+            result = parser.finalize();
+            assert.strictEqual(result.length, 0, 'Finalize should not re-emit');
+        });
+        
+        test('Should detect multiple tool calls in sequence', () => {
+            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
+            const parser = new XmlToolCallStreamParser(['tool_a', 'tool_b']);
+            
+            // First tool call
+            let result = parser.addChunk('<tool_a><x>1</x></tool_a>');
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].name, 'tool_a');
+            
+            // Second tool call
+            result = parser.addChunk('<tool_b><y>2</y></tool_b>');
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].name, 'tool_b');
+        });
+        
+        test('Should handle empty chunks', () => {
+            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
+            const parser = new XmlToolCallStreamParser(['test_tool']);
+            
+            let result = parser.addChunk('');
+            assert.strictEqual(result.length, 0);
+            
+            result = parser.addChunk('<test_tool><param>value</param></test_tool>');
+            assert.strictEqual(result.length, 1);
+        });
+        
+        test('Should return buffer content', () => {
+            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
+            const parser = new XmlToolCallStreamParser(['test_tool']);
+            
+            parser.addChunk('Hello ');
+            parser.addChunk('<test_tool><x>1</x></test_tool>');
+            parser.addChunk(' World');
+            
+            assert.strictEqual(parser.getBuffer(), 'Hello <test_tool><x>1</x></test_tool> World');
+        });
+        
+        test('Should extract non-tool-call text', () => {
+            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
+            const parser = new XmlToolCallStreamParser(['test_tool']);
+            
+            parser.addChunk('Before ');
+            parser.addChunk('<test_tool><x>1</x></test_tool>');
+            parser.addChunk(' After');
+            
+            assert.strictEqual(parser.getNonToolCallText(), 'Before  After');
+        });
+        
+    });
+
 });

@@ -13,7 +13,7 @@ import {
 import { GEMINI_API_KEY_SECRET_KEY, GEMINI_CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata } from './modelMetadata';
 import { stripSchemaField } from './schemaUtils';
-import { generateXmlToolPrompt, parseXmlToolCalls, formatToolCallAsXml, formatToolResultAsText } from './xmlToolPrompt';
+import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
 
 interface GeminiModelInformation extends vscode.LanguageModelChatInformation {
@@ -353,8 +353,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             this._toolCallNames.set(id, name);
         }
 
-        // For prompt-based tool calling, collect all text chunks to parse XML tool calls
-        let fullResponseText = '';
+        // For prompt-based tool calling, use streaming parser to detect tool calls incrementally
+        const streamParser = usePromptBasedToolCalling && availableToolNames.length > 0 
+            ? new XmlToolCallStreamParser(availableToolNames) 
+            : null;
 
         await this.client.streamChatCompletion(
             contents,
@@ -362,9 +364,22 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             effectiveSystemInstruction,
             {
                 onChunk: (chunk) => {
-                    if (usePromptBasedToolCalling) {
-                        // Collect text for XML parsing; do not stream raw XML chunks to the user
-                        fullResponseText += chunk;
+                    if (streamParser) {
+                        // Add chunk to parser and emit any newly detected tool calls immediately
+                        const newToolCalls = streamParser.addChunk(chunk);
+                        for (const toolCall of newToolCalls) {
+                            if (reportedToolCallIds.has(toolCall.id)) {
+                                continue;
+                            }
+                            reportedToolCallIds.add(toolCall.id);
+                            
+                            progress.report(new vscode.LanguageModelToolCallPart(
+                                toolCall.id,
+                                toolCall.name,
+                                toolCall.arguments
+                            ));
+                            console.log(`GeminiProvider: Streaming XML tool call detected: ${toolCall.name}`);
+                        }
                     } else {
                         progress.report(new vscode.LanguageModelTextPart(chunk));
                     }
@@ -406,10 +421,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             }
         );
 
-        // After streaming, parse XML tool calls if using prompt-based tool calling
-        if (usePromptBasedToolCalling && fullResponseText && availableToolNames.length > 0) {
-            const parsedToolCalls = parseXmlToolCalls(fullResponseText, availableToolNames);
-            for (const toolCall of parsedToolCalls) {
+        // After streaming, finalize the parser to catch any remaining tool calls
+        if (streamParser) {
+            const remainingToolCalls = streamParser.finalize();
+            for (const toolCall of remainingToolCalls) {
                 if (reportedToolCallIds.has(toolCall.id)) {
                     continue;
                 }
@@ -420,7 +435,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                     toolCall.name,
                     toolCall.arguments
                 ));
-                console.log(`GeminiProvider: Parsed XML tool call: ${toolCall.name}`);
+                console.log(`GeminiProvider: Finalized XML tool call: ${toolCall.name}`);
             }
         }
     }
