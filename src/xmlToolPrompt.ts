@@ -19,7 +19,7 @@ export function generateXmlToolPrompt(tools: readonly vscode.LanguageModelChatTo
 
 TOOL USE
 
-You have access to a set of tools that are executed upon the user's approval. You must use exactly one tool per message, and every assistant message must include a tool call. You use tools step-by-step to accomplish a given task, with each tool use informed by the result of the previous tool use.
+You have access to a set of tools that are executed upon the user's approval. You can use up to 5 tools in a single message when the tasks are independent and can be executed in parallel. The results of all tool calls will be returned together after execution.
 
 # Tool Use Formatting
 
@@ -33,6 +33,18 @@ Tool uses are formatted using XML-style tags. The tool name itself becomes the X
 
 Always use the actual tool name as the XML tag name for proper parsing and execution.
 
+## Multiple Tool Calls
+
+When you need to perform multiple independent operations, you can include multiple tool calls in a single message (up to 5 at once). All tools will be executed and their results returned together:
+
+<tool_name_1>
+<param>value</param>
+</tool_name_1>
+
+<tool_name_2>
+<param>value</param>
+</tool_name_2>
+
 # Available Tools
 
 ${toolDescriptions}
@@ -40,12 +52,13 @@ ${toolDescriptions}
 # Tool Use Guidelines
 
 1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task.
-2. Choose the most appropriate tool based on the task and the tool descriptions provided.
-3. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use.
-4. Formulate your tool use using the XML format specified for each tool.
-5. After each tool use, the user will respond with the result of that tool use. This result will provide you with the necessary information to continue your task or make further decisions.
+2. Choose the most appropriate tool(s) based on the task and the tool descriptions provided.
+3. For independent operations that don't depend on each other's results, you can call up to 5 tools in a single message for efficiency.
+4. For dependent operations where one tool's result is needed for the next, use tools step-by-step with each use informed by the previous result.
+5. Formulate your tool use using the XML format specified for each tool.
+6. After tool execution, the user will respond with the results of all tool calls. Use these results to continue your task or make further decisions.
 
-IMPORTANT: Do not include any text or explanation after your tool call. The tool call must be the final part of your response.`;
+IMPORTANT: Do not include any text or explanation after your tool calls. The tool call(s) must be the final part of your response.`;
 }
 
 /**
