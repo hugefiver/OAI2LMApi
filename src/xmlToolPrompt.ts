@@ -192,7 +192,12 @@ function parseXmlParameters(content: string): Record<string, unknown> {
         // Try to parse as JSON first, otherwise use as string
         try {
             args[paramName] = JSON.parse(paramValue);
-        } catch {
+        } catch (error) {
+            console.debug('[oai2lmapi] Failed to parse XML parameter as JSON', {
+                paramName,
+                paramValue,
+                error
+            });
             args[paramName] = paramValue;
         }
     }
