@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { generateXmlToolPrompt, parseXmlToolCalls, ParsedToolCall } from '../../xmlToolPrompt';
+import { generateXmlToolPrompt, parseXmlToolCalls, XmlToolCallStreamParser } from '../../xmlToolPrompt';
 
 // Mock LanguageModelChatTool interface for testing
 interface MockTool {
@@ -312,7 +312,6 @@ Line 3</content></write_file>`;
     suite('XmlToolCallStreamParser', () => {
         
         test('Should detect tool call incrementally as stream completes', () => {
-            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
             const parser = new XmlToolCallStreamParser(['read_file']);
             
             // Simulate streaming chunks
@@ -332,7 +331,6 @@ Line 3</content></write_file>`;
         });
         
         test('Should not emit duplicate tool calls', () => {
-            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
             const parser = new XmlToolCallStreamParser(['test_tool']);
             
             // Add complete tool call
@@ -349,7 +347,6 @@ Line 3</content></write_file>`;
         });
         
         test('Should detect multiple tool calls in sequence', () => {
-            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
             const parser = new XmlToolCallStreamParser(['tool_a', 'tool_b']);
             
             // First tool call
@@ -364,7 +361,6 @@ Line 3</content></write_file>`;
         });
         
         test('Should handle empty chunks', () => {
-            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
             const parser = new XmlToolCallStreamParser(['test_tool']);
             
             let result = parser.addChunk('');
@@ -375,7 +371,6 @@ Line 3</content></write_file>`;
         });
         
         test('Should return buffer content', () => {
-            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
             const parser = new XmlToolCallStreamParser(['test_tool']);
             
             parser.addChunk('Hello ');
@@ -386,7 +381,6 @@ Line 3</content></write_file>`;
         });
         
         test('Should extract non-tool-call text', () => {
-            const { XmlToolCallStreamParser } = require('../../xmlToolPrompt');
             const parser = new XmlToolCallStreamParser(['test_tool']);
             
             parser.addChunk('Before ');

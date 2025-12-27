@@ -21,6 +21,11 @@ export function generateXmlToolPrompt(tools: readonly vscode.LanguageModelChatTo
 
     // Tools without valid names return '' from formatToolDescription and are filtered out by .filter(Boolean)
     const toolDescriptions = tools.map(tool => formatToolDescription(tool)).filter(Boolean).join('\n\n');
+    
+    // If all tools were filtered out (e.g., all had empty names), return empty string
+    if (!toolDescriptions) {
+        return '';
+    }
 
     return `====
 
@@ -213,7 +218,8 @@ function parseXmlParameters(content: string): Record<string, unknown> {
     // Match parameter tags: <param_name>value</param_name>
     // Note: This regex uses a backreference (\1) to match closing tags.
     // It does not handle nested tags with the same name correctly.
-    const paramRegex = /<([a-zA-Z_][a-zA-Z0-9_]*)>([\s\S]*?)<\/\1>/g;
+    // Allows hyphens in parameter names to match JSON schema conventions.
+    const paramRegex = /<([a-zA-Z_][a-zA-Z0-9_-]*)>([\s\S]*?)<\/\1>/g;
     let match;
     
     while ((match = paramRegex.exec(content)) !== null) {
@@ -258,6 +264,20 @@ function generateToolCallId(): string {
 }
 
 /**
+ * Escapes XML special characters in a string.
+ * @param str - The string to escape
+ * @returns The escaped string
+ */
+function escapeXml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+/**
  * Formats a tool call as XML text for message history.
  * Used when converting assistant messages with tool calls to plain text format
  * for prompt-based tool calling.
@@ -269,7 +289,9 @@ function generateToolCallId(): string {
 export function formatToolCallAsXml(name: string, args: Record<string, unknown>): string {
     const paramLines = Object.entries(args).map(([key, value]) => {
         const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-        return `<${key}>${stringValue}</${key}>`;
+        // Escape XML special characters to ensure valid XML
+        const escapedValue = escapeXml(stringValue);
+        return `<${key}>${escapedValue}</${key}>`;
     });
     
     return `<${name}>\n${paramLines.join('\n')}\n</${name}>`;

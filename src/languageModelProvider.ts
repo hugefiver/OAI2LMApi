@@ -391,6 +391,12 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 ));
                 console.log(`OAI2LMApi: Finalized XML tool call: ${toolCall.name}`);
             }
+            
+            // Report any non-tool-call text content to the user
+            const nonToolCallText = streamParser.getNonToolCallText();
+            if (nonToolCallText) {
+                progress.report(new vscode.LanguageModelTextPart(nonToolCallText));
+            }
         }
     }
 
