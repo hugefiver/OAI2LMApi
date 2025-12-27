@@ -13,6 +13,7 @@ import {
 import { GEMINI_API_KEY_SECRET_KEY, GEMINI_CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata } from './modelMetadata';
 import { stripSchemaField } from './schemaUtils';
+import { generateXmlToolPrompt, parseXmlToolCalls } from './xmlToolPrompt';
 
 /**
  * Model override configuration from user settings.
@@ -37,6 +38,11 @@ interface ModelOverrideConfig {
      * Reserved for future use; currently not applied by getModelOverride.
      */
     thinkingLevel?: string | number;
+    /**
+     * When enabled, tools are converted to XML-format instructions in the system prompt
+     * instead of using native function calling.
+     */
+    usePromptBasedToolCalling?: boolean;
 }
 
 interface GeminiModelInformation extends vscode.LanguageModelChatInformation {
@@ -341,12 +347,37 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             throw new Error('Gemini client not initialized');
         }
 
+        // Check if prompt-based tool calling is enabled for this model
+        const modelOverride = this.getModelOverride(model.modelId);
+        const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
+
         // Convert VSCode messages to Gemini format
         const { contents, systemInstruction, toolCallNames } = this.convertMessages(messages);
 
-        // Convert VSCode tools to Gemini format
-        const tools = this.convertTools(options.tools);
-        const toolMode = this.convertToolMode(options.toolMode);
+        // Get available tool names for XML parsing
+        const availableToolNames = options.tools?.map(t => t.name).filter((n): n is string => !!n) ?? [];
+
+        // Handle prompt-based tool calling
+        let tools: GeminiFunctionDeclaration[] | undefined;
+        let toolMode: 'auto' | 'required' | 'none' | undefined;
+        let effectiveSystemInstruction = systemInstruction;
+
+        if (usePromptBasedToolCalling && options.tools && options.tools.length > 0) {
+            // Generate XML tool prompt and append to system instruction
+            const xmlToolPrompt = generateXmlToolPrompt(options.tools);
+            effectiveSystemInstruction = effectiveSystemInstruction 
+                ? effectiveSystemInstruction + '\n\n' + xmlToolPrompt 
+                : xmlToolPrompt;
+            
+            // Don't pass native tools when using prompt-based tool calling
+            tools = undefined;
+            toolMode = undefined;
+            console.log(`GeminiProvider: Using prompt-based tool calling for model ${model.modelId}`);
+        } else {
+            // Use native function calling
+            tools = this.convertTools(options.tools);
+            toolMode = this.convertToolMode(options.toolMode);
+        }
 
         // Get maxTokens from options
         type TokenBudgetOptions = {
@@ -381,12 +412,19 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             this._toolCallNames.set(id, name);
         }
 
+        // For prompt-based tool calling, collect all text chunks to parse XML tool calls
+        let fullResponseText = '';
+
         await this.client.streamChatCompletion(
             contents,
             model.modelId,
-            systemInstruction,
+            effectiveSystemInstruction,
             {
                 onChunk: (chunk) => {
+                    if (usePromptBasedToolCalling) {
+                        // Collect text for XML parsing
+                        fullResponseText += chunk;
+                    }
                     progress.report(new vscode.LanguageModelTextPart(chunk));
                 },
                 onThinkingChunk: (chunk, thoughtSignature) => {
@@ -425,6 +463,24 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                 maxTokens
             }
         );
+
+        // After streaming, parse XML tool calls if using prompt-based tool calling
+        if (usePromptBasedToolCalling && fullResponseText && availableToolNames.length > 0) {
+            const parsedToolCalls = parseXmlToolCalls(fullResponseText, availableToolNames);
+            for (const toolCall of parsedToolCalls) {
+                if (reportedToolCallIds.has(toolCall.id)) {
+                    continue;
+                }
+                reportedToolCallIds.add(toolCall.id);
+                
+                progress.report(new vscode.LanguageModelToolCallPart(
+                    toolCall.id,
+                    toolCall.name,
+                    toolCall.arguments
+                ));
+                console.log(`GeminiProvider: Parsed XML tool call: ${toolCall.name}`);
+            }
+        }
     }
 
     // Map of tool call IDs to function names, used for function responses

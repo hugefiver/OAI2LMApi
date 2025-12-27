@@ -2,6 +2,20 @@ import * as vscode from 'vscode';
 import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, CompletedToolCall } from './openaiClient';
 import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
+import { generateXmlToolPrompt, parseXmlToolCalls } from './xmlToolPrompt';
+
+/**
+ * Model override configuration from user settings.
+ */
+interface ModelOverrideConfig {
+    maxInputTokens?: number;
+    maxOutputTokens?: number;
+    supportsToolCalling?: boolean;
+    supportsImageInput?: boolean;
+    temperature?: number;
+    thinkingLevel?: string | number;
+    usePromptBasedToolCalling?: boolean;
+}
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -202,6 +216,36 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         return nameWithoutPrefix.toLowerCase();
     }
 
+    /**
+     * Gets model override configuration for a given model ID.
+     * Supports wildcard patterns like 'gpt-*' with case-insensitive matching.
+     */
+    private getModelOverride(modelId: string): ModelOverrideConfig | undefined {
+        const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const overrides = config.get<Record<string, ModelOverrideConfig>>('modelOverrides', {});
+        
+        // Check for exact match first
+        if (overrides[modelId]) {
+            return overrides[modelId];
+        }
+        
+        // Check for wildcard patterns (case-insensitive)
+        for (const pattern of Object.keys(overrides)) {
+            if (pattern.includes('*')) {
+                // Convert wildcard pattern to regex
+                const regexPattern = pattern
+                    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                    .replace(/\\\*/g, '.*');
+                const regex = new RegExp(`^${regexPattern}$`, 'i');
+                if (regex.test(modelId)) {
+                    return overrides[pattern];
+                }
+            }
+        }
+        
+        return undefined;
+    }
+
     private addModel(apiModel: APIModelInfo) {
         const { metadata, fromApi } = this.getModelInfo(apiModel);
         const family = this.extractModelFamily(apiModel.id);
@@ -244,12 +288,45 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             throw new Error('OpenAI client not initialized');
         }
 
-        // Convert VSCode messages to OpenAI format
-        const chatMessages: ChatMessage[] = this.convertMessages(messages);
+        // Check if prompt-based tool calling is enabled for this model
+        const modelOverride = this.getModelOverride(model.modelId);
+        const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
-        // Convert VSCode tools to OpenAI format (pass modelId for special handling)
-        const tools = this.convertTools(options.tools, model.modelId);
-        const toolChoice = this.convertToolMode(options.toolMode);
+        // Convert VSCode messages to OpenAI format
+        let chatMessages: ChatMessage[] = this.convertMessages(messages);
+
+        // Get available tool names for XML parsing
+        const availableToolNames = options.tools?.map(t => t.name).filter((n): n is string => !!n) ?? [];
+
+        // Handle prompt-based tool calling
+        let tools: ToolDefinition[] | undefined;
+        let toolChoice: ToolChoice | undefined;
+
+        if (usePromptBasedToolCalling && options.tools && options.tools.length > 0) {
+            // Generate XML tool prompt and prepend to system message
+            const xmlToolPrompt = generateXmlToolPrompt(options.tools);
+            
+            // Find or create system message
+            const systemMsgIndex = chatMessages.findIndex(m => m.role === 'system');
+            if (systemMsgIndex >= 0) {
+                chatMessages[systemMsgIndex] = {
+                    ...chatMessages[systemMsgIndex],
+                    content: (chatMessages[systemMsgIndex].content || '') + '\n\n' + xmlToolPrompt
+                };
+            } else {
+                // Prepend a new system message
+                chatMessages = [{ role: 'system', content: xmlToolPrompt }, ...chatMessages];
+            }
+            
+            // Don't pass native tools when using prompt-based tool calling
+            tools = undefined;
+            toolChoice = undefined;
+            console.log(`OAI2LMApi: Using prompt-based tool calling for model ${model.modelId}`);
+        } else {
+            // Use native function calling
+            tools = this.convertTools(options.tools, model.modelId);
+            toolChoice = this.convertToolMode(options.toolMode);
+        }
 
         // Derive a reasonable maxTokens for providers that require an explicit budget.
         // VS Code's API surface may vary; probe common fields defensively.
@@ -271,12 +348,19 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         // Track reported tool call IDs to prevent duplicates
         const reportedToolCallIds = new Set<string>();
 
+        // For prompt-based tool calling, collect all text chunks to parse XML tool calls
+        let fullResponseText = '';
+
         // Stream the response
         await this.client.streamChatCompletion(
             chatMessages,
             model.modelId,
             {
                 onChunk: (chunk) => {
+                    if (usePromptBasedToolCalling) {
+                        // Collect text for XML parsing
+                        fullResponseText += chunk;
+                    }
                     progress.report(new vscode.LanguageModelTextPart(chunk));
                 },
                 onThinkingChunk: (chunk) => {
@@ -316,6 +400,24 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 maxTokens
             }
         );
+
+        // After streaming, parse XML tool calls if using prompt-based tool calling
+        if (usePromptBasedToolCalling && fullResponseText && availableToolNames.length > 0) {
+            const parsedToolCalls = parseXmlToolCalls(fullResponseText, availableToolNames);
+            for (const toolCall of parsedToolCalls) {
+                if (reportedToolCallIds.has(toolCall.id)) {
+                    continue;
+                }
+                reportedToolCallIds.add(toolCall.id);
+                
+                progress.report(new vscode.LanguageModelToolCallPart(
+                    toolCall.id,
+                    toolCall.name,
+                    toolCall.arguments
+                ));
+                console.log(`OAI2LMApi: Parsed XML tool call: ${toolCall.name}`);
+            }
+        }
     }
 
     /**
