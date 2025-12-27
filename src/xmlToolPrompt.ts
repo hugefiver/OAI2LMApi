@@ -1,15 +1,6 @@
 import * as vscode from 'vscode';
 
 /**
- * Interface for a tool definition that can be converted to XML format
- */
-interface ToolDefinition {
-    name: string;
-    description?: string;
-    inputSchema?: Record<string, unknown>;
-}
-
-/**
  * Generates XML-based tool calling system prompt instructions.
  * This is based on the approach used by kilocode (https://github.com/Kilo-Org/kilocode/)
  * where tools are described in the system prompt using XML format instead of native function calling.
@@ -22,7 +13,7 @@ export function generateXmlToolPrompt(tools: readonly vscode.LanguageModelChatTo
         return '';
     }
 
-    const toolDescriptions = tools.map(tool => formatToolDescription(tool)).join('\n\n');
+    const toolDescriptions = tools.map(tool => formatToolDescription(tool)).filter(Boolean).join('\n\n');
 
     return `====
 
@@ -70,14 +61,19 @@ function formatToolDescription(tool: vscode.LanguageModelChatTool): string {
     const schema = tool.inputSchema as Record<string, unknown> | undefined;
     const parameters = formatParameters(schema);
 
-    return `## ${name}
-${description ? `Description: ${description}` : ''}
-${parameters ? `Parameters:\n${parameters}` : 'Parameters: None'}
-
+    // Build parts array and filter empty ones to avoid blank lines
+    const parts: string[] = [`## ${name}`];
+    if (description) {
+        parts.push(`Description: ${description}`);
+    }
+    parts.push(parameters ? `Parameters:\n${parameters}` : 'Parameters: None');
+    parts.push(`
 Usage:
 <${name}>
 ${generateParameterExample(schema)}
-</${name}>`;
+</${name}>`);
+
+    return parts.join('\n');
 }
 
 /**
