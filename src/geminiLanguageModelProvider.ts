@@ -14,36 +14,7 @@ import { GEMINI_API_KEY_SECRET_KEY, GEMINI_CACHED_MODELS_KEY } from './constants
 import { getModelMetadata } from './modelMetadata';
 import { stripSchemaField } from './schemaUtils';
 import { generateXmlToolPrompt, parseXmlToolCalls } from './xmlToolPrompt';
-
-/**
- * Model override configuration from user settings.
- *
- * Note:
- * - This interface mirrors the `oai2lmapi.modelOverrides` schema in package.json.
- * - The `temperature` and `thinkingLevel` properties are currently not applied by
- *   this provider's getModelOverride logic; they are exposed here to keep the
- *   Gemini configuration aligned with other providers and reserved for potential
- *   future use.
- */
-interface ModelOverrideConfig {
-    maxInputTokens?: number;
-    maxOutputTokens?: number;
-    supportsToolCalling?: boolean;
-    supportsImageInput?: boolean;
-    /**
-     * Reserved for future use; currently not applied by getModelOverride.
-     */
-    temperature?: number;
-    /**
-     * Reserved for future use; currently not applied by getModelOverride.
-     */
-    thinkingLevel?: string | number;
-    /**
-     * When enabled, tools are converted to XML-format instructions in the system prompt
-     * instead of using native function calling.
-     */
-    usePromptBasedToolCalling?: boolean;
-}
+import { getModelOverride } from './configUtils';
 
 interface GeminiModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -235,7 +206,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             : apiVision;
 
         // Apply user-configured model overrides
-        const override = this.getModelOverride(modelId);
+        const override = getModelOverride(modelId);
         if (override) {
             const validInputTokens = this.getValidNumber(override.maxInputTokens);
             if (validInputTokens !== undefined) {
@@ -281,36 +252,6 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             : undefined;
     }
 
-    /**
-     * Gets model override configuration for a given model ID.
-     * Supports wildcard patterns like 'gemini-*' with case-insensitive matching.
-     */
-    private getModelOverride(modelId: string): ModelOverrideConfig | undefined {
-        const config = vscode.workspace.getConfiguration('oai2lmapi');
-        const overrides = config.get<Record<string, ModelOverrideConfig>>('modelOverrides', {});
-        
-        // Check for exact match first
-        if (overrides[modelId]) {
-            return overrides[modelId];
-        }
-        
-        // Check for wildcard patterns (case-insensitive)
-        for (const pattern of Object.keys(overrides)) {
-            if (pattern.includes('*')) {
-                // Convert wildcard pattern to regex; 'i' flag below handles case-insensitive matching
-                const regexPattern = pattern
-                    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
-                    .replace(/\\\*/g, '.*'); // Convert \* back to .*
-                const regex = new RegExp(`^${regexPattern}$`, 'i');
-                if (regex.test(modelId)) {
-                    return overrides[pattern];
-                }
-            }
-        }
-        
-        return undefined;
-    }
-
     private supportsVision(modelId: string | null | undefined): boolean {
         if (!modelId) {
             return false;
@@ -348,7 +289,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         }
 
         // Check if prompt-based tool calling is enabled for this model
-        const modelOverride = this.getModelOverride(model.modelId);
+        const modelOverride = getModelOverride(model.modelId);
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
         // Convert VSCode messages to Gemini format
@@ -422,10 +363,11 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             {
                 onChunk: (chunk) => {
                     if (usePromptBasedToolCalling) {
-                        // Collect text for XML parsing
+                        // Collect text for XML parsing; do not stream raw XML chunks to the user
                         fullResponseText += chunk;
+                    } else {
+                        progress.report(new vscode.LanguageModelTextPart(chunk));
                     }
-                    progress.report(new vscode.LanguageModelTextPart(chunk));
                 },
                 onThinkingChunk: (chunk, thoughtSignature) => {
                     // Report thinking content with optional signature

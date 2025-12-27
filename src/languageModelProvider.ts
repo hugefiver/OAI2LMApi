@@ -3,19 +3,7 @@ import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, Co
 import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
 import { generateXmlToolPrompt, parseXmlToolCalls } from './xmlToolPrompt';
-
-/**
- * Model override configuration from user settings.
- */
-interface ModelOverrideConfig {
-    maxInputTokens?: number;
-    maxOutputTokens?: number;
-    supportsToolCalling?: boolean;
-    supportsImageInput?: boolean;
-    temperature?: number;
-    thinkingLevel?: string | number;
-    usePromptBasedToolCalling?: boolean;
-}
+import { getModelOverride } from './configUtils';
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -216,36 +204,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         return nameWithoutPrefix.toLowerCase();
     }
 
-    /**
-     * Gets model override configuration for a given model ID.
-     * Supports wildcard patterns like 'gpt-*' with case-insensitive matching.
-     */
-    private getModelOverride(modelId: string): ModelOverrideConfig | undefined {
-        const config = vscode.workspace.getConfiguration('oai2lmapi');
-        const overrides = config.get<Record<string, ModelOverrideConfig>>('modelOverrides', {});
-        
-        // Check for exact match first
-        if (overrides[modelId]) {
-            return overrides[modelId];
-        }
-        
-        // Check for wildcard patterns (case-insensitive)
-        for (const pattern of Object.keys(overrides)) {
-            if (pattern.includes('*')) {
-                // Convert wildcard pattern to regex
-                const regexPattern = pattern
-                    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                    .replace(/\\\*/g, '.*');
-                const regex = new RegExp(`^${regexPattern}$`, 'i');
-                if (regex.test(modelId)) {
-                    return overrides[pattern];
-                }
-            }
-        }
-        
-        return undefined;
-    }
-
     private addModel(apiModel: APIModelInfo) {
         const { metadata, fromApi } = this.getModelInfo(apiModel);
         const family = this.extractModelFamily(apiModel.id);
@@ -289,7 +247,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         }
 
         // Check if prompt-based tool calling is enabled for this model
-        const modelOverride = this.getModelOverride(model.modelId);
+        const modelOverride = getModelOverride(model.modelId);
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
         // Convert VSCode messages to OpenAI format
@@ -358,10 +316,11 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             {
                 onChunk: (chunk) => {
                     if (usePromptBasedToolCalling) {
-                        // Collect text for XML parsing
+                        // Collect text for XML parsing; do not stream raw XML chunks to the user
                         fullResponseText += chunk;
+                    } else {
+                        progress.report(new vscode.LanguageModelTextPart(chunk));
                     }
-                    progress.report(new vscode.LanguageModelTextPart(chunk));
                 },
                 onThinkingChunk: (chunk) => {
                     // Report thinking/reasoning content using LanguageModelThinkingPart

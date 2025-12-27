@@ -1,4 +1,10 @@
 import * as vscode from 'vscode';
+import { escapeRegex } from './configUtils';
+
+/**
+ * Counter for generating unique tool call IDs within a session.
+ */
+let toolCallIdCounter = 0;
 
 /**
  * Generates XML-based tool calling system prompt instructions.
@@ -13,13 +19,14 @@ export function generateXmlToolPrompt(tools: readonly vscode.LanguageModelChatTo
         return '';
     }
 
+    // Tools without valid names return '' from formatToolDescription and are filtered out by .filter(Boolean)
     const toolDescriptions = tools.map(tool => formatToolDescription(tool)).filter(Boolean).join('\n\n');
 
     return `====
 
 TOOL USE
 
-You have access to a set of tools that are executed upon the user's approval. You can use up to 5 tools in a single message when the tasks are independent and can be executed in parallel. The results of all tool calls will be returned together after execution.
+You have access to a set of tools that are executed upon the user's approval. You can use zero or more tools per message depending on what the task requires. For independent operations, you can call up to 5 tools in a single message. The results of all tool calls will be returned together after execution.
 
 # Tool Use Formatting
 
@@ -57,12 +64,14 @@ ${toolDescriptions}
 4. For dependent operations where one tool's result is needed for the next, use tools step-by-step with each use informed by the previous result.
 5. Formulate your tool use using the XML format specified for each tool.
 6. After tool execution, the user will respond with the results of all tool calls. Use these results to continue your task or make further decisions.
+7. If no tool is needed, you may respond with text only.
 
-IMPORTANT: Do not include any text or explanation after your tool calls. The tool call(s) must be the final part of your response.`;
+IMPORTANT: Keep your tool call as a well-formed XML block that can be parsed without any text interleaved inside the tags. You may include brief natural language instructions or explanations before or after the XML tool call if helpful, but do not break the XML structure.`;
 }
 
 /**
- * Formats a single tool definition into an XML description
+ * Formats a single tool definition into an XML description.
+ * Returns an empty string for tools without valid names (filtered in generateXmlToolPrompt).
  */
 function formatToolDescription(tool: vscode.LanguageModelChatTool): string {
     const name = (tool.name ?? '').trim();
@@ -74,7 +83,7 @@ function formatToolDescription(tool: vscode.LanguageModelChatTool): string {
     const schema = tool.inputSchema as Record<string, unknown> | undefined;
     const parameters = formatParameters(schema);
 
-    // Build parts array and filter empty ones to avoid blank lines
+    // Build parts array for this tool
     const parts: string[] = [`## ${name}`];
     if (description) {
         parts.push(`Description: ${description}`);
@@ -161,6 +170,7 @@ function getPlaceholder(paramName: string, type?: string): string {
 
 /**
  * Parses XML tool calls from model response text.
+ * Uses case-sensitive matching for tool names.
  * 
  * @param text - The model response text that may contain XML tool calls
  * @param availableTools - List of available tool names to look for
@@ -169,8 +179,13 @@ function getPlaceholder(paramName: string, type?: string): string {
 export function parseXmlToolCalls(text: string, availableTools: string[]): ParsedToolCall[] {
     const toolCalls: ParsedToolCall[] = [];
     
-    for (const toolName of availableTools) {
-        const regex = new RegExp(`<${escapeRegex(toolName)}>([\\s\\S]*?)<\\/${escapeRegex(toolName)}>`, 'gi');
+    // Pre-compute regex patterns for all tools for efficiency
+    const toolPatterns = availableTools.map(toolName => ({
+        name: toolName,
+        regex: new RegExp(`<${escapeRegex(toolName)}>([\\s\\S]*?)<\\/${escapeRegex(toolName)}>`, 'g'),
+    }));
+    
+    for (const { name: toolName, regex } of toolPatterns) {
         let match;
         
         while ((match = regex.exec(text)) !== null) {
@@ -189,18 +204,31 @@ export function parseXmlToolCalls(text: string, availableTools: string[]): Parse
 }
 
 /**
- * Parses XML parameters from the content inside a tool tag
+ * Parses XML parameters from the content inside a tool tag.
+ * Note: This simple regex does not support nested tags with the same name.
  */
 function parseXmlParameters(content: string): Record<string, unknown> {
     const args: Record<string, unknown> = {};
     
     // Match parameter tags: <param_name>value</param_name>
+    // Note: This regex uses a backreference (\1) to match closing tags.
+    // It does not handle nested tags with the same name correctly.
     const paramRegex = /<([a-zA-Z_][a-zA-Z0-9_]*)>([\s\S]*?)<\/\1>/g;
     let match;
     
     while ((match = paramRegex.exec(content)) !== null) {
         const paramName = match[1];
         const paramValue = match[2].trim();
+        
+        // Skip malformed nested parameters with the same name to avoid incorrect parsing
+        // e.g. <param><param>value</param></param>
+        // Use simple string search for efficiency instead of creating new RegExp
+        const openTag = `<${paramName}>`;
+        const closeTag = `</${paramName}>`;
+        if (paramValue.includes(openTag) || paramValue.includes(closeTag)) {
+            console.debug('[oai2lmapi] Skipping malformed nested parameter', { paramName, paramValue });
+            continue;
+        }
         
         // Try to parse as JSON first, otherwise use as string
         try {
@@ -219,17 +247,14 @@ function parseXmlParameters(content: string): Record<string, unknown> {
 }
 
 /**
- * Escapes special regex characters in a string
- */
-function escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Generates a unique tool call ID
+ * Generates a unique tool call ID using timestamp, counter, and random component.
  */
 function generateToolCallId(): string {
-    return `call_xml_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    toolCallIdCounter += 1;
+    const timestampPart = Date.now().toString(36);
+    const counterPart = toolCallIdCounter.toString(36);
+    const randomPart = Math.random().toString(36).slice(2, 11);
+    return `call_xml_${timestampPart}_${counterPart}_${randomPart}`;
 }
 
 /**
