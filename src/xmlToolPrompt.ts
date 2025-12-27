@@ -258,6 +258,37 @@ function generateToolCallId(): string {
 }
 
 /**
+ * Formats a tool call as XML text for message history.
+ * Used when converting assistant messages with tool calls to plain text format
+ * for prompt-based tool calling.
+ * 
+ * @param name - The tool name
+ * @param args - The tool arguments object
+ * @returns XML-formatted tool call string
+ */
+export function formatToolCallAsXml(name: string, args: Record<string, unknown>): string {
+    const paramLines = Object.entries(args).map(([key, value]) => {
+        const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+        return `<${key}>${stringValue}</${key}>`;
+    });
+    
+    return `<${name}>\n${paramLines.join('\n')}\n</${name}>`;
+}
+
+/**
+ * Formats a tool result as text for message history.
+ * Used when converting tool result messages to plain text format
+ * for prompt-based tool calling, following kilocode's approach.
+ * 
+ * @param toolName - The name of the tool that was called
+ * @param result - The tool result content
+ * @returns Formatted tool result text
+ */
+export function formatToolResultAsText(toolName: string, result: string): string {
+    return `[${toolName} Result]\n${result}`;
+}
+
+/**
  * Parsed tool call result
  */
 export interface ParsedToolCall {
