@@ -325,8 +325,6 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): ChatMessage[] {
         const result: ChatMessage[] = [];
         const processedToolCallIds = new Set<string>();
-        // Map from original callId (or index-based key) to assigned ID (for fallback ID consistency)
-        const callIdMapping = new Map<string, string>();
         let toolCallIndex = 0;
 
         for (const msg of messages) {
@@ -340,18 +338,8 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
                 for (const part of msg.content) {
                     if (this.isToolCallPart(part)) {
-                        // Ensure we have a valid tool call ID and store the mapping
-                        const originalCallId = part.callId;
-                        const currentIndex = toolCallIndex++;
-                        const toolCallId = this.ensureToolCallId(originalCallId, part.name, currentIndex);
-                        
-                        // Store the mapping from original callId to assigned ID
-                        // This ensures tool results can look up the same ID
-                        if (this.isValidCallId(originalCallId)) {
-                            callIdMapping.set(originalCallId, toolCallId);
-                        }
-                        // Also store index-based mapping for falsy callIds
-                        callIdMapping.set(`__index_${currentIndex}`, toolCallId);
+                        // Ensure we have a valid tool call ID
+                        const toolCallId = this.ensureToolCallId(part.callId, part.name, toolCallIndex++);
                         
                         // Skip duplicate tool calls in message history
                         if (processedToolCallIds.has(toolCallId)) {
@@ -371,19 +359,8 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     } else if (this.isToolResultPart(part)) {
                         // This is a tool result
                         const resultContent = this.extractToolResultContent(part);
-                        // Look up the mapped ID first by original callId
-                        const originalCallId = part.callId;
-                        let toolCallId: string;
-                        if (this.isValidCallId(originalCallId) && callIdMapping.has(originalCallId)) {
-                            // Use the same ID that was assigned to the corresponding tool call
-                            toolCallId = callIdMapping.get(originalCallId)!;
-                        } else {
-                            // No mapping found by callId - this can happen if tool call was missing or had different callId
-                            console.warn('OAI2LMApi: Tool result missing mapping for callId, using fallback. This may cause API errors with some providers.');
-                            // Note: toolCallIndex is only incremented when generating a new ID,
-                            // to keep index values consistent for future lookups
-                            toolCallId = this.ensureToolCallId(originalCallId, 'result', toolCallIndex++);
-                        }
+                        // Ensure we have a valid tool call ID, consistent with tool calls
+                        const toolCallId = this.ensureToolCallId(part.callId, 'result', toolCallIndex++);
                         toolResults.push({
                             tool_call_id: toolCallId,
                             content: resultContent
@@ -458,17 +435,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     }
 
     /**
-     * Checks if a call ID is valid (non-empty string).
-     */
-    private isValidCallId(callId: unknown): callId is string {
-        return typeof callId === 'string' && callId.trim().length > 0;
-    }
-
-    /**
      * Generates a unique tool call ID if one is missing or invalid.
      */
     private ensureToolCallId(callId: unknown, name: string, index: number): string {
-        if (this.isValidCallId(callId)) {
+        if (typeof callId === 'string' && callId.trim().length > 0) {
             return callId;
         }
         // Generate a unique ID using timestamp + index + random component for uniqueness
