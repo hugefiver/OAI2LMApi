@@ -471,7 +471,11 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
                 // Handle tool calls and results based on mode
                 if (usePromptBasedToolCalling) {
-                    // For prompt-based tool calling, everything is text
+                    // For prompt-based tool calling, everything is text.
+                    // Tool results are pushed as user messages first, followed by assistant
+                    // content with tool calls. This ordering may differ from the original
+                    // message content array order, but is consistent with the prompt-based
+                    // tool calling convention where results precede the next assistant turn.
                     if (toolResults.length > 0) {
                         // Convert tool results to user message with formatted text
                         const formattedResults = toolResults.map(tr => 
@@ -579,14 +583,21 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
     /**
      * Gets the tool name from a tool result part if available.
-     * Tool result parts may have a 'toolName' property in some VSCode versions.
+     * 
+     * Note: LanguageModelToolResultPart does not currently define a `toolName` property
+     * in the VS Code API. This method is implemented as a forward-compatibility hook
+     * in case future versions add such a property.
      */
     private getToolNameFromResult(part: unknown): string | undefined {
-        if (part !== null && typeof part === 'object') {
-            // Check for toolName property that may be present in some versions
-            if ('toolName' in part && typeof (part as any).toolName === 'string') {
-                return (part as any).toolName;
-            }
+        if (!part || typeof part !== 'object') {
+            return undefined;
+        }
+
+        // Forward-compatibility: check for an optional `toolName` property in a
+        // type-safe way without using `any`. If present and a string, return it.
+        const candidate = (part as { toolName?: unknown }).toolName;
+        if (typeof candidate === 'string') {
+            return candidate;
         }
         return undefined;
     }

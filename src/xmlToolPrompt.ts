@@ -2,7 +2,15 @@ import * as vscode from 'vscode';
 import { escapeRegex } from './configUtils';
 
 /**
- * Counter for generating unique tool call IDs within a session.
+ * Counter for generating unique tool call IDs.
+ *
+ * This is a module-level, monotonically increasing counter that is intentionally
+ * never reset for the lifetime of the extension process. As a result:
+ * - All instances/providers that use this module share the same ID sequence.
+ * - IDs remain unique across all tool calls in the session.
+ *
+ * Overflow is not expected in practice (it would require more than
+ * Number.MAX_SAFE_INTEGER (~2^53) tool calls in a single process).
  */
 let toolCallIdCounter = 0;
 
@@ -228,7 +236,12 @@ function parseXmlParameters(content: string): Record<string, unknown> {
         
         // Skip malformed nested parameters with the same name to avoid incorrect parsing
         // e.g. <param><param>value</param></param>
-        // Use simple string search for efficiency instead of creating new RegExp
+        // Use simple string search for efficiency instead of creating new RegExp.
+        //
+        // Known limitation: This will also skip valid parameters whose values legitimately
+        // contain the parameter name in angle brackets (e.g., `<code>Use <code> tags</code></code>`).
+        // However, formatToolCallAsXml escapes special characters, so this should only occur
+        // when parsing model-generated XML that doesn't properly escape values.
         const openTag = `<${paramName}>`;
         const closeTag = `</${paramName}>`;
         if (paramValue.includes(openTag) || paramValue.includes(closeTag)) {
@@ -265,12 +278,14 @@ function generateToolCallId(): string {
 
 /**
  * Escapes XML special characters in a string.
+ * Note: Ampersand (&) must be escaped first to prevent double-escaping
+ * of already-escaped sequences.
  * @param str - The string to escape
  * @returns The escaped string
  */
 function escapeXml(str: string): string {
     return str
-        .replace(/&/g, '&amp;')
+        .replace(/&/g, '&amp;')  // Must be first to prevent double-escaping
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
@@ -398,7 +413,7 @@ export class XmlToolCallStreamParser {
     private extractCompletedToolCalls(): ParsedToolCall[] {
         const newToolCalls: ParsedToolCall[] = [];
         
-        for (const { name: toolName, regex } of this.toolPatterns) {
+        for (const { name: toolName } of this.toolPatterns) {
             // Find all matches using global regex
             const globalRegex = new RegExp(`<${escapeRegex(toolName)}>([\\s\\S]*?)<\\/${escapeRegex(toolName)}>`, 'g');
             let match;
@@ -413,7 +428,12 @@ export class XmlToolCallStreamParser {
                 };
                 
                 // Create a unique signature for this tool call to avoid duplicates
-                const signature = `${toolName}:${JSON.stringify(args)}`;
+                // Sort keys to ensure consistent serialization regardless of object property order
+                const sortedArgs = Object.keys(args).sort().reduce((acc, key) => {
+                    acc[key] = args[key];
+                    return acc;
+                }, {} as Record<string, unknown>);
+                const signature = `${toolName}:${JSON.stringify(sortedArgs)}`;
                 if (!this.emittedToolCallIds.has(signature)) {
                     this.emittedToolCallIds.add(signature);
                     newToolCalls.push(toolCall);
