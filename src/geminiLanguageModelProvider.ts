@@ -15,6 +15,7 @@ import { getModelMetadata } from './modelMetadata';
 import { stripSchemaField } from './schemaUtils';
 import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
+import { logger } from './logger';
 
 interface GeminiModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -43,11 +44,11 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         const apiKey = await this.context.secrets.get(GEMINI_API_KEY_SECRET_KEY);
 
         if (!apiKey) {
-            console.log('GeminiProvider: API key not configured, provider will not be enabled');
+            logger.debug('API key not configured, provider will not be enabled', undefined, 'Gemini');
             return;
         }
 
-        console.log(`GeminiProvider: Initializing with endpoint: ${apiEndpoint}`);
+        logger.info(`Initializing with endpoint: ${apiEndpoint}`, 'Gemini');
 
         this.client = new GeminiClient({
             apiEndpoint,
@@ -55,7 +56,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         });
 
         // Register the provider with a unique ID
-        console.log('GeminiProvider: Registering language model provider');
+        logger.info('Registering language model provider', 'Gemini');
         const disposable = vscode.lm.registerLanguageModelChatProvider('gemini2lmapi', this);
         this.disposables.push(disposable);
         this._initialized = true;
@@ -63,17 +64,17 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         // Try to load cached models first
         const cachedModels = this.context.globalState.get<GeminiModelInfo[]>(GEMINI_CACHED_MODELS_KEY);
         if (cachedModels && cachedModels.length > 0) {
-            console.log(`GeminiProvider: Loading ${cachedModels.length} models from cache`);
+            logger.info(`Loading ${cachedModels.length} models from cache`, 'Gemini');
             this.updateModelList(cachedModels);
         }
 
         // Auto-load models if enabled
         const autoLoadModels = config.get<boolean>('autoLoadModels', true);
         if (autoLoadModels) {
-            console.log('GeminiProvider: Auto-loading models from API');
+            logger.info('Auto-loading models from API', 'Gemini');
             await this.loadModels();
         } else {
-            console.warn('GeminiProvider: autoLoadModels is disabled');
+            logger.warn('autoLoadModels is disabled', 'Gemini');
             if (!cachedModels || cachedModels.length === 0) {
                 vscode.window.showWarningMessage(
                     'GeminiProvider: autoLoadModels is disabled. No models have been loaded.'
@@ -104,24 +105,24 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             // Filter out models with no identifiable name
             if (!modelId) {
                 filteredCount++;
-                console.log('GeminiProvider: Filtered out model with missing name', { 
+                logger.debug('Filtered out model with missing name', { 
                     displayName: apiModel.displayName,
                     baseModelId: apiModel.baseModelId
-                });
+                }, 'Gemini');
                 continue;
             }
 
             // Filter out non-text-generation models
             if (!supportsTextGeneration(apiModel)) {
                 filteredCount++;
-                console.log(`GeminiProvider: Filtered out non-text model: ${modelId}`);
+                logger.debug(`Filtered out non-text model: ${modelId}`, undefined, 'Gemini');
                 continue;
             }
 
             // Filter out models without function calling unless setting is enabled
             if (!showModelsWithoutToolCalling && !supportsGeminiFunctionCalling(apiModel)) {
                 filteredCount++;
-                console.log(`GeminiProvider: Filtered out model without function calling: ${modelId}`);
+                logger.debug(`Filtered out model without function calling: ${modelId}`, undefined, 'Gemini');
                 continue;
             }
 
@@ -129,27 +130,27 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             addedCount++;
         }
 
-        console.log(`GeminiProvider: Added ${addedCount} models, filtered ${filteredCount} models`);
+        logger.info(`Added ${addedCount} models, filtered ${filteredCount} models`, 'Gemini');
         this._onDidChangeLanguageModelChatInformation.fire();
     }
 
     async loadModels(): Promise<void> {
         if (!this.client) {
-            console.warn('GeminiProvider: Client not initialized');
+            logger.warn('Client not initialized', 'Gemini');
             return;
         }
 
         try {
             const apiModels = await this.client.listModels();
-            console.log(`GeminiProvider: Loaded ${apiModels.length} models from API`);
+            logger.info(`Loaded ${apiModels.length} models from API`, 'Gemini');
 
             this.updateModelList(apiModels);
 
             // Cache the models
             await this.context.globalState.update(GEMINI_CACHED_MODELS_KEY, apiModels);
         } catch (error) {
-            console.error('GeminiProvider: Failed to load models:', error);
-            vscode.window.showErrorMessage(`GeminiProvider: Failed to load models. Error: ${error}`);
+            logger.error('Failed to load models', error, 'Gemini');
+            vscode.window.showErrorMessage(`GeminiProvider: Failed to load models.`);
             this._onDidChangeLanguageModelChatInformation.fire();
         }
     }
@@ -177,7 +178,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
     private addModel(apiModel: GeminiModelInfo) {
         const modelId = getGeminiModelId(apiModel);
         if (!modelId) {
-            console.log('GeminiProvider: Skipping model with no identifiable name');
+            logger.debug('Skipping model with no identifiable name', undefined, 'Gemini');
             return;
         }
         
@@ -240,7 +241,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
         this.modelList.push(modelInfo);
         const hasOverride = override ? ' (with overrides)' : '';
-        console.log(`GeminiProvider: Added model: ${modelInfo.id} (family: ${family})${hasOverride}`);
+        logger.debug(`Added model: ${modelInfo.id} (family: ${family})${hasOverride}`, undefined, 'Gemini');
     }
 
     /**
@@ -273,7 +274,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         options: vscode.PrepareLanguageModelChatModelOptions,
         token: vscode.CancellationToken
     ): Promise<GeminiModelInformation[]> {
-        console.log(`GeminiProvider: Providing ${this.modelList.length} models to VSCode`);
+        logger.debug(`Providing ${this.modelList.length} models to VSCode`, undefined, 'Gemini');
         return this.modelList;
     }
 
@@ -313,7 +314,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             // Don't pass native tools when using prompt-based tool calling
             tools = undefined;
             toolMode = undefined;
-            console.log(`GeminiProvider: Using prompt-based tool calling for model ${model.modelId}`);
+            logger.debug(`Using prompt-based tool calling for model ${model.modelId}`, undefined, 'Gemini');
         } else {
             // Use native function calling
             tools = this.convertTools(options.tools);
@@ -378,7 +379,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                                 toolCall.name,
                                 toolCall.arguments
                             ));
-                            console.log(`GeminiProvider: Streaming XML tool call detected: ${toolCall.name}`);
+                            logger.debug(`Streaming XML tool call detected: ${toolCall.name}`, undefined, 'Gemini');
                         }
                     } else {
                         progress.report(new vscode.LanguageModelTextPart(chunk));
@@ -392,7 +393,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                 onToolCallsComplete: (toolCalls: GeminiCompletedToolCall[]) => {
                     for (const toolCall of toolCalls) {
                         if (reportedToolCallIds.has(toolCall.id)) {
-                            console.warn(`GeminiProvider: Duplicate tool call id '${toolCall.id}' for tool '${toolCall.name}', ignoring subsequent occurrence.`);
+                            logger.debug(`Duplicate tool call id '${toolCall.id}' for tool '${toolCall.name}', ignoring`, undefined, 'Gemini');
                             continue;
                         }
                         reportedToolCallIds.add(toolCall.id);
@@ -405,7 +406,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                                 parsedArgs
                             ));
                         } catch (error) {
-                            console.warn(`GeminiProvider: Failed to parse tool call arguments for ${toolCall.name}:`, error);
+                            logger.debug(`Failed to parse tool call arguments for ${toolCall.name}`, undefined, 'Gemini');
                             progress.report(new vscode.LanguageModelToolCallPart(
                                 toolCall.id,
                                 toolCall.name,
@@ -435,7 +436,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                     toolCall.name,
                     toolCall.arguments
                 ));
-                console.log(`GeminiProvider: Finalized XML tool call: ${toolCall.name}`);
+                logger.debug(`Finalized XML tool call: ${toolCall.name}`, undefined, 'Gemini');
             }
             
             // Report any non-tool-call text content to the user
@@ -600,7 +601,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             
             // For non-base64 URIs, we can't directly use them in Gemini
             // Would need to fetch and convert to base64
-            console.warn('GeminiProvider: Non-base64 image URIs are not supported');
+            logger.debug('Non-base64 image URIs are not supported', undefined, 'Gemini');
             return null;
         }
 
@@ -665,10 +666,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         for (const tool of tools) {
             const name = (tool.name ?? '').trim();
             if (!name) {
-                console.warn('GeminiProvider: Skipping tool with invalid name (empty or whitespace only).', {
+                logger.debug('Skipping tool with invalid name (empty or whitespace only)', {
                     originalName: tool.name,
                     description: tool.description
-                });
+                }, 'Gemini');
                 continue;
             }
 
@@ -754,11 +755,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             const count = await this.client.countTokens(contents, model.modelId);
             return count;
         } catch (error) {
-            console.error('[GeminiLanguageModelProvider] Failed to count tokens via Gemini API, falling back to estimation.', {
+            logger.debug('Failed to count tokens via API, falling back to estimation', {
                 modelId: model.modelId,
-                inputType: typeof text,
-                error
-            });
+                inputType: typeof text
+            }, 'Gemini');
             // Fall back to estimation
             return this.estimateTokens(text);
         }

@@ -10,6 +10,8 @@
  * Reference: https://ai.google.dev/gemini-api/docs
  */
 
+import { logger } from './logger';
+
 export interface GeminiConfig {
     apiEndpoint: string;
     apiKey: string;
@@ -369,9 +371,9 @@ export class GeminiClient {
             }
             
             // If v1beta fails, try v1/models (OpenAI compatible format)
-            console.log('GeminiClient: v1beta/models failed, trying v1/models fallback');
+            logger.debug('v1beta/models failed, trying v1/models fallback', undefined, 'Gemini');
         } catch (error) {
-            console.debug('GeminiClient: v1beta/models request failed:', error);
+            logger.debug('v1beta/models request failed', undefined, 'Gemini');
         }
 
         // Fallback to /v1/models (OpenAI compatible)
@@ -399,7 +401,7 @@ export class GeminiClient {
                 supportedGenerationMethods: ['generateContent']
             }));
         } catch (error) {
-            console.error('GeminiClient: Failed to list models from both endpoints:', error);
+            logger.error('Failed to list models from both endpoints', error, 'Gemini');
             throw error;
         }
     }
@@ -563,7 +565,7 @@ export class GeminiClient {
                                 }
                             } catch (parseError) {
                                 // Log parse errors - could indicate API response format issues
-                                console.warn('GeminiClient: Failed to parse chunk:', parseError);
+                                logger.debug('Failed to parse chunk', undefined, 'Gemini');
                             }
                         }
                     }
@@ -581,7 +583,7 @@ export class GeminiClient {
                 return fullContent;
             }
 
-            console.error('GeminiClient: Stream error:', error);
+            logger.error('Stream error', error, 'Gemini');
             throw error;
         }
     }
@@ -710,14 +712,14 @@ export class GeminiClient {
 
             if (!response.ok) {
                 // Fall back to estimation if API fails
-                console.warn('GeminiClient: countTokens API failed, using estimation');
+                logger.debug('countTokens API failed, using estimation', undefined, 'Gemini');
                 return this.estimateTokens(contents);
             }
 
             const data = await response.json() as { totalTokens: number };
             return data.totalTokens || 0;
         } catch (error) {
-            console.warn('GeminiClient: countTokens request failed:', error);
+            logger.debug('countTokens request failed', undefined, 'Gemini');
             return this.estimateTokens(contents);
         }
     }
@@ -789,11 +791,10 @@ export function supportsTextGeneration(model: GeminiModelInfo): boolean {
     
     // Assume Gemini models support text generation unless excluded, but log that this is heuristic
     const inferredSupportsText = lowerModelId.includes('gemini') && !isExcluded;
-    console.warn(
-        '[OAI2LMApi][Gemini] supportsTextGeneration falling back to heuristic for model',
-        modelId,
-        '- inferred supports text generation =',
-        inferredSupportsText
+    logger.debug(
+        `supportsTextGeneration falling back to heuristic for model ${modelId} - inferred supports text = ${inferredSupportsText}`,
+        undefined,
+        'Gemini'
     );
     return inferredSupportsText;
 }

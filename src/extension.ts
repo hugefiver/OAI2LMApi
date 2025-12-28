@@ -2,12 +2,15 @@ import * as vscode from 'vscode';
 import { OpenAILanguageModelProvider } from './languageModelProvider';
 import { GeminiLanguageModelProvider } from './geminiLanguageModelProvider';
 import { API_KEY_SECRET_KEY, GEMINI_API_KEY_SECRET_KEY } from './constants';
+import { logger } from './logger';
 
 let languageModelProvider: OpenAILanguageModelProvider | undefined;
 let geminiProvider: GeminiLanguageModelProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('OAI2LMApi extension is now active');
+    // Initialize the logger first
+    logger.initialize(context);
+    logger.info('Extension is now active');
 
     // Register commands FIRST to ensure they are always available
     // This prevents "command not found" errors even if initialization fails
@@ -111,7 +114,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (e.affectsConfiguration('oai2lmapi')) {
-                console.log('OAI2LMApi configuration changed, reinitializing...');
+                logger.info('Configuration changed, reinitializing providers...');
                 await reinitializeAllProviders(context);
             }
         })
@@ -139,9 +142,9 @@ async function initializeAsync(context: vscode.ExtensionContext): Promise<void> 
         // This will only be enabled if a Gemini API key is configured
         await initializeGeminiProvider(context);
     } catch (error) {
-        console.error('OAI2LMApi: Background initialization failed:', error);
+        logger.error('Background initialization failed', error);
         // Surface critical initialization failures to the user
-        vscode.window.showErrorMessage('OAI2LMApi: Background initialization failed. Check the Developer Console for details.');
+        vscode.window.showErrorMessage('OAI2LMApi: Background initialization failed. Check the Output panel for details.');
     }
 }
 
@@ -150,7 +153,7 @@ async function migrateApiKeyToSecretStorage(context: vscode.ExtensionContext): P
     const plaintextKey = config.get<string>('apiKey', '');
     
     if (plaintextKey) {
-        console.log('OAI2LMApi: Migrating API key from settings to SecretStorage');
+        logger.info('Migrating API key from settings to SecretStorage');
         
         // Store in SecretStorage
         await context.secrets.store(API_KEY_SECRET_KEY, plaintextKey);
@@ -160,7 +163,7 @@ async function migrateApiKeyToSecretStorage(context: vscode.ExtensionContext): P
             await config.update('apiKey', undefined, vscode.ConfigurationTarget.Global);
             await config.update('apiKey', undefined, vscode.ConfigurationTarget.Workspace);
         } catch (error) {
-            console.warn('OAI2LMApi: Could not clear plaintext API key from settings:', error);
+            logger.warn('Could not clear plaintext API key from settings');
         }
         
         vscode.window.showInformationMessage('OAI2LMApi: API key has been migrated to secure storage');
@@ -172,9 +175,9 @@ async function initializeProvider(context: vscode.ExtensionContext): Promise<voi
         languageModelProvider = new OpenAILanguageModelProvider(context);
         await languageModelProvider.initialize();
     } catch (error) {
-        console.error('OAI2LMApi: Failed to initialize provider:', error);
+        logger.error('Failed to initialize OpenAI provider', error, 'OpenAI');
         // Show a generic message to avoid exposing sensitive information
-        vscode.window.showErrorMessage('OAI2LMApi: Failed to initialize. Check the Developer Console for details.');
+        vscode.window.showErrorMessage('OAI2LMApi: Failed to initialize. Check the Output panel for details.');
     }
 }
 
@@ -185,9 +188,9 @@ async function initializeGeminiProvider(context: vscode.ExtensionContext, isRein
     
     if (!enableGeminiChannel) {
         if (isReinitialize) {
-            console.log('GeminiProvider: Gemini channel disabled by configuration change');
+            logger.info('Gemini channel disabled by configuration change', 'Gemini');
         } else {
-            console.log('GeminiProvider: Gemini channel is disabled in settings');
+            logger.debug('Gemini channel is disabled in settings', undefined, 'Gemini');
         }
         return;
     }
@@ -199,10 +202,10 @@ async function initializeGeminiProvider(context: vscode.ExtensionContext, isRein
         if (!geminiProvider.isInitialized) {
             geminiProvider.dispose();
             geminiProvider = undefined;
-            console.log('GeminiProvider: Not initialized (no API key configured)');
+            logger.debug('Gemini provider not initialized (no API key configured)', undefined, 'Gemini');
         }
     } catch (error) {
-        console.error('GeminiProvider: Failed to initialize:', error);
+        logger.error('Failed to initialize Gemini provider', error, 'Gemini');
         if (geminiProvider) {
             geminiProvider.dispose();
             geminiProvider = undefined;
