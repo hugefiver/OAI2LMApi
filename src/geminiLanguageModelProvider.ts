@@ -13,31 +13,8 @@ import {
 import { GEMINI_API_KEY_SECRET_KEY, GEMINI_CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata } from './modelMetadata';
 import { stripSchemaField } from './schemaUtils';
-
-/**
- * Model override configuration from user settings.
- *
- * Note:
- * - This interface mirrors the `oai2lmapi.modelOverrides` schema in package.json.
- * - The `temperature` and `thinkingLevel` properties are currently not applied by
- *   this provider's getModelOverride logic; they are exposed here to keep the
- *   Gemini configuration aligned with other providers and reserved for potential
- *   future use.
- */
-interface ModelOverrideConfig {
-    maxInputTokens?: number;
-    maxOutputTokens?: number;
-    supportsToolCalling?: boolean;
-    supportsImageInput?: boolean;
-    /**
-     * Reserved for future use; currently not applied by getModelOverride.
-     */
-    temperature?: number;
-    /**
-     * Reserved for future use; currently not applied by getModelOverride.
-     */
-    thinkingLevel?: string | number;
-}
+import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
+import { getModelOverride } from './configUtils';
 
 interface GeminiModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -229,7 +206,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             : apiVision;
 
         // Apply user-configured model overrides
-        const override = this.getModelOverride(modelId);
+        const override = getModelOverride(modelId);
         if (override) {
             const validInputTokens = this.getValidNumber(override.maxInputTokens);
             if (validInputTokens !== undefined) {
@@ -275,36 +252,6 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             : undefined;
     }
 
-    /**
-     * Gets model override configuration for a given model ID.
-     * Supports wildcard patterns like 'gemini-*' with case-insensitive matching.
-     */
-    private getModelOverride(modelId: string): ModelOverrideConfig | undefined {
-        const config = vscode.workspace.getConfiguration('oai2lmapi');
-        const overrides = config.get<Record<string, ModelOverrideConfig>>('modelOverrides', {});
-        
-        // Check for exact match first
-        if (overrides[modelId]) {
-            return overrides[modelId];
-        }
-        
-        // Check for wildcard patterns (case-insensitive)
-        for (const pattern of Object.keys(overrides)) {
-            if (pattern.includes('*')) {
-                // Convert wildcard pattern to regex; 'i' flag below handles case-insensitive matching
-                const regexPattern = pattern
-                    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
-                    .replace(/\\\*/g, '.*'); // Convert \* back to .*
-                const regex = new RegExp(`^${regexPattern}$`, 'i');
-                if (regex.test(modelId)) {
-                    return overrides[pattern];
-                }
-            }
-        }
-        
-        return undefined;
-    }
-
     private supportsVision(modelId: string | null | undefined): boolean {
         if (!modelId) {
             return false;
@@ -341,12 +288,37 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             throw new Error('Gemini client not initialized');
         }
 
-        // Convert VSCode messages to Gemini format
-        const { contents, systemInstruction, toolCallNames } = this.convertMessages(messages);
+        // Check if prompt-based tool calling is enabled for this model
+        const modelOverride = getModelOverride(model.modelId);
+        const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
-        // Convert VSCode tools to Gemini format
-        const tools = this.convertTools(options.tools);
-        const toolMode = this.convertToolMode(options.toolMode);
+        // Convert VSCode messages to Gemini format
+        const { contents, systemInstruction, toolCallNames } = this.convertMessages(messages, usePromptBasedToolCalling);
+
+        // Get available tool names for XML parsing
+        const availableToolNames = options.tools?.map(t => t.name).filter((n): n is string => !!n) ?? [];
+
+        // Handle prompt-based tool calling
+        let tools: GeminiFunctionDeclaration[] | undefined;
+        let toolMode: 'auto' | 'required' | 'none' | undefined;
+        let effectiveSystemInstruction = systemInstruction;
+
+        if (usePromptBasedToolCalling && options.tools && options.tools.length > 0) {
+            // Generate XML tool prompt and append to system instruction
+            const xmlToolPrompt = generateXmlToolPrompt(options.tools);
+            effectiveSystemInstruction = effectiveSystemInstruction 
+                ? effectiveSystemInstruction + '\n\n' + xmlToolPrompt 
+                : xmlToolPrompt;
+            
+            // Don't pass native tools when using prompt-based tool calling
+            tools = undefined;
+            toolMode = undefined;
+            console.log(`GeminiProvider: Using prompt-based tool calling for model ${model.modelId}`);
+        } else {
+            // Use native function calling
+            tools = this.convertTools(options.tools);
+            toolMode = this.convertToolMode(options.toolMode);
+        }
 
         // Get maxTokens from options
         type TokenBudgetOptions = {
@@ -381,13 +353,36 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             this._toolCallNames.set(id, name);
         }
 
+        // For prompt-based tool calling, use streaming parser to detect tool calls incrementally
+        const streamParser = usePromptBasedToolCalling && availableToolNames.length > 0 
+            ? new XmlToolCallStreamParser(availableToolNames) 
+            : null;
+
         await this.client.streamChatCompletion(
             contents,
             model.modelId,
-            systemInstruction,
+            effectiveSystemInstruction,
             {
                 onChunk: (chunk) => {
-                    progress.report(new vscode.LanguageModelTextPart(chunk));
+                    if (streamParser) {
+                        // Add chunk to parser and emit any newly detected tool calls immediately
+                        const newToolCalls = streamParser.addChunk(chunk);
+                        for (const toolCall of newToolCalls) {
+                            if (reportedToolCallIds.has(toolCall.id)) {
+                                continue;
+                            }
+                            reportedToolCallIds.add(toolCall.id);
+                            
+                            progress.report(new vscode.LanguageModelToolCallPart(
+                                toolCall.id,
+                                toolCall.name,
+                                toolCall.arguments
+                            ));
+                            console.log(`GeminiProvider: Streaming XML tool call detected: ${toolCall.name}`);
+                        }
+                    } else {
+                        progress.report(new vscode.LanguageModelTextPart(chunk));
+                    }
                 },
                 onThinkingChunk: (chunk, thoughtSignature) => {
                     // Report thinking content with optional signature
@@ -425,6 +420,30 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                 maxTokens
             }
         );
+
+        // After streaming, finalize the parser to catch any remaining tool calls
+        if (streamParser) {
+            const remainingToolCalls = streamParser.finalize();
+            for (const toolCall of remainingToolCalls) {
+                if (reportedToolCallIds.has(toolCall.id)) {
+                    continue;
+                }
+                reportedToolCallIds.add(toolCall.id);
+                
+                progress.report(new vscode.LanguageModelToolCallPart(
+                    toolCall.id,
+                    toolCall.name,
+                    toolCall.arguments
+                ));
+                console.log(`GeminiProvider: Finalized XML tool call: ${toolCall.name}`);
+            }
+            
+            // Report any non-tool-call text content to the user
+            const nonToolCallText = streamParser.getNonToolCallText();
+            if (nonToolCallText) {
+                progress.report(new vscode.LanguageModelTextPart(nonToolCallText));
+            }
+        }
     }
 
     // Map of tool call IDs to function names, used for function responses
@@ -436,7 +455,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
      * System instructions are handled separately.
      * Also extracts tool call IDs to function name mappings for function responses.
      */
-    private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): {
+    private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], usePromptBasedToolCalling = false): {
         contents: GeminiContent[];
         systemInstruction: string | undefined;
         toolCallNames: Map<string, string>;
@@ -458,7 +477,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             }
 
             const geminiRole = role === 'assistant' ? 'model' : 'user';
-            const parts = this.convertContentParts(msg, toolCallNames);
+            const parts = this.convertContentParts(msg, toolCallNames, usePromptBasedToolCalling);
 
             if (parts.length > 0) {
                 contents.push({
@@ -474,20 +493,20 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
     /**
      * Convert message content to Gemini parts
      */
-    private convertContentParts(msg: vscode.LanguageModelChatRequestMessage, toolCallNames: Map<string, string>): GeminiPart[] {
+    private convertContentParts(msg: vscode.LanguageModelChatRequestMessage, toolCallNames: Map<string, string>, usePromptBasedToolCalling = false): GeminiPart[] {
         const parts: GeminiPart[] = [];
 
         if (typeof msg.content === 'string') {
             parts.push({ text: msg.content });
         } else if (Array.isArray(msg.content)) {
             for (const part of msg.content) {
-                const converted = this.convertPart(part, toolCallNames);
+                const converted = this.convertPart(part, toolCallNames, usePromptBasedToolCalling);
                 if (converted) {
                     parts.push(converted);
                 }
             }
         } else if (msg.content && typeof msg.content === 'object') {
-            const converted = this.convertPart(msg.content, toolCallNames);
+            const converted = this.convertPart(msg.content, toolCallNames, usePromptBasedToolCalling);
             if (converted) {
                 parts.push(converted);
             }
@@ -504,7 +523,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
      * as the function name, which may cause issues with Gemini's function response
      * matching. Ensure that tool calls are properly tracked in the conversation.
      */
-    private convertPart(part: unknown, toolCallNames: Map<string, string>): GeminiPart | null {
+    private convertPart(part: unknown, toolCallNames: Map<string, string>, usePromptBasedToolCalling = false): GeminiPart | null {
         if (!part || typeof part !== 'object') {
             return null;
         }
@@ -525,12 +544,21 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             const callId = partObj.callId as string;
             const name = partObj.name as string;
             toolCallNames.set(callId, name);
-            return {
-                functionCall: {
-                    name: name,
-                    args: partObj.input as Record<string, unknown>
-                }
-            };
+            
+            if (usePromptBasedToolCalling) {
+                // For prompt-based tool calling, convert tool call to XML text
+                const args = typeof partObj.input === 'object' && partObj.input !== null
+                    ? partObj.input as Record<string, unknown>
+                    : {};
+                return { text: formatToolCallAsXml(name, args) };
+            } else {
+                return {
+                    functionCall: {
+                        name: name,
+                        args: partObj.input as Record<string, unknown>
+                    }
+                };
+            }
         }
 
         // Tool result part (user providing function response)
@@ -539,12 +567,18 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             const resultContent = this.extractToolResultContent(partObj);
             // Look up the function name from our stored mappings or instance map
             const functionName = toolCallNames.get(callId) || this._toolCallNames.get(callId) || callId;
-            return {
-                functionResponse: {
-                    name: functionName,
-                    response: { result: resultContent }
-                }
-            };
+            
+            if (usePromptBasedToolCalling) {
+                // For prompt-based tool calling, convert tool result to text
+                return { text: formatToolResultAsText(functionName, resultContent) };
+            } else {
+                return {
+                    functionResponse: {
+                        name: functionName,
+                        response: { result: resultContent }
+                    }
+                };
+            }
         }
 
         // Image/data part

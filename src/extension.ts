@@ -178,7 +178,20 @@ async function initializeProvider(context: vscode.ExtensionContext): Promise<voi
     }
 }
 
-async function initializeGeminiProvider(context: vscode.ExtensionContext): Promise<void> {
+async function initializeGeminiProvider(context: vscode.ExtensionContext, isReinitialize = false): Promise<void> {
+    // Check if Gemini channel is enabled in settings
+    const config = vscode.workspace.getConfiguration('oai2lmapi');
+    const enableGeminiChannel = config.get<boolean>('enableGeminiChannel', false);
+    
+    if (!enableGeminiChannel) {
+        if (isReinitialize) {
+            console.log('GeminiProvider: Gemini channel disabled by configuration change');
+        } else {
+            console.log('GeminiProvider: Gemini channel is disabled in settings');
+        }
+        return;
+    }
+
     try {
         geminiProvider = new GeminiLanguageModelProvider(context);
         await geminiProvider.initialize();
@@ -218,7 +231,7 @@ async function reinitializeGeminiProvider(context: vscode.ExtensionContext): Pro
         geminiProvider.dispose();
         geminiProvider = undefined;
     }
-    await initializeGeminiProvider(context);
+    await initializeGeminiProvider(context, true);
 }
 
 export function deactivate() {

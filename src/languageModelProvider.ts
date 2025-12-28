@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, CompletedToolCall } from './openaiClient';
 import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
+import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
+import { getModelOverride } from './configUtils';
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -244,12 +246,45 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             throw new Error('OpenAI client not initialized');
         }
 
-        // Convert VSCode messages to OpenAI format
-        const chatMessages: ChatMessage[] = this.convertMessages(messages);
+        // Check if prompt-based tool calling is enabled for this model
+        const modelOverride = getModelOverride(model.modelId);
+        const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
-        // Convert VSCode tools to OpenAI format (pass modelId for special handling)
-        const tools = this.convertTools(options.tools, model.modelId);
-        const toolChoice = this.convertToolMode(options.toolMode);
+        // Convert VSCode messages to OpenAI format
+        let chatMessages: ChatMessage[] = this.convertMessages(messages, usePromptBasedToolCalling);
+
+        // Get available tool names for XML parsing
+        const availableToolNames = options.tools?.map(t => t.name).filter((n): n is string => !!n) ?? [];
+
+        // Handle prompt-based tool calling
+        let tools: ToolDefinition[] | undefined;
+        let toolChoice: ToolChoice | undefined;
+
+        if (usePromptBasedToolCalling && options.tools && options.tools.length > 0) {
+            // Generate XML tool prompt and prepend to system message
+            const xmlToolPrompt = generateXmlToolPrompt(options.tools);
+            
+            // Find or create system message
+            const systemMsgIndex = chatMessages.findIndex(m => m.role === 'system');
+            if (systemMsgIndex >= 0) {
+                chatMessages[systemMsgIndex] = {
+                    ...chatMessages[systemMsgIndex],
+                    content: (chatMessages[systemMsgIndex].content || '') + '\n\n' + xmlToolPrompt
+                };
+            } else {
+                // Prepend a new system message
+                chatMessages = [{ role: 'system', content: xmlToolPrompt }, ...chatMessages];
+            }
+            
+            // Don't pass native tools when using prompt-based tool calling
+            tools = undefined;
+            toolChoice = undefined;
+            console.log(`OAI2LMApi: Using prompt-based tool calling for model ${model.modelId}`);
+        } else {
+            // Use native function calling
+            tools = this.convertTools(options.tools, model.modelId);
+            toolChoice = this.convertToolMode(options.toolMode);
+        }
 
         // Derive a reasonable maxTokens for providers that require an explicit budget.
         // VS Code's API surface may vary; probe common fields defensively.
@@ -271,13 +306,36 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         // Track reported tool call IDs to prevent duplicates
         const reportedToolCallIds = new Set<string>();
 
+        // For prompt-based tool calling, use streaming parser to detect tool calls incrementally
+        const streamParser = usePromptBasedToolCalling && availableToolNames.length > 0 
+            ? new XmlToolCallStreamParser(availableToolNames) 
+            : null;
+
         // Stream the response
         await this.client.streamChatCompletion(
             chatMessages,
             model.modelId,
             {
                 onChunk: (chunk) => {
-                    progress.report(new vscode.LanguageModelTextPart(chunk));
+                    if (streamParser) {
+                        // Add chunk to parser and emit any newly detected tool calls immediately
+                        const newToolCalls = streamParser.addChunk(chunk);
+                        for (const toolCall of newToolCalls) {
+                            if (reportedToolCallIds.has(toolCall.id)) {
+                                continue;
+                            }
+                            reportedToolCallIds.add(toolCall.id);
+                            
+                            progress.report(new vscode.LanguageModelToolCallPart(
+                                toolCall.id,
+                                toolCall.name,
+                                toolCall.arguments
+                            ));
+                            console.log(`OAI2LMApi: Streaming XML tool call detected: ${toolCall.name}`);
+                        }
+                    } else {
+                        progress.report(new vscode.LanguageModelTextPart(chunk));
+                    }
                 },
                 onThinkingChunk: (chunk) => {
                     // Report thinking/reasoning content using LanguageModelThinkingPart
@@ -316,13 +374,40 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                 maxTokens
             }
         );
+
+        // After streaming, finalize the parser to catch any remaining tool calls
+        if (streamParser) {
+            const remainingToolCalls = streamParser.finalize();
+            for (const toolCall of remainingToolCalls) {
+                if (reportedToolCallIds.has(toolCall.id)) {
+                    continue;
+                }
+                reportedToolCallIds.add(toolCall.id);
+                
+                progress.report(new vscode.LanguageModelToolCallPart(
+                    toolCall.id,
+                    toolCall.name,
+                    toolCall.arguments
+                ));
+                console.log(`OAI2LMApi: Finalized XML tool call: ${toolCall.name}`);
+            }
+            
+            // Report any non-tool-call text content to the user
+            const nonToolCallText = streamParser.getNonToolCallText();
+            if (nonToolCallText) {
+                progress.report(new vscode.LanguageModelTextPart(nonToolCallText));
+            }
+        }
     }
 
     /**
      * Converts VSCode messages to OpenAI ChatMessage format.
      * Handles tool calls and tool results in message history.
+     * 
+     * @param messages - VSCode messages to convert
+     * @param usePromptBasedToolCalling - If true, convert tool calls/results to plain text format
      */
-    private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): ChatMessage[] {
+    private convertMessages(messages: readonly vscode.LanguageModelChatRequestMessage[], usePromptBasedToolCalling = false): ChatMessage[] {
         const result: ChatMessage[] = [];
         const processedToolCallIds = new Set<string>();
         let toolCallIndex = 0;
@@ -333,7 +418,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             if (Array.isArray(msg.content)) {
                 // Check if this message contains tool calls or tool results
                 const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
-                const toolResults: Array<{ tool_call_id: string; content: string }> = [];
+                const toolResults: Array<{ tool_call_id: string; content: string; toolName?: string }> = [];
                 let textContent = '';
 
                 for (const part of msg.content) {
@@ -347,23 +432,36 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                         }
                         processedToolCallIds.add(toolCallId);
                         
-                        // This is a tool call from the assistant
-                        toolCalls.push({
-                            id: toolCallId,
-                            type: 'function',
-                            function: {
-                                name: part.name,
-                                arguments: JSON.stringify(part.input)
-                            }
-                        });
+                        if (usePromptBasedToolCalling) {
+                            // For prompt-based tool calling, convert tool call to XML text
+                            const args = typeof part.input === 'object' && part.input !== null 
+                                ? part.input as Record<string, unknown>
+                                : {};
+                            textContent += formatToolCallAsXml(part.name, args) + '\n';
+                        } else {
+                            // Native function calling format
+                            toolCalls.push({
+                                id: toolCallId,
+                                type: 'function',
+                                function: {
+                                    name: part.name,
+                                    arguments: JSON.stringify(part.input)
+                                }
+                            });
+                        }
                     } else if (this.isToolResultPart(part)) {
                         // This is a tool result
                         const resultContent = this.extractToolResultContent(part);
                         // Ensure we have a valid tool call ID, consistent with tool calls
                         const toolCallId = this.ensureToolCallId(part.callId, 'result', toolCallIndex++);
+                        
+                        // Try to get tool name from the part
+                        const toolName = this.getToolNameFromResult(part);
+                        
                         toolResults.push({
                             tool_call_id: toolCallId,
-                            content: resultContent
+                            content: resultContent,
+                            toolName
                         });
                     } else {
                         // Regular text content
@@ -371,30 +469,57 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     }
                 }
 
-                // If we have tool calls, this is an assistant message with tool calls
-                if (toolCalls.length > 0) {
-                    result.push({
-                        role: 'assistant',
-                        content: textContent || null,
-                        tool_calls: toolCalls
-                    });
-                }
-                // If we have tool results, add them as separate tool messages
-                else if (toolResults.length > 0) {
-                    for (const toolResult of toolResults) {
+                // Handle tool calls and results based on mode
+                if (usePromptBasedToolCalling) {
+                    // For prompt-based tool calling, everything is text.
+                    // Tool results are pushed as user messages first, followed by assistant
+                    // content with tool calls. This ordering may differ from the original
+                    // message content array order, but is consistent with the prompt-based
+                    // tool calling convention where results precede the next assistant turn.
+                    if (toolResults.length > 0) {
+                        // Convert tool results to user message with formatted text
+                        const formattedResults = toolResults.map(tr => 
+                            formatToolResultAsText(tr.toolName || 'Tool', tr.content)
+                        ).join('\n\n');
                         result.push({
-                            role: 'tool',
-                            content: toolResult.content,
-                            tool_call_id: toolResult.tool_call_id
+                            role: 'user',
+                            content: formattedResults
                         });
                     }
-                }
-                // Regular message with text content
-                else {
-                    result.push({
-                        role,
-                        content: textContent
-                    });
+                    // Tool calls were already added to textContent
+                    if (textContent.trim()) {
+                        result.push({
+                            role,
+                            content: textContent.trim()
+                        });
+                    }
+                } else {
+                    // Native function calling mode
+                    // If we have tool calls, this is an assistant message with tool calls
+                    if (toolCalls.length > 0) {
+                        result.push({
+                            role: 'assistant',
+                            content: textContent || null,
+                            tool_calls: toolCalls
+                        });
+                    }
+                    // If we have tool results, add them as separate tool messages
+                    else if (toolResults.length > 0) {
+                        for (const toolResult of toolResults) {
+                            result.push({
+                                role: 'tool',
+                                content: toolResult.content,
+                                tool_call_id: toolResult.tool_call_id
+                            });
+                        }
+                    }
+                    // Regular message with text content
+                    else if (textContent) {
+                        result.push({
+                            role,
+                            content: textContent
+                        });
+                    }
                 }
             } else if (typeof msg.content === 'string') {
                 result.push({
@@ -454,6 +579,27 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             return part.content.map(c => this.extractTextFromPart(c)).join('');
         }
         return '';
+    }
+
+    /**
+     * Gets the tool name from a tool result part if available.
+     * 
+     * Note: LanguageModelToolResultPart does not currently define a `toolName` property
+     * in the VS Code API. This method is implemented as a forward-compatibility hook
+     * in case future versions add such a property.
+     */
+    private getToolNameFromResult(part: unknown): string | undefined {
+        if (!part || typeof part !== 'object') {
+            return undefined;
+        }
+
+        // Forward-compatibility: check for an optional `toolName` property in a
+        // type-safe way without using `any`. If present and a string, return it.
+        const candidate = (part as { toolName?: unknown }).toolName;
+        if (typeof candidate === 'string') {
+            return candidate;
+        }
+        return undefined;
     }
 
     /**
