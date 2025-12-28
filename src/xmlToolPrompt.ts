@@ -71,7 +71,7 @@ ${toolDescriptions}
 
 # Tool Use Guidelines
 
-1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task.
+1. In reasoning chains, assess what information you already have and what information you need to proceed with the task.
 2. Choose the most appropriate tool(s) based on the task and the tool descriptions provided.
 3. For independent operations that don't depend on each other's results, you can call up to 5 tools in a single message for efficiency.
 4. For dependent operations where one tool's result is needed for the next, use tools step-by-step with each use informed by the previous result.
