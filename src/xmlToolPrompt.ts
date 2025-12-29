@@ -54,6 +54,17 @@ Tool uses are formatted using XML-style tags. The tool name itself becomes the X
 
 Always use the actual tool name as the XML tag name for proper parsing and execution.
 
+## Special Characters
+
+When parameter values contain XML special characters, escape them as follows:
+- \`&\` → \`&amp;\`
+- \`<\` → \`&lt;\`
+- \`>\` → \`&gt;\`
+- \`"\` → \`&quot;\`
+- \`'\` → \`&apos;\`
+
+For example: \`<content>x &lt; y &amp;&amp; z &gt; w</content>\`
+
 You may optionally include a \`callId\` parameter to identify each tool call. This is useful when making multiple calls to the same tool:
 
 <tool_name>
@@ -269,12 +280,15 @@ function parseXmlParameters(content: string): Record<string, unknown> {
             continue;
         }
         
+        // Unescape XML entities before processing
+        const unescapedValue = unescapeXml(paramValue);
+        
         // Try to parse as JSON first, otherwise use as string
         try {
-            args[paramName] = JSON.parse(paramValue);
+            args[paramName] = JSON.parse(unescapedValue);
         } catch {
             // Not valid JSON, use as string (this is common for text parameters)
-            args[paramName] = paramValue;
+            args[paramName] = unescapedValue;
         }
     }
     
@@ -306,6 +320,22 @@ function escapeXml(str: string): string {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&apos;');
+}
+
+/**
+ * Unescapes XML entities back to their original characters.
+ * Note: Ampersand (&amp;) must be unescaped last to prevent incorrect unescaping
+ * of sequences like &amp;lt; -> &lt; (correct) vs &amp;lt; -> < (incorrect if done wrong order).
+ * @param str - The string to unescape
+ * @returns The unescaped string
+ */
+function unescapeXml(str: string): string {
+    return str
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&');  // Must be last to prevent incorrect unescaping
 }
 
 /**

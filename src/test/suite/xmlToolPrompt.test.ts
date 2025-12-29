@@ -348,6 +348,30 @@ Line 3</content></write_file>`;
             assert.strictEqual(result[0].arguments.code, 'const x = 1;');
         });
 
+        test('Should unescape XML entities in parameter values', () => {
+            const text = '<test_tool><content>x &lt; y &amp;&amp; y &gt; z</content></test_tool>';
+            const result = parseXmlToolCalls(text, ['test_tool']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.content, 'x < y && y > z');
+        });
+
+        test('Should unescape all standard XML entities', () => {
+            const text = '<test_tool><value>&lt;tag attr=&quot;value&quot;&gt;it&apos;s &amp; test&lt;/tag&gt;</value></test_tool>';
+            const result = parseXmlToolCalls(text, ['test_tool']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.value, '<tag attr="value">it\'s & test</tag>');
+        });
+
+        test('Should handle mixed escaped and unescaped content', () => {
+            const text = '<test_tool><msg>Hello &amp; welcome to &lt;world&gt;!</msg></test_tool>';
+            const result = parseXmlToolCalls(text, ['test_tool']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.msg, 'Hello & welcome to <world>!');
+        });
+
     });
 
     // ============== XmlToolCallStreamParser Tests ==============
