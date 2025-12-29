@@ -249,6 +249,44 @@ Before submitting a PR, ensure:
 6. ✅ `pnpm run package` creates VSIX successfully
 7. ✅ Manual test: Install VSIX in VSCode and verify functionality
 
+## Release Process
+
+To publish a new version (e.g., `0.2.3`):
+
+### 1. Update CHANGELOG.md
+- Review git log since last release: `git log --oneline <last-tag>..HEAD`
+- Add new version section at the top following [Keep a Changelog](https://keepachangelog.com/) format
+- Group changes under: Added, Changed, Fixed, Removed, Deprecated, Security
+
+### 2. Update Version in package.json
+- Change `"version"` field to the new version number
+
+### 3. Commit Changes
+```bash
+git add CHANGELOG.md package.json
+git commit -S -m "chore(release): v0.2.3"
+```
+- Use `-S` flag for GPG-signed commit
+
+### 4. Create Signed Tag
+```bash
+git tag -s v0.2.3 -m "Release v0.2.3"
+```
+- Use `-s` flag for GPG-signed tag
+- Tag format: `v{major}.{minor}.{patch}`
+
+### 5. Push to Remote
+```bash
+git push origin main
+git push origin v0.2.3
+```
+- The `release.yml` workflow will automatically publish to VS Code Marketplace when a version tag is pushed
+
+### GPG Signing Requirements
+- Ensure GPG key is configured: `git config --global user.signingkey <KEY_ID>`
+- For automatic signing: `git config --global commit.gpgsign true`
+- Verify signing works: `git log --show-signature -1`
+
 ## Quick Reference
 
 ### Most Common Commands (in order)

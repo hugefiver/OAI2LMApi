@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2025-12-29
+
+### Added
+
+- Centralized logging system with Output Channel for users and debug console for developers (#27)
+- XML-based tool calling support for Gemini channel (#26)
+- Gemini channel toggle configuration
+
+### Changed
+
+- Updated tool use guidelines from `<thinking>` to reasoning chains
+- Refactored logging infrastructure for better debugging experience
+
+### Fixed
+
+- Fixed missing `tool_use.id` when using OpenAI-compatible APIs with Claude models (#24, #25)
+- Fixed Gemini API error by stripping `$schema` field from tool parameters (#22)
+- Fixed Gemini API responses with null/missing model fields (#20)
+- Fixed GeminiProvider null reference error when loading models (#19)
+- Fixed Gemini vendor registration conflict (#18)
+
 ## [0.2.2] - 2025-12-25
 
 ### Added
