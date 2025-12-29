@@ -99,24 +99,55 @@ export interface CompletedToolCall {
 }
 
 /**
- * Parses model output that embeds chain-of-thought inside <think>...</think> tags.
+ * Represents a thinking tag pair (start and end tags).
+ */
+interface ThinkingTagPair {
+    startTag: string;  // lowercase start tag, e.g., '<think>'
+    endTag: string;    // lowercase end tag, e.g., '</think>'
+    onlyAtStart: boolean;  // if true, only match at the beginning of the stream (before any text emitted)
+    onlyAtLineStart: boolean;  // if true, only match at line start (after \n or at position 0)
+    requireNoThinking: boolean;  // if true, only match when no thinking content has been received yet
+}
+
+/**
+ * Parses model output that embeds chain-of-thought inside thinking tags.
+ *
+ * Supported tag formats (case-insensitive):
+ * - <think>...</think> - only matches at the beginning of the stream, and only when
+ *   no thinking content has been received yet (via onThinking or reasoning_content)
+ * - <thinking>...</thinking> - matches at line start (after \n or at position 0)
  *
  * Some OpenAI-compatible providers/models do not use a separate `reasoning_content` field,
- * and instead prepend the assistant content with <think> blocks.
+ * and instead prepend the assistant content with thinking blocks.
  *
  * This parser is streaming-safe: tags may be split across chunks.
  *
  * Behavior:
- * - If `onThinking` is provided, content inside <think>...</think> is sent to `onThinking`
+ * - If `onThinking` is provided, content inside thinking tags is sent to `onThinking`
  *   and is NOT forwarded to `onText`.
  * - If `onThinking` is not provided, all input is forwarded to `onText` unchanged.
+ * - Nested tags are NOT supported: inner tags are treated as literal text content.
+ *   e.g., `<thinking><thinking></thinking>` -> thinking = "<thinking>", text = ""
+ * - Unmatched closing tags are passed through as text.
+ *   e.g., `<thinking></thinking></thinking>` -> thinking = "", text = "</thinking>"
  */
 export class ThinkTagStreamParser {
     private carry = '';
     private inThink = false;
+    private currentEndTag = '';  // The end tag we're looking for when inside a thinking block
+    private hasEmittedText = false;  // Track if any text has been emitted (for onlyAtStart tags)
+    private hasReceivedThinking = false;  // Track if any thinking content has been received
 
-    private readonly startTagLower = '<think>';
-    private readonly endTagLower = '</think>';
+    // Supported thinking tag pairs (order matters - longer tags should come first for proper matching)
+    private static readonly THINKING_TAGS: ThinkingTagPair[] = [
+        { startTag: '<thinking>', endTag: '</thinking>', onlyAtStart: false, onlyAtLineStart: true, requireNoThinking: false },
+        { startTag: '<think>', endTag: '</think>', onlyAtStart: true, onlyAtLineStart: false, requireNoThinking: true },
+    ];
+
+    // Longest possible start tag prefix for carry handling
+    private static readonly MAX_START_TAG_LENGTH = Math.max(
+        ...ThinkTagStreamParser.THINKING_TAGS.map(t => t.startTag.length)
+    );
 
     constructor(
         private readonly handlers: {
@@ -124,6 +155,14 @@ export class ThinkTagStreamParser {
             onThinking?: (chunk: string) => void;
         }
     ) {}
+
+    /**
+     * Notify the parser that thinking content has been received from an external source
+     * (e.g., reasoning_content field). This disables <think> tag matching.
+     */
+    notifyThinkingReceived(): void {
+        this.hasReceivedThinking = true;
+    }
 
     ingest(fragment: string): void {
         if (!fragment) {
@@ -143,9 +182,10 @@ export class ThinkTagStreamParser {
             const lower = text.toLowerCase();
 
             if (this.inThink) {
-                const endIdx = lower.indexOf(this.endTagLower);
+                // Looking for the matching end tag
+                const endIdx = lower.indexOf(this.currentEndTag);
                 if (endIdx === -1) {
-                    const split = this.splitKeepingPossibleTagPrefix(text, this.endTagLower);
+                    const split = this.splitKeepingPossibleTagPrefix(text, this.currentEndTag);
                     if (split.emit) {
                         this.handlers.onThinking?.(split.emit);
                     }
@@ -156,30 +196,83 @@ export class ThinkTagStreamParser {
                 const thinkingPart = text.slice(0, endIdx);
                 if (thinkingPart) {
                     this.handlers.onThinking?.(thinkingPart);
+                    this.hasReceivedThinking = true;
                 }
 
-                text = text.slice(endIdx + this.endTagLower.length);
+                text = text.slice(endIdx + this.currentEndTag.length);
                 this.inThink = false;
+                this.currentEndTag = '';
                 continue;
             }
 
-            const startIdx = lower.indexOf(this.startTagLower);
-            if (startIdx === -1) {
-                const split = this.splitKeepingPossibleTagPrefix(text, this.startTagLower);
+            // Look for any start tag, find the earliest one
+            // Note: <think> only matches at position 0 when no text emitted and no thinking received
+            // <thinking> matches at line start (after \n or at position 0)
+            let earliestIdx = -1;
+            let matchedTag: ThinkingTagPair | null = null;
+
+            for (const tagPair of ThinkTagStreamParser.THINKING_TAGS) {
+                // Skip onlyAtStart tags if we've already emitted text
+                if (tagPair.onlyAtStart && this.hasEmittedText) {
+                    continue;
+                }
+
+                // Skip requireNoThinking tags if thinking content has already been received
+                if (tagPair.requireNoThinking && this.hasReceivedThinking) {
+                    continue;
+                }
+
+                // Find all occurrences and check position constraints
+                let searchStart = 0;
+                while (searchStart < lower.length) {
+                    const idx = lower.indexOf(tagPair.startTag, searchStart);
+                    if (idx === -1) {
+                        break;
+                    }
+
+                    // For onlyAtStart tags, only match at position 0
+                    if (tagPair.onlyAtStart && idx !== 0) {
+                        break;  // No point searching further
+                    }
+
+                    // For onlyAtLineStart tags, check if at line start
+                    if (tagPair.onlyAtLineStart && idx !== 0) {
+                        // Must be preceded by a newline
+                        if (text[idx - 1] !== '\n') {
+                            searchStart = idx + 1;
+                            continue;
+                        }
+                    }
+
+                    // Valid match found
+                    if (earliestIdx === -1 || idx < earliestIdx) {
+                        earliestIdx = idx;
+                        matchedTag = tagPair;
+                    }
+                    break;
+                }
+            }
+
+            if (earliestIdx === -1 || !matchedTag) {
+                // No start tag found, but keep potential partial tag in carry
+                const split = this.splitKeepingPossibleStartTagPrefix(text);
                 if (split.emit) {
                     this.handlers.onText?.(split.emit);
+                    this.hasEmittedText = true;
                 }
                 this.carry = split.carry;
                 return;
             }
 
-            const visiblePart = text.slice(0, startIdx);
+            const visiblePart = text.slice(0, earliestIdx);
             if (visiblePart) {
                 this.handlers.onText?.(visiblePart);
+                this.hasEmittedText = true;
             }
 
-            text = text.slice(startIdx + this.startTagLower.length);
+            text = text.slice(earliestIdx + matchedTag.startTag.length);
             this.inThink = true;
+            this.currentEndTag = matchedTag.endTag;
         }
     }
 
@@ -191,6 +284,7 @@ export class ThinkTagStreamParser {
         // If no thinking handler, carry would never be used, but be safe.
         if (!this.handlers.onThinking) {
             this.handlers.onText?.(this.carry);
+            this.hasEmittedText = true;
             this.carry = '';
             return;
         }
@@ -199,8 +293,43 @@ export class ThinkTagStreamParser {
             this.handlers.onThinking?.(this.carry);
         } else {
             this.handlers.onText?.(this.carry);
+            this.hasEmittedText = true;
         }
         this.carry = '';
+    }
+
+    /**
+     * Checks if text ends with a possible prefix of any applicable start tag.
+     * Returns the split point to keep potential partial tags in carry.
+     * Only considers tags that are still applicable (e.g., onlyAtStart tags
+     * are skipped if text has already been emitted).
+     */
+    private splitKeepingPossibleStartTagPrefix(text: string): { emit: string; carry: string } {
+        const lower = text.toLowerCase();
+        const maxPrefixLen = Math.min(ThinkTagStreamParser.MAX_START_TAG_LENGTH - 1, text.length);
+
+        for (let k = maxPrefixLen; k > 0; k--) {
+            const suffix = lower.slice(-k);
+            // Check if this suffix is a prefix of any applicable start tag
+            for (const tagPair of ThinkTagStreamParser.THINKING_TAGS) {
+                // Skip onlyAtStart tags if we've already emitted text
+                if (tagPair.onlyAtStart && this.hasEmittedText) {
+                    continue;
+                }
+                // Skip requireNoThinking tags if thinking content has already been received
+                if (tagPair.requireNoThinking && this.hasReceivedThinking) {
+                    continue;
+                }
+                if (tagPair.startTag.startsWith(suffix)) {
+                    return {
+                        emit: text.slice(0, text.length - k),
+                        carry: text.slice(text.length - k)
+                    };
+                }
+            }
+        }
+
+        return { emit: text, carry: '' };
     }
 
     private splitKeepingPossibleTagPrefix(text: string, tagLower: string): { emit: string; carry: string } {
@@ -398,6 +527,7 @@ export class OpenAIClient {
                 const messageReasoning = this.coerceThinkingText(messageReasoningRaw);
                 if (messageReasoning && messageReasoning.length > 0) {
                     thinkingChars += messageReasoning.length;
+                    thinkTagParser.notifyThinkingReceived();
                     streamOptions.onThinkingChunk?.(messageReasoning);
                 }
 
@@ -434,6 +564,7 @@ export class OpenAIClient {
                 const reasoningContent = this.coerceThinkingText(reasoningRaw);
                 if (reasoningContent && reasoningContent.length > 0) {
                     thinkingChars += reasoningContent.length;
+                    thinkTagParser.notifyThinkingReceived();
                     streamOptions.onThinkingChunk?.(reasoningContent);
                 }
 

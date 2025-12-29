@@ -382,7 +382,7 @@ suite('Tool Call Message Conversion Integration Tests', () => {
 
 suite('ThinkTagStreamParser Unit Tests', () => {
 	
-	test('Should route <think>...</think> to thinking and strip from visible text', () => {
+	test('Should route <think>...</think> at the start to thinking and strip from visible text', () => {
 		const textChunks: string[] = [];
 		const thinkingChunks: string[] = [];
 
@@ -398,7 +398,25 @@ suite('ThinkTagStreamParser Unit Tests', () => {
 		assert.strictEqual(textChunks.join(''), 'hello');
 	});
 
-	test('Should handle tags split across streamed chunks', () => {
+	test('Should NOT match <think> tag after text has been emitted', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// <think> appears after "a", so it should NOT be treated as a thinking tag
+		parser.ingest('a<think>b</think>c');
+		parser.flush();
+
+		// The entire string should be passed as text since <think> only matches at start
+		assert.strictEqual(textChunks.join(''), 'a<think>b</think>c');
+		assert.strictEqual(thinkingChunks.join(''), '');
+	});
+
+	test('Should handle <think> tags split across streamed chunks when at start', () => {
 		const textChunks: string[] = [];
 		const thinkingChunks: string[] = [];
 
@@ -416,7 +434,7 @@ suite('ThinkTagStreamParser Unit Tests', () => {
 		assert.strictEqual(textChunks.join(''), 'hi');
 	});
 
-	test('Should support multiple <think> blocks in one stream', () => {
+	test('Should NOT treat <think> as thinking tag when appearing mid-stream', () => {
 		const textChunks: string[] = [];
 		const thinkingChunks: string[] = [];
 
@@ -425,14 +443,37 @@ suite('ThinkTagStreamParser Unit Tests', () => {
 			onThinking: (c) => thinkingChunks.push(c)
 		});
 
-		parser.ingest('a<think>b</think>c<think>d</think>e');
+		// First emit some text, then have a <think> tag
+		parser.ingest('hello ');
+		parser.ingest('<think>abc</think>world');
 		parser.flush();
 
-		assert.strictEqual(textChunks.join(''), 'ace');
-		assert.strictEqual(thinkingChunks.join(''), 'bd');
+		// <think> should NOT be matched since text was already emitted
+		assert.strictEqual(textChunks.join(''), 'hello <think>abc</think>world');
+		assert.strictEqual(thinkingChunks.join(''), '');
 	});
 
-	test('Should be case-insensitive for <think> tags', () => {
+	test('Should only match <think> at start, not in the middle', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// First <think> is at start, should be matched. 
+		// After visible text "c", subsequent <think> should NOT be matched.
+		parser.ingest('<think>b</think>c<think>d</think>e');
+		parser.flush();
+
+		// First <think>b</think> is at start -> thinking
+		// "c<think>d</think>e" is text (second <think> not matched because text already emitted)
+		assert.strictEqual(thinkingChunks.join(''), 'b');
+		assert.strictEqual(textChunks.join(''), 'c<think>d</think>e');
+	});
+
+	test('Should be case-insensitive for <think> tags at start', () => {
 		const textChunks: string[] = [];
 		const thinkingChunks: string[] = [];
 
@@ -460,6 +501,273 @@ suite('ThinkTagStreamParser Unit Tests', () => {
 		parser.flush();
 
 		assert.strictEqual(textChunks.join(''), input);
+	});
+
+	test('Should route <thinking>...</thinking> to thinking handler when at line start', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		parser.ingest('<thinking>reasoning here</thinking>response');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'reasoning here');
+		assert.strictEqual(textChunks.join(''), 'response');
+	});
+
+	test('Should match <thinking> tag only at line start, not mid-line', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// <thinking> appears mid-line (after "prefix text" without newline), should NOT be matched
+		parser.ingest('prefix text<thinking>reasoning</thinking>suffix');
+		parser.flush();
+
+		// <thinking> not at line start, so entire string is text
+		assert.strictEqual(thinkingChunks.join(''), '');
+		assert.strictEqual(textChunks.join(''), 'prefix text<thinking>reasoning</thinking>suffix');
+	});
+
+	test('Should support multiple <thinking> blocks only at line start', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// Only <thinking> at position 0 or after newline should be matched
+		parser.ingest('<thinking>b</thinking>c\n<thinking>d</thinking>e');
+		parser.flush();
+
+		assert.strictEqual(textChunks.join(''), 'c\ne');
+		assert.strictEqual(thinkingChunks.join(''), 'bd');
+	});
+
+	test('Should handle <thinking> tags split across streamed chunks', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		parser.ingest('<think');
+		parser.ingest('ing>abc</think');
+		parser.ingest('ing>hi');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'abc');
+		assert.strictEqual(textChunks.join(''), 'hi');
+	});
+
+	test('Should be case-insensitive for <thinking> tags', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		parser.ingest('<THINKING>abc</THINKING>hi');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'abc');
+		assert.strictEqual(textChunks.join(''), 'hi');
+	});
+
+	test('Should handle <think> at start and <thinking> at line start in same stream', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// <think> at start is matched, then text "c", then <thinking> after newline is matched
+		parser.ingest('<think>b</think>c\n<thinking>d</thinking>e');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'bd');
+		assert.strictEqual(textChunks.join(''), 'c\ne');
+	});
+
+	test('Should NOT match <think> after text but still match <thinking> at line start', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// "a" is text first, so <think> is NOT matched
+		// <thinking> after newline should be matched
+		parser.ingest('a<think>b</think>c\n<thinking>d</thinking>e');
+		parser.flush();
+
+		// <think> after "a" should NOT be matched -> passed as text
+		// <thinking> after newline should be matched -> "d" goes to thinking
+		assert.strictEqual(textChunks.join(''), 'a<think>b</think>c\ne');
+		assert.strictEqual(thinkingChunks.join(''), 'd');
+	});
+
+	test('Should pass through <thinking> content unchanged if no thinking handler', () => {
+		const textChunks: string[] = [];
+		const input = '<thinking>abc</thinking>hello';
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c)
+		});
+
+		parser.ingest(input);
+		parser.flush();
+
+		assert.strictEqual(textChunks.join(''), input);
+	});
+
+	test('Should NOT match <think> after notifyThinkingReceived is called', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// Simulate external thinking content received (e.g., reasoning_content field)
+		parser.notifyThinkingReceived();
+
+		// Now <think> at start should NOT be matched
+		parser.ingest('<think>abc</think>hello');
+		parser.flush();
+
+		// <think> should be passed through as text since thinking was already received
+		assert.strictEqual(textChunks.join(''), '<think>abc</think>hello');
+		assert.strictEqual(thinkingChunks.join(''), '');
+	});
+
+	test('Should still match <thinking> at line start after notifyThinkingReceived', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// Simulate external thinking content received
+		parser.notifyThinkingReceived();
+
+		// <thinking> should still be matched at line start
+		parser.ingest('<thinking>abc</thinking>hello');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'abc');
+		assert.strictEqual(textChunks.join(''), 'hello');
+	});
+
+	test('Should match <thinking> after newline in middle of text', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// <thinking> after newline should be matched
+		parser.ingest('line1\n<thinking>reasoning</thinking>line2');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'reasoning');
+		assert.strictEqual(textChunks.join(''), 'line1\nline2');
+	});
+
+	test('Should NOT match <thinking> in middle of line', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// <thinking> not at line start, should NOT be matched
+		parser.ingest('text <thinking>reasoning</thinking> more');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), '');
+		assert.strictEqual(textChunks.join(''), 'text <thinking>reasoning</thinking> more');
+	});
+
+	test('Should treat nested <thinking> as literal content (no nesting support)', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// Nested <thinking> is treated as literal text inside thinking content
+		// First </thinking> closes the block
+		parser.ingest('<thinking><thinking></thinking>');
+		parser.flush();
+
+		// Inner <thinking> becomes thinking content, nothing left as text
+		assert.strictEqual(thinkingChunks.join(''), '<thinking>');
+		assert.strictEqual(textChunks.join(''), '');
+	});
+
+	test('Should pass through unmatched closing tag as text', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// Extra </thinking> is passed through as text
+		parser.ingest('<thinking></thinking></thinking>');
+		parser.flush();
+
+		// First pair matches, extra closing tag is text
+		assert.strictEqual(thinkingChunks.join(''), '');
+		assert.strictEqual(textChunks.join(''), '</thinking>');
+	});
+
+	test('Should handle deeply nested tags correctly', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser({
+			onText: (c) => textChunks.push(c),
+			onThinking: (c) => thinkingChunks.push(c)
+		});
+
+		// Multiple levels of nesting
+		parser.ingest('<thinking>a<thinking>b</thinking>c</thinking>d');
+		parser.flush();
+
+		// First </thinking> closes the block, "a<thinking>b" is thinking
+		// "c</thinking>d" is text (</thinking> doesn't match at line start)
+		assert.strictEqual(thinkingChunks.join(''), 'a<thinking>b');
+		assert.strictEqual(textChunks.join(''), 'c</thinking>d');
 	});
 });
 
