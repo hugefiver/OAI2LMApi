@@ -52,9 +52,10 @@ jobs:
         run: xvfb-run -a pnpm test
 
       # Get version from package.json for VS Code Marketplace prerelease
-      # For pre-releases, use MAJOR.MINOR.X format where X is PATCH concatenated with a 7-digit SUFFIX (timestamp % 10^7).
-      # This ensures pre-release versions are always distinct and fit within int32 limit.
-      # Example: 0.1.2 -> 0.1.21234567 (third component 21234567 = patch 2 + 7-digit suffix)
+      # For pre-releases, use MAJOR.MINOR.X format where X = PATCH * 10^7 + SUFFIX (timestamp % 10^7).
+      # This ensures pre-release versions are always distinct, fit within int32 limit, and have no leading zeros.
+      # Example: 0.1.2 -> 0.1.21234567 (third component = 2 * 10^7 + 1234567 = 21234567)
+      # Example: 0.2.0 -> 0.2.1234567 (third component = 0 * 10^7 + 1234567 = 1234567, no leading zero)
       - name: Get and adjust version for prerelease
         id: version
         shell: bash
@@ -62,13 +63,16 @@ jobs:
           MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
           MINOR=$(node -p "require('./package.json').version.split('.')[1]")
           PATCH=$(node -p "require('./package.json').version.split('.')[2]")
-          # Use seconds since epoch % 10^7 as suffix (always 7 digits with leading zeros)
-          SUFFIX=$(printf "%07d" $(($(date +%s) % 10000000)))
-          VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
+          # Use seconds since epoch % 10^7 as suffix (7-digit number)
+          # Calculate third component as: PATCH * 10^7 + SUFFIX
+          # This ensures no leading zeros (e.g., patch=0, suffix=1234567 -> 1234567, not 01234567)
+          SUFFIX=$(($(date +%s) % 10000000))
+          THIRD_COMPONENT=$((PATCH * 10000000 + SUFFIX))
+          VERSION="${MAJOR}.${MINOR}.${THIRD_COMPONENT}"
           # Update package.json with the new version
           npm version "${VERSION}" --no-git-tag-version --allow-same-version
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using pre-release version $VERSION (patch: $PATCH, suffix: $SUFFIX)"
+          echo "Using pre-release version $VERSION (patch: $PATCH, suffix: $SUFFIX, third: $THIRD_COMPONENT)"
 
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
