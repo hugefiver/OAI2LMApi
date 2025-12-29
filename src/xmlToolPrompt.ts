@@ -77,7 +77,7 @@ ${toolDescriptions}
 3. For independent operations that don't depend on each other's results, you can call up to 5 tools in a single message for efficiency.
 4. For dependent operations where one tool's result is needed for the next, use tools step-by-step with each use informed by the previous result.
 5. Formulate your tool use using the XML format specified for each tool.
-6. After tool execution, the user will respond with the results of all tool calls. Use these results to continue your task or make further decisions.
+6. After tool execution, results will be provided in XML format: <tool_name_result>...</tool_name_result>. Use these results to continue your task or make further decisions.
 7. If no tool is needed, you may respond with text only.
 
 IMPORTANT: Keep your tool call as a well-formed XML block that can be parsed without any text interleaved inside the tags. You may include brief natural language instructions or explanations before or after the XML tool call if helpful, but do not break the XML structure.`;
@@ -314,12 +314,15 @@ export function formatToolCallAsXml(name: string, args: Record<string, unknown>)
  * Used when converting tool result messages to plain text format
  * for prompt-based tool calling, following kilocode's approach.
  * 
+ * Uses XML-style format to be consistent with tool call format
+ * and make it easier for the model to understand the result structure.
+ * 
  * @param toolName - The name of the tool that was called
  * @param result - The tool result content
- * @returns Formatted tool result text
+ * @returns Formatted tool result text in XML format
  */
 export function formatToolResultAsText(toolName: string, result: string): string {
-    return `[${toolName} Result]\n${result}`;
+    return `<${toolName}_result>\n${result}\n</${toolName}_result>`;
 }
 
 /**
