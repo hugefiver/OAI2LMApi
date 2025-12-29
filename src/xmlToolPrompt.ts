@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { escapeRegex } from './configUtils';
+import { logger } from './logger';
 
 /**
  * Counter for generating unique tool call IDs.
@@ -245,19 +246,15 @@ function parseXmlParameters(content: string): Record<string, unknown> {
         const openTag = `<${paramName}>`;
         const closeTag = `</${paramName}>`;
         if (paramValue.includes(openTag) || paramValue.includes(closeTag)) {
-            console.debug('[oai2lmapi] Skipping malformed nested parameter', { paramName, paramValue });
+            logger.debug('Skipping malformed nested parameter', { paramName }, 'XMLToolPrompt');
             continue;
         }
         
         // Try to parse as JSON first, otherwise use as string
         try {
             args[paramName] = JSON.parse(paramValue);
-        } catch (error) {
-            console.debug('[oai2lmapi] Failed to parse XML parameter as JSON', {
-                paramName,
-                paramValue,
-                error
-            });
+        } catch {
+            // Not valid JSON, use as string (this is common for text parameters)
             args[paramName] = paramValue;
         }
     }

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { logger } from './logger';
 
 export interface OpenAIConfig {
     apiEndpoint: string;
@@ -274,14 +275,14 @@ export class OpenAIClient {
             const models = response.data.map(model => model as unknown as APIModelInfo);
             return models;
         } catch (error) {
-            console.error('OAI2LMApi: Failed to list models:', error);
-            const e = error as any;
-            console.error('OAI2LMApi: listModels error details', {
-                status: e?.status ?? e?.response?.status,
-                code: e?.code ?? e?.error?.code,
+            const e = error as Record<string, unknown>;
+            logger.error('Failed to list models', error, 'OpenAI');
+            logger.debug('listModels error details', {
+                status: e?.status ?? (e?.response as Record<string, unknown>)?.status,
+                code: e?.code ?? (e?.error as Record<string, unknown>)?.code,
                 name: e?.name,
-                message: e?.error?.message ?? e?.message
-            });
+                message: (e?.error as Record<string, unknown>)?.message ?? e?.message
+            }, 'OpenAI');
             throw new Error(`Failed to fetch models from API: ${error}`);
         }
     }
@@ -309,15 +310,15 @@ export class OpenAIClient {
 
             return response.choices[0]?.message?.content || '';
         } catch (error) {
-            console.error('Failed to create chat completion:', error);
-            const e = error as any;
-            console.error('OAI2LMApi: createChatCompletion error details', {
+            const e = error as Record<string, unknown>;
+            logger.error('Failed to create chat completion', error, 'OpenAI');
+            logger.debug('createChatCompletion error details', {
                 model,
-                status: e?.status ?? e?.response?.status,
-                code: e?.code ?? e?.error?.code,
+                status: e?.status ?? (e?.response as Record<string, unknown>)?.status,
+                code: e?.code ?? (e?.error as Record<string, unknown>)?.code,
                 name: e?.name,
-                message: e?.error?.message ?? e?.message
-            });
+                message: (e?.error as Record<string, unknown>)?.message ?? e?.message
+            }, 'OpenAI');
             throw new Error(`Failed to create chat completion: ${error}`);
         }
     }
@@ -510,11 +511,12 @@ export class OpenAIClient {
 
             // If the stream produced nothing at all (no text/thinking/tool calls), fall back to non-streaming once.
             if (fullContent.length === 0 && thinkingChars === 0 && completedToolCalls.length === 0 && !streamOptions.signal?.aborted) {
-                console.warn('OAI2LMApi: Empty streaming response detected; falling back to non-streaming', {
+                logger.warn('Empty streaming response detected; falling back to non-streaming', 'OpenAI');
+                logger.debug('Empty streaming response details', {
                     model,
                     chunkCount,
                     finishReason
-                });
+                }, 'OpenAI');
 
                 const response = await this.client.chat.completions.create({
                     model: model,
@@ -524,9 +526,9 @@ export class OpenAIClient {
                     stream: false,
                     ...(streamOptions.tools && streamOptions.tools.length > 0 ? { tools: streamOptions.tools } : {}),
                     ...(streamOptions.toolChoice ? { tool_choice: streamOptions.toolChoice } : {})
-                } as any);
+                }) as OpenAI.Chat.ChatCompletion;
 
-                const msgAny = response.choices?.[0]?.message as any;
+                const msgAny = response.choices?.[0]?.message as unknown as Record<string, unknown> | undefined;
                 const nonStreamContent = msgAny?.content;
                 if (typeof nonStreamContent === 'string' && nonStreamContent.length > 0) {
                     thinkTagParser.ingest(nonStreamContent);
@@ -542,11 +544,14 @@ export class OpenAIClient {
                 const nonStreamToolCalls = msgAny?.tool_calls;
                 if (Array.isArray(nonStreamToolCalls) && nonStreamToolCalls.length > 0 && streamOptions.onToolCallsComplete) {
                     const mapped: CompletedToolCall[] = nonStreamToolCalls
-                        .map((tc: any) => ({
-                            id: tc?.id || '',
-                            name: tc?.function?.name || '',
-                            arguments: typeof tc?.function?.arguments === 'string' ? tc.function.arguments : ''
-                        }))
+                        .map((tc: Record<string, unknown>) => {
+                            const tcFunction = tc?.function as Record<string, unknown> | undefined;
+                            return {
+                                id: (tc?.id as string) || '',
+                                name: (tcFunction?.name as string) || '',
+                                arguments: typeof tcFunction?.arguments === 'string' ? tcFunction.arguments : ''
+                            };
+                        })
                         .filter((tc: CompletedToolCall) => tc.id && tc.name);
                     if (mapped.length > 0) {
                         streamOptions.onToolCallsComplete(mapped);
@@ -557,34 +562,27 @@ export class OpenAIClient {
             }
 
             return fullContent;
-        } catch (error: any) {
-            if (error?.name === 'AbortError' || streamOptions.signal?.aborted) {
+        } catch (error: unknown) {
+            const err = error as Record<string, unknown>;
+            if (err?.name === 'AbortError' || streamOptions.signal?.aborted) {
                 thinkTagParser.flush();
                 return fullContent;
             }
 
-            const e = error as any;
-            console.error('OAI2LMApi: streamChatCompletion failed', {
+            logger.error('streamChatCompletion failed', error, 'OpenAI');
+            logger.debug('streamChatCompletion error details', {
                 model,
                 messageCount: openaiMessages.length,
                 toolsCount: streamOptions.tools?.length ?? 0,
                 toolChoice: streamOptions.toolChoice ?? undefined,
-                status: e?.status ?? e?.response?.status,
-                code: e?.code ?? e?.error?.code,
-                name: e?.name,
-                message: e?.error?.message ?? e?.message,
-                stack: e?.stack
-            });
+                status: err?.status ?? (err?.response as Record<string, unknown>)?.status,
+                code: err?.code ?? (err?.error as Record<string, unknown>)?.code,
+                name: err?.name,
+                message: (err?.error as Record<string, unknown>)?.message ?? err?.message,
+                responseData: (err?.response as Record<string, unknown> | undefined)?.data,
+                errorDetails: err?.error as Record<string, unknown> | undefined
+            }, 'OpenAI');
 
-            // Some SDK errors include response body under various fields; try to surface it.
-            if (e?.response?.data !== undefined) {
-                console.error('OAI2LMApi: streamChatCompletion response.data', e.response.data);
-            }
-            if (e?.error !== undefined) {
-                console.error('OAI2LMApi: streamChatCompletion error.error', e.error);
-            }
-
-            console.error('Failed to stream chat completion:', error);
             throw new Error(`Failed to stream chat completion: ${error}`);
         }
     }
@@ -649,7 +647,7 @@ export class OpenAIClient {
                     let toolCallId = msg.tool_call_id;
                     if (!toolCallId || typeof toolCallId !== 'string' || toolCallId.trim().length === 0) {
                         // Log warning as this may cause issues with some API providers
-                        console.warn('OAI2LMApi: Tool message missing valid tool_call_id, using fallback. This may cause API errors with some providers.');
+                        logger.warn('Tool message missing valid tool_call_id, using fallback', 'OpenAI');
                         // Generate a fallback ID using counter + timestamp + random component for uniqueness
                         // Random component ensures uniqueness even if called multiple times in same millisecond
                         toolCallId = `call_fallback_${Date.now()}_${fallbackIdCounter++}_${Math.random().toString(36).slice(2, 9)}`;

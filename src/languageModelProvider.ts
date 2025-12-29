@@ -4,6 +4,7 @@ import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
 import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
+import { logger } from './logger';
 
 interface ModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -26,10 +27,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         // Retrieve API key from SecretStorage
         const apiKey = await this.context.secrets.get(API_KEY_SECRET_KEY);
 
-        console.log(`OAI2LMApi: Initializing with endpoint: ${apiEndpoint}`);
+        logger.info(`Initializing with endpoint: ${apiEndpoint}`, 'OpenAI');
 
         if (!apiKey) {
-            console.warn('OAI2LMApi: API key not configured');
+            logger.warn('API key not configured', 'OpenAI');
             vscode.window.showWarningMessage('OAI2LMApi: API key not configured. Use command "OAI2LMApi: Set API Key" to configure.');
             return;
         }
@@ -40,24 +41,24 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         });
 
         // Register the provider
-        console.log('OAI2LMApi: Registering language model provider');
+        logger.info('Registering language model provider', 'OpenAI');
         const disposable = vscode.lm.registerLanguageModelChatProvider('oai2lmapi', this);
         this.disposables.push(disposable);
 
         // Try to load cached models first
         const cachedModels = this.context.globalState.get<APIModelInfo[]>(CACHED_MODELS_KEY);
         if (cachedModels && cachedModels.length > 0) {
-            console.log(`OAI2LMApi: Loading ${cachedModels.length} models from cache`);
+            logger.info(`Loading ${cachedModels.length} models from cache`, 'OpenAI');
             this.updateModelList(cachedModels);
         }
 
         // Auto-load models if enabled
         const autoLoadModels = config.get<boolean>('autoLoadModels', true);
         if (autoLoadModels) {
-            console.log('OAI2LMApi: Auto-loading models from API');
+            logger.info('Auto-loading models from API', 'OpenAI');
             await this.loadModels();
         } else {
-            console.warn('OAI2LMApi: autoLoadModels is disabled; no models have been loaded automatically.');
+            logger.warn('autoLoadModels is disabled; no models have been loaded automatically', 'OpenAI');
             if (!cachedModels || cachedModels.length === 0) {
                 vscode.window.showWarningMessage(
                     'OAI2LMApi: autoLoadModels is disabled. No models have been loaded automatically; enable autoLoadModels in settings or manually refresh models to use this provider.'
@@ -80,14 +81,14 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             // Filter out non-LLM models (embedding, rerank, image, audio, etc.)
             if (!isLLMModel(apiModel.id)) {
                 filteredCount++;
-                console.log(`OAI2LMApi: Filtered out non-LLM model: ${apiModel.id}`);
+                logger.debug(`Filtered out non-LLM model: ${apiModel.id}`, undefined, 'OpenAI');
                 continue;
             }
 
             // Filter out models without tool calling support unless setting is enabled
             if (!showModelsWithoutToolCalling && !this.modelSupportsToolCalling(apiModel)) {
                 filteredCount++;
-                console.log(`OAI2LMApi: Filtered out model without tool calling: ${apiModel.id}`);
+                logger.debug(`Filtered out model without tool calling: ${apiModel.id}`, undefined, 'OpenAI');
                 continue;
             }
 
@@ -95,7 +96,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             addedCount++;
         }
 
-        console.log(`OAI2LMApi: Added ${addedCount} models, filtered ${filteredCount} models`);
+        logger.info(`Added ${addedCount} models, filtered ${filteredCount} models`, 'OpenAI');
 
         // Notify listeners that models changed
         this._onDidChangeLanguageModelChatInformation.fire();
@@ -103,21 +104,21 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
     async loadModels() {
         if (!this.client) {
-            console.warn('OAI2LMApi: OpenAI client not initialized');
+            logger.warn('OpenAI client not initialized', 'OpenAI');
             return;
         }
 
         try {
             const apiModels = await this.client.listModels();
-            console.log(`OAI2LMApi: Loaded ${apiModels.length} models from API`);
+            logger.info(`Loaded ${apiModels.length} models from API`, 'OpenAI');
 
             this.updateModelList(apiModels);
 
             // Cache the models
             await this.context.globalState.update(CACHED_MODELS_KEY, apiModels);
         } catch (error) {
-            console.error('OAI2LMApi: Failed to load models:', error);
-            vscode.window.showErrorMessage(`OAI2LMApi: Failed to load models from API. Please check your endpoint and API key. Error: ${error}`);
+            logger.error('Failed to load models from API', error, 'OpenAI');
+            vscode.window.showErrorMessage(`OAI2LMApi: Failed to load models from API. Please check your endpoint and API key.`);
             this._onDidChangeLanguageModelChatInformation.fire();
         }
     }
@@ -224,14 +225,14 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
         this.modelList.push(modelInfo);
         const source = fromApi ? 'API' : 'registry';
-        console.log(`OAI2LMApi: Added model: ${modelInfo.id} (family: ${family}, source: ${source})`);
+        logger.debug(`Added model: ${modelInfo.id} (family: ${family}, source: ${source})`, undefined, 'OpenAI');
     }
 
     async provideLanguageModelChatInformation(
         options: vscode.PrepareLanguageModelChatModelOptions,
         token: vscode.CancellationToken
     ): Promise<ModelInformation[]> {
-        console.log(`OAI2LMApi: Providing ${this.modelList.length} models to VSCode`);
+        logger.debug(`Providing ${this.modelList.length} models to VSCode`, undefined, 'OpenAI');
         return this.modelList;
     }
 
@@ -279,7 +280,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             // Don't pass native tools when using prompt-based tool calling
             tools = undefined;
             toolChoice = undefined;
-            console.log(`OAI2LMApi: Using prompt-based tool calling for model ${model.modelId}`);
+            logger.debug(`Using prompt-based tool calling for model ${model.modelId}`, undefined, 'OpenAI');
         } else {
             // Use native function calling
             tools = this.convertTools(options.tools, model.modelId);
@@ -331,7 +332,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                                 toolCall.name,
                                 toolCall.arguments
                             ));
-                            console.log(`OAI2LMApi: Streaming XML tool call detected: ${toolCall.name}`);
+                            logger.debug(`Streaming XML tool call detected: ${toolCall.name}`, undefined, 'OpenAI');
                         }
                     } else {
                         progress.report(new vscode.LanguageModelTextPart(chunk));
@@ -359,7 +360,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                             ));
                         } catch {
                             // If arguments are not valid JSON, report with empty object
-                            console.warn(`OAI2LMApi: Failed to parse tool call arguments for ${toolCall.name}: ${toolCall.arguments}`);
+                            logger.debug(`Failed to parse tool call arguments for ${toolCall.name}: ${toolCall.arguments}`, undefined, 'OpenAI');
                             progress.report(new vscode.LanguageModelToolCallPart(
                                 toolCall.id,
                                 toolCall.name,
@@ -389,7 +390,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     toolCall.name,
                     toolCall.arguments
                 ));
-                console.log(`OAI2LMApi: Finalized XML tool call: ${toolCall.name}`);
+                logger.debug(`Finalized XML tool call: ${toolCall.name}`, undefined, 'OpenAI');
             }
             
             // Report any non-tool-call text content to the user
@@ -675,13 +676,14 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             });
         }
 
-        // Only warn on dropped tools (empty name). Sanitizing schemas is expected for compatibility.
+        // Warn on dropped tools (empty name). Sanitizing schemas is expected for compatibility.
         if (dropped > 0) {
-            console.warn('OAI2LMApi: Dropped invalid tools with empty name', {
+            logger.warn(`Dropped ${dropped} invalid tools with empty name`, 'OpenAI');
+            logger.debug('Dropped tools details', {
                 original: tools.length,
                 converted: converted.length,
                 dropped
-            });
+            }, 'OpenAI');
         }
 
         return converted.length > 0 ? converted : undefined;
