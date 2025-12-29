@@ -255,6 +255,49 @@ Line 3</content></write_file>`;
             assert.notStrictEqual(result[0].id, result[1].id);
         });
 
+        test('Should use model-provided callId when present', () => {
+            const text = '<read_file><callId>my-custom-id-123</callId><path>test.txt</path></read_file>';
+            const result = parseXmlToolCalls(text, ['read_file']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].id, 'my-custom-id-123');
+            assert.strictEqual(result[0].arguments.path, 'test.txt');
+            // callId should not be in arguments
+            assert.strictEqual(result[0].arguments.callId, undefined);
+        });
+
+        test('Should fallback to generated ID when callId is empty', () => {
+            const text = '<read_file><callId></callId><path>test.txt</path></read_file>';
+            const result = parseXmlToolCalls(text, ['read_file']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.ok(result[0].id.startsWith('call_xml_'));
+            // callId should be removed from arguments (either undefined or empty string is acceptable)
+            assert.ok(!result[0].arguments.callId);
+        });
+
+        test('Should fallback to generated ID when callId is whitespace only', () => {
+            const text = '<read_file><callId>   </callId><path>test.txt</path></read_file>';
+            const result = parseXmlToolCalls(text, ['read_file']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.ok(result[0].id.startsWith('call_xml_'));
+        });
+
+        test('Should handle multiple tool calls with mixed callId presence', () => {
+            const text = `
+                <read_file><callId>custom-1</callId><path>file1.txt</path></read_file>
+                <read_file><path>file2.txt</path></read_file>
+                <write_file><callId>custom-2</callId><path>file3.txt</path><content>hello</content></write_file>
+            `;
+            const result = parseXmlToolCalls(text, ['read_file', 'write_file']);
+            
+            assert.strictEqual(result.length, 3);
+            assert.strictEqual(result[0].id, 'custom-1');
+            assert.ok(result[1].id.startsWith('call_xml_'));
+            assert.strictEqual(result[2].id, 'custom-2');
+        });
+
         test('Should skip malformed nested parameters with same name', () => {
             // This tests the protection against nested tags parsing incorrectly
             const text = '<test_tool><param><param>nested</param></param></test_tool>';

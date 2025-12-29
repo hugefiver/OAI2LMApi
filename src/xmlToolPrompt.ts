@@ -54,6 +54,15 @@ Tool uses are formatted using XML-style tags. The tool name itself becomes the X
 
 Always use the actual tool name as the XML tag name for proper parsing and execution.
 
+You may optionally include a \`callId\` parameter to identify each tool call. This is useful when making multiple calls to the same tool:
+
+<tool_name>
+<callId>unique_id_here</callId>
+<parameter1_name>value1</parameter1_name>
+</tool_name>
+
+If \`callId\` is omitted, one will be automatically generated.
+
 ## Multiple Tool Calls
 
 When you need to perform multiple independent operations, you can include multiple tool calls in a single message (up to 5 at once). All tools will be executed and their results returned together:
@@ -206,8 +215,18 @@ export function parseXmlToolCalls(text: string, availableTools: string[]): Parse
             const content = match[1];
             const args = parseXmlParameters(content);
             
+            // Extract callId if provided by the model, otherwise generate one
+            let callId: string;
+            if (typeof args.callId === 'string' && args.callId.trim()) {
+                callId = args.callId.trim();
+                // Remove callId from arguments as it's not a tool parameter
+                delete args.callId;
+            } else {
+                callId = generateToolCallId();
+            }
+            
             toolCalls.push({
-                id: generateToolCallId(),
+                id: callId,
                 name: toolName,
                 arguments: args
             });
@@ -421,8 +440,19 @@ export class XmlToolCallStreamParser {
             while ((match = globalRegex.exec(this.buffer)) !== null) {
                 const content = match[1];
                 const args = parseXmlParameters(content);
+                
+                // Extract callId if provided by the model, otherwise generate one
+                let callId: string;
+                if (typeof args.callId === 'string' && args.callId.trim()) {
+                    callId = args.callId.trim();
+                    // Remove callId from arguments as it's not a tool parameter
+                    delete args.callId;
+                } else {
+                    callId = generateToolCallId();
+                }
+                
                 const toolCall: ParsedToolCall = {
-                    id: generateToolCallId(),
+                    id: callId,
                     name: toolName,
                     arguments: args
                 };
