@@ -12,13 +12,17 @@ A VSCode extension that connects OpenAI-compatible APIs to VSCode's Language Mod
 ## Features
 
 - ✅ **Full OpenAI API Compatibility**: Works with any OpenAI-compatible API endpoint
+- ✅ **Google Gemini Support**: Native support for Google Gemini API with dedicated channel
 - ✅ **VSCode Language Model API Integration**: Seamlessly integrates with VSCode's built-in language model features
 - ✅ **Streaming Support**: Real-time streaming responses for better user experience
+- ✅ **Thinking/Reasoning Support**: Stream reasoning content from models that support it (e.g., o1, Claude with thinking)
 - ✅ **Automatic Model Loading**: Fetches available models from the API endpoint on startup
 - ✅ **Model Caching**: Loaded models are cached locally for faster startup times
 - ✅ **Secure API Key Storage**: API keys are stored securely using VSCode's SecretStorage
 - ✅ **Tool Calling Support**: Full support for tool/function calling with improved reliability
+- ✅ **XML-based Tool Calling**: Fallback prompt-based tool calling for models without native support
 - ✅ **Tool Calling Filter**: Optionally filter models by tool/function calling support
+- ✅ **Per-Model Configuration**: Customize token limits, temperature, and capabilities per model
 - ✅ **Easy Configuration**: Simple setup through VSCode settings and commands
 
 ## Requirements
@@ -54,14 +58,18 @@ A VSCode extension that connects OpenAI-compatible APIs to VSCode's Language Mod
 
 | Command | Description |
 |---------|-------------|
-| `OAI2LMApi: Set API Key` | Securely store your API key |
-| `OAI2LMApi: Clear API Key` | Remove the stored API key |
-| `OAI2LMApi: Refresh Models` | Manually reload available models from the API |
+| `OAI2LMApi: Set API Key` | Securely store your OpenAI-compatible API key |
+| `OAI2LMApi: Clear API Key` | Remove the stored OpenAI-compatible API key |
+| `OAI2LMApi: Set Gemini API Key` | Securely store your Google Gemini API key |
+| `OAI2LMApi: Clear Gemini API Key` | Remove the stored Gemini API key |
+| `OAI2LMApi: Refresh Models` | Manually reload available models from all providers |
 | `OAI2LMApi: Manage Provider Settings` | Open extension settings |
 
 ## Configuration
 
 Configure the extension through VSCode settings (`Ctrl+,` or `Cmd+,`):
+
+### Basic Settings
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -69,13 +77,45 @@ Configure the extension through VSCode settings (`Ctrl+,` or `Cmd+,`):
 | `oai2lmapi.autoLoadModels` | `true` | Automatically load models from API on startup |
 | `oai2lmapi.showModelsWithoutToolCalling` | `false` | Show models that do not support tool/function calling |
 
+### Gemini Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `oai2lmapi.enableGeminiChannel` | `false` | Enable the Gemini channel provider |
+| `oai2lmapi.geminiApiEndpoint` | `https://generativelanguage.googleapis.com` | Google Gemini API endpoint URL |
+
+### Model Overrides
+
+The `oai2lmapi.modelOverrides` setting allows per-model configuration. Keys are model name patterns (supports wildcards like `gemini-*`), values are configuration objects:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `maxInputTokens` | number | Override max input tokens |
+| `maxOutputTokens` | number | Override max output tokens |
+| `supportsToolCalling` | boolean | Override tool calling support |
+| `supportsImageInput` | boolean | Override image input support |
+| `temperature` | number | Default temperature for the model |
+| `thinkingLevel` | string/number | Thinking level: token budget number, or `'low'`/`'medium'`/`'high'`/`'auto'`/`'none'` |
+| `usePromptBasedToolCalling` | boolean | Use XML-based prompt tool calling instead of native function calling |
+
 ### Example Configuration
 
 ```json
 {
   "oai2lmapi.apiEndpoint": "https://api.openai.com/v1",
   "oai2lmapi.autoLoadModels": true,
-  "oai2lmapi.showModelsWithoutToolCalling": false
+  "oai2lmapi.showModelsWithoutToolCalling": false,
+  "oai2lmapi.enableGeminiChannel": true,
+  "oai2lmapi.geminiApiEndpoint": "https://generativelanguage.googleapis.com",
+  "oai2lmapi.modelOverrides": {
+    "gemini-2.0-flash-thinking-exp": {
+      "thinkingLevel": "auto",
+      "usePromptBasedToolCalling": true
+    },
+    "claude-*": {
+      "maxOutputTokens": 8192
+    }
+  }
 }
 ```
 
@@ -91,10 +131,14 @@ This extension works with any API that implements the OpenAI chat completions fo
 
 - OpenAI API
 - Azure OpenAI
+- Google Gemini API (native support via Gemini channel)
+- Anthropic Claude (via OpenAI-compatible proxy)
 - LocalAI
 - Ollama (with OpenAI compatibility layer)
 - LM Studio
-- Text Generation WebUI (with OpenAI extension)
+- vLLM
+- liteLM (transfer from other APIs)
+- OpenRouter
 - Any custom OpenAI-compatible implementation
 
 ## Troubleshooting
@@ -107,14 +151,22 @@ This extension works with any API that implements the OpenAI chat completions fo
 ### Models not loading
 
 - Run **OAI2LMApi: Set API Key** to ensure your API key is configured
+- For Gemini: Enable `oai2lmapi.enableGeminiChannel` and run **OAI2LMApi: Set Gemini API Key**
 - Verify your API endpoint is correct and accessible
-- Check the VSCode Developer Console (`Help > Toggle Developer Tools`) for errors
+- Check the **OAI2LMApi** Output Channel (`View > Output`, select "OAI2LMApi") for detailed logs
 - Try **OAI2LMApi: Refresh Models** to manually reload
 
 ### API errors
 
 - Ensure your API endpoint supports `/v1/models` and `/v1/chat/completions`
+- For Gemini: The extension uses the native Gemini API format, not OpenAI compatibility
 - Verify network connectivity to the API endpoint
+
+### Tool calling issues
+
+- Some models don't support native function calling
+- Use `usePromptBasedToolCalling: true` in model overrides for XML-based fallback
+- Check model capabilities in the Output Channel logs
 
 ## License
 
