@@ -42,13 +42,19 @@ class Logger {
     /**
      * Log an informational message.
      * These are coarse-grained operation logs shown to users via the output channel.
+     * Falls back to console.log if output channel is not initialized.
      * 
      * @param message - The message to log
      * @param prefix - Optional prefix (e.g., 'OpenAI', 'Gemini')
      */
     info(message: string, prefix?: string): void {
         const formatted = this.formatMessage('info', message, prefix);
-        this.outputChannel?.appendLine(formatted);
+        if (this.outputChannel) {
+            this.outputChannel.appendLine(formatted);
+        } else {
+            const prefixStr = prefix ? `[${prefix}] ` : '';
+            console.log(`${this.extensionName}: ${prefixStr}${message}`);
+        }
     }
 
     /**
@@ -60,7 +66,9 @@ class Logger {
      */
     warn(message: string, prefix?: string): void {
         const formatted = this.formatMessage('warn', message, prefix);
-        this.outputChannel?.appendLine(formatted);
+        if (this.outputChannel) {
+            this.outputChannel.appendLine(formatted);
+        }
         console.warn(`${this.extensionName}: ${prefix ? `[${prefix}] ` : ''}${message}`);
     }
 
@@ -74,10 +82,12 @@ class Logger {
      */
     error(message: string, error?: unknown, prefix?: string): void {
         const formatted = this.formatMessage('error', message, prefix);
-        this.outputChannel?.appendLine(formatted);
-        if (error) {
-            const errorDetails = this.formatError(error);
-            this.outputChannel?.appendLine(`  Details: ${errorDetails}`);
+        if (this.outputChannel) {
+            this.outputChannel.appendLine(formatted);
+            if (error) {
+                const errorDetails = this.formatError(error);
+                this.outputChannel.appendLine(`  Details: ${errorDetails}`);
+            }
         }
         console.error(`${this.extensionName}: ${prefix ? `[${prefix}] ` : ''}${message}`, error ?? '');
     }

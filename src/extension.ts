@@ -142,7 +142,7 @@ async function initializeAsync(context: vscode.ExtensionContext): Promise<void> 
         // This will only be enabled if a Gemini API key is configured
         await initializeGeminiProvider(context);
     } catch (error) {
-        logger.error('Background initialization failed', error);
+        logger.error('Background initialization failed', error, 'Extension');
         // Surface critical initialization failures to the user
         vscode.window.showErrorMessage('OAI2LMApi: Background initialization failed. Check the Output panel for details.');
     }

@@ -533,7 +533,7 @@ export class OpenAIClient {
                     thinkTagParser.ingest(nonStreamContent);
                 }
 
-                const nonStreamReasoningRaw = (msgAny as Record<string, unknown>)?.reasoning_content ?? (msgAny as Record<string, unknown>)?.reasoning ?? (msgAny as Record<string, unknown>)?.thinking;
+                const nonStreamReasoningRaw = msgAny?.reasoning_content ?? msgAny?.reasoning ?? msgAny?.thinking;
                 const nonStreamReasoning = this.coerceThinkingText(nonStreamReasoningRaw);
                 if (nonStreamReasoning && nonStreamReasoning.length > 0) {
                     thinkingChars += nonStreamReasoning.length;
