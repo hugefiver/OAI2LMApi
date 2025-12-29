@@ -23,24 +23,28 @@ suite('Logger Unit Tests', () => {
 			assert.doesNotThrow(() => {
 				// This will fall back to console.log since outputChannel is not initialized
 				// We can't easily test the console output, but we verify no exception is thrown
+				logger.info('Test info before initialization', 'TestBeforeInit');
 			});
 		});
 
 		test('warn() should not throw before initialization', () => {
 			assert.doesNotThrow(() => {
 				// warn() always logs to console.warn regardless of initialization
+				logger.warn('Test warn before initialization', 'TestBeforeInit');
 			});
 		});
 
 		test('error() should not throw before initialization', () => {
 			assert.doesNotThrow(() => {
 				// error() always logs to console.error regardless of initialization
+				logger.error('Test error before initialization', new Error('Test error'), 'TestBeforeInit');
 			});
 		});
 
 		test('debug() should not throw before initialization', () => {
 			assert.doesNotThrow(() => {
 				// debug() only logs to console.debug, no outputChannel dependency
+				logger.debug('Test debug before initialization', { foo: 'bar' }, 'TestBeforeInit');
 			});
 		});
 	});

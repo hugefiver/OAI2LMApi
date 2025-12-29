@@ -676,9 +676,10 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             });
         }
 
-        // Only warn on dropped tools (empty name). Sanitizing schemas is expected for compatibility.
+        // Warn on dropped tools (empty name). Sanitizing schemas is expected for compatibility.
         if (dropped > 0) {
-            logger.debug('Dropped invalid tools with empty name', {
+            logger.warn(`Dropped ${dropped} invalid tools with empty name`, 'OpenAI');
+            logger.debug('Dropped tools details', {
                 original: tools.length,
                 converted: converted.length,
                 dropped

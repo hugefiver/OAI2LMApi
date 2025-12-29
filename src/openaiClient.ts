@@ -511,7 +511,8 @@ export class OpenAIClient {
 
             // If the stream produced nothing at all (no text/thinking/tool calls), fall back to non-streaming once.
             if (fullContent.length === 0 && thinkingChars === 0 && completedToolCalls.length === 0 && !streamOptions.signal?.aborted) {
-                logger.debug('Empty streaming response detected; falling back to non-streaming', {
+                logger.warn('Empty streaming response detected; falling back to non-streaming', 'OpenAI');
+                logger.debug('Empty streaming response details', {
                     model,
                     chunkCount,
                     finishReason
@@ -543,11 +544,14 @@ export class OpenAIClient {
                 const nonStreamToolCalls = msgAny?.tool_calls;
                 if (Array.isArray(nonStreamToolCalls) && nonStreamToolCalls.length > 0 && streamOptions.onToolCallsComplete) {
                     const mapped: CompletedToolCall[] = nonStreamToolCalls
-                        .map((tc: Record<string, unknown>) => ({
-                            id: (tc?.id as string) || '',
-                            name: ((tc?.function as Record<string, unknown>)?.name as string) || '',
-                            arguments: typeof (tc?.function as Record<string, unknown>)?.arguments === 'string' ? (tc?.function as Record<string, unknown>)?.arguments as string : ''
-                        }))
+                        .map((tc: Record<string, unknown>) => {
+                            const tcFunction = tc?.function as Record<string, unknown> | undefined;
+                            return {
+                                id: (tc?.id as string) || '',
+                                name: (tcFunction?.name as string) || '',
+                                arguments: typeof tcFunction?.arguments === 'string' ? tcFunction.arguments : ''
+                            };
+                        })
                         .filter((tc: CompletedToolCall) => tc.id && tc.name);
                     if (mapped.length > 0) {
                         streamOptions.onToolCallsComplete(mapped);
@@ -574,7 +578,9 @@ export class OpenAIClient {
                 status: err?.status ?? (err?.response as Record<string, unknown>)?.status,
                 code: err?.code ?? (err?.error as Record<string, unknown>)?.code,
                 name: err?.name,
-                message: (err?.error as Record<string, unknown>)?.message ?? err?.message
+                message: (err?.error as Record<string, unknown>)?.message ?? err?.message,
+                responseData: (err?.response as Record<string, unknown> | undefined)?.data,
+                errorDetails: err?.error as Record<string, unknown> | undefined
             }, 'OpenAI');
 
             throw new Error(`Failed to stream chat completion: ${error}`);
@@ -641,7 +647,7 @@ export class OpenAIClient {
                     let toolCallId = msg.tool_call_id;
                     if (!toolCallId || typeof toolCallId !== 'string' || toolCallId.trim().length === 0) {
                         // Log warning as this may cause issues with some API providers
-                        logger.debug('Tool message missing valid tool_call_id, using fallback', undefined, 'OpenAI');
+                        logger.warn('Tool message missing valid tool_call_id, using fallback', 'OpenAI');
                         // Generate a fallback ID using counter + timestamp + random component for uniqueness
                         // Random component ensures uniqueness even if called multiple times in same millisecond
                         toolCallId = `call_fallback_${Date.now()}_${fallbackIdCounter++}_${Math.random().toString(36).slice(2, 9)}`;

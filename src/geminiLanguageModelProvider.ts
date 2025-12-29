@@ -393,7 +393,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
                 onToolCallsComplete: (toolCalls: GeminiCompletedToolCall[]) => {
                     for (const toolCall of toolCalls) {
                         if (reportedToolCallIds.has(toolCall.id)) {
-                            logger.debug(`Duplicate tool call id '${toolCall.id}' for tool '${toolCall.name}', ignoring`, undefined, 'Gemini');
+                            logger.warn(`Duplicate tool call id '${toolCall.id}' for tool '${toolCall.name}', ignoring`, 'Gemini');
                             continue;
                         }
                         reportedToolCallIds.add(toolCall.id);

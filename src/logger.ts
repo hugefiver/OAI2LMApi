@@ -89,7 +89,12 @@ class Logger {
                 this.outputChannel.appendLine(`  Details: ${errorDetails}`);
             }
         }
-        console.error(`${this.extensionName}: ${prefix ? `[${prefix}] ` : ''}${message}`, error ?? '');
+        const consoleMessage = `${this.extensionName}: ${prefix ? `[${prefix}] ` : ''}${message}`;
+        if (error !== undefined && error !== null) {
+            console.error(consoleMessage, error);
+        } else {
+            console.error(consoleMessage);
+        }
     }
 
     /**
