@@ -33,6 +33,15 @@ A VSCode extension that connects OpenAI-compatible APIs to VSCode's Language Mod
 
 ## Installation
 
+### From VS Code Marketplace (Recommended)
+
+1. Open VSCode
+2. Go to Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`)
+3. Search for "OAI2LMApi"
+4. Click **Install**
+
+Or install directly via [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi).
+
 ### From VSIX
 
 1. Download the `.vsix` file from the [Releases](https://github.com/hugefiver/OAI2LMApi/releases) page
