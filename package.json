@@ -82,6 +82,11 @@
           "default": false,
           "description": "Show models that do not support tool/function calling. By default, only models with tool calling support are displayed."
         },
+        "oai2lmapi.suppressChainOfThought": {
+          "type": "boolean",
+          "default": false,
+          "description": "Suppress chain-of-thought transmission: strips leading <think>...</think> blocks and does not forward reasoning_content/reasoning/thinking fields. <thinking>...</thinking> blocks are still forwarded as thinking."
+        },
         "oai2lmapi.enableGeminiChannel": {
           "type": "boolean",
           "default": false,
@@ -95,7 +100,7 @@
         "oai2lmapi.modelOverrides": {
           "type": "object",
           "default": {},
-          "description": "Per-model configuration overrides. Keys are model name patterns (supports wildcards like 'gemini-*'), values are objects with optional: maxInputTokens, maxOutputTokens, supportsToolCalling, supportsImageInput, temperature, thinkingLevel (number for budget, or 'low'/'medium'/'high'/'auto'), usePromptBasedToolCalling (boolean to use XML-based prompt engineering for tool calling).",
+          "description": "Per-model configuration overrides. Keys are model name patterns (supports wildcards like 'gemini-*'), values are objects with optional: maxInputTokens, maxOutputTokens, supportsToolCalling, supportsImageInput, temperature, thinkingLevel (number for budget, or 'low'/'medium'/'high'/'auto'), usePromptBasedToolCalling (boolean to use XML-based prompt engineering for tool calling), suppressChainOfThought (boolean to suppress chain-of-thought transmission for matching models).",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -126,6 +131,10 @@
               "usePromptBasedToolCalling": {
                 "type": "boolean",
                 "description": "When enabled, tools are converted to XML-format instructions in the system prompt instead of using native function calling. Useful for models that don't support native tool calling."
+              },
+              "suppressChainOfThought": {
+                "type": "boolean",
+                "description": "Override oai2lmapi.suppressChainOfThought for matching models. When true, strips leading <think>...</think> blocks and does not forward reasoning_content/reasoning/thinking fields. <thinking>...</thinking> blocks are still forwarded as thinking."
               }
             }
           }

@@ -251,6 +251,11 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const modelOverride = getModelOverride(model.modelId);
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
+        // Chain-of-thought suppression: per-model override takes precedence over global.
+        const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const globalSuppressChainOfThought = config.get<boolean>('suppressChainOfThought', false);
+        const suppressChainOfThought = modelOverride?.suppressChainOfThought ?? globalSuppressChainOfThought;
+
         // Convert VSCode messages to OpenAI format
         let chatMessages: ChatMessage[] = this.convertMessages(messages, usePromptBasedToolCalling);
 
@@ -342,6 +347,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     // Report thinking/reasoning content using LanguageModelThinkingPart
                     progress.report(new vscode.LanguageModelThinkingPart(chunk));
                 },
+                suppressChainOfThought,
                 onToolCallsComplete: (toolCalls: CompletedToolCall[]) => {
                     // Report all tool calls at once after streaming is complete
                     for (const toolCall of toolCalls) {

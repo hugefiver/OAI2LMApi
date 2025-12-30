@@ -22,6 +22,12 @@ export interface ModelOverrideConfig {
      * instead of using native function calling.
      */
     usePromptBasedToolCalling?: boolean;
+
+    /**
+     * When true, suppress chain-of-thought transmission for matching models.
+     * See `oai2lmapi.suppressChainOfThought` for exact behavior.
+     */
+    suppressChainOfThought?: boolean;
 }
 
 /**

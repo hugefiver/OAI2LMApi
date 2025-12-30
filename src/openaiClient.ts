@@ -102,11 +102,26 @@ export interface CompletedToolCall {
  * Represents a thinking tag pair (start and end tags).
  */
 interface ThinkingTagPair {
+    tagName: 'think' | 'thinking';
     startTag: string;  // lowercase start tag, e.g., '<think>'
     endTag: string;    // lowercase end tag, e.g., '</think>'
+    handling: 'thinking' | 'drop';
     onlyAtStart: boolean;  // if true, only match at the beginning of the stream (before any text emitted)
     onlyAtLineStart: boolean;  // if true, only match at line start (after \n or at position 0)
     requireNoThinking: boolean;  // if true, only match when no thinking content has been received yet
+}
+
+export interface ThinkTagStreamParserOptions {
+    /**
+     * How to handle `<think>...</think>` blocks (only matched at the beginning of the stream).
+     * - 'thinking': forward the inner content to `onThinking`
+     * - 'drop': strip the block from visible text and do NOT forward anywhere
+     */
+    thinkTagHandling?: 'thinking' | 'drop';
+    /**
+     * How to handle `<thinking>...</thinking>` blocks (matched at line start).
+     */
+    thinkingTagHandling?: 'thinking' | 'drop';
 }
 
 /**
@@ -135,26 +150,41 @@ export class ThinkTagStreamParser {
     private carry = '';
     private inThink = false;
     private currentEndTag = '';  // The end tag we're looking for when inside a thinking block
+    private currentHandling: 'thinking' | 'drop' = 'thinking';
     private hasEmittedText = false;  // Track if any text has been emitted (for onlyAtStart tags)
     private hasReceivedThinking = false;  // Track if any thinking content has been received
 
+    private readonly tagPairs: ThinkingTagPair[];
+
     // Supported thinking tag pairs (order matters - longer tags should come first for proper matching)
-    private static readonly THINKING_TAGS: ThinkingTagPair[] = [
-        { startTag: '<thinking>', endTag: '</thinking>', onlyAtStart: false, onlyAtLineStart: true, requireNoThinking: false },
-        { startTag: '<think>', endTag: '</think>', onlyAtStart: true, onlyAtLineStart: false, requireNoThinking: true },
+    private static readonly thinkingTags: ThinkingTagPair[] = [
+        { tagName: 'thinking', startTag: '<thinking>', endTag: '</thinking>', handling: 'thinking', onlyAtStart: false, onlyAtLineStart: true, requireNoThinking: false },
+        { tagName: 'think', startTag: '<think>', endTag: '</think>', handling: 'thinking', onlyAtStart: true, onlyAtLineStart: false, requireNoThinking: true },
     ];
 
     // Longest possible start tag prefix for carry handling
-    private static readonly MAX_START_TAG_LENGTH = Math.max(
-        ...ThinkTagStreamParser.THINKING_TAGS.map(t => t.startTag.length)
+    private static readonly maxStartTagLength = Math.max(
+        ...ThinkTagStreamParser.thinkingTags.map(t => t.startTag.length)
     );
 
     constructor(
         private readonly handlers: {
             onText?: (chunk: string) => void;
             onThinking?: (chunk: string) => void;
-        }
-    ) {}
+        },
+        options?: ThinkTagStreamParserOptions
+    ) {
+        // Apply per-tag handling overrides.
+        this.tagPairs = ThinkTagStreamParser.thinkingTags.map((tp) => {
+            if (tp.tagName === 'think' && options?.thinkTagHandling) {
+                return { ...tp, handling: options.thinkTagHandling };
+            }
+            if (tp.tagName === 'thinking' && options?.thinkingTagHandling) {
+                return { ...tp, handling: options.thinkingTagHandling };
+            }
+            return tp;
+        });
+    }
 
     /**
      * Notify the parser that thinking content has been received from an external source
@@ -187,7 +217,11 @@ export class ThinkTagStreamParser {
                 if (endIdx === -1) {
                     const split = this.splitKeepingPossibleTagPrefix(text, this.currentEndTag);
                     if (split.emit) {
-                        this.handlers.onThinking?.(split.emit);
+                        if (this.currentHandling === 'thinking') {
+                            this.handlers.onThinking?.(split.emit);
+                        }
+                        // If currentHandling === 'drop', we intentionally discard it.
+                        this.hasReceivedThinking = true;
                     }
                     this.carry = split.carry;
                     return;
@@ -195,13 +229,16 @@ export class ThinkTagStreamParser {
 
                 const thinkingPart = text.slice(0, endIdx);
                 if (thinkingPart) {
-                    this.handlers.onThinking?.(thinkingPart);
+                    if (this.currentHandling === 'thinking') {
+                        this.handlers.onThinking?.(thinkingPart);
+                    }
                     this.hasReceivedThinking = true;
                 }
 
                 text = text.slice(endIdx + this.currentEndTag.length);
                 this.inThink = false;
                 this.currentEndTag = '';
+                this.currentHandling = 'thinking';
                 continue;
             }
 
@@ -211,7 +248,7 @@ export class ThinkTagStreamParser {
             let earliestIdx = -1;
             let matchedTag: ThinkingTagPair | null = null;
 
-            for (const tagPair of ThinkTagStreamParser.THINKING_TAGS) {
+            for (const tagPair of this.tagPairs) {
                 // Skip onlyAtStart tags if we've already emitted text
                 if (tagPair.onlyAtStart && this.hasEmittedText) {
                     continue;
@@ -273,6 +310,7 @@ export class ThinkTagStreamParser {
             text = text.slice(earliestIdx + matchedTag.startTag.length);
             this.inThink = true;
             this.currentEndTag = matchedTag.endTag;
+            this.currentHandling = matchedTag.handling;
         }
     }
 
@@ -290,7 +328,10 @@ export class ThinkTagStreamParser {
         }
 
         if (this.inThink) {
-            this.handlers.onThinking?.(this.carry);
+            if (this.currentHandling === 'thinking') {
+                this.handlers.onThinking?.(this.carry);
+            }
+            this.hasReceivedThinking = true;
         } else {
             this.handlers.onText?.(this.carry);
             this.hasEmittedText = true;
@@ -306,12 +347,12 @@ export class ThinkTagStreamParser {
      */
     private splitKeepingPossibleStartTagPrefix(text: string): { emit: string; carry: string } {
         const lower = text.toLowerCase();
-        const maxPrefixLen = Math.min(ThinkTagStreamParser.MAX_START_TAG_LENGTH - 1, text.length);
+        const maxPrefixLen = Math.min(ThinkTagStreamParser.maxStartTagLength - 1, text.length);
 
         for (let k = maxPrefixLen; k > 0; k--) {
             const suffix = lower.slice(-k);
             // Check if this suffix is a prefix of any applicable start tag
-            for (const tagPair of ThinkTagStreamParser.THINKING_TAGS) {
+            for (const tagPair of this.tagPairs) {
                 // Skip onlyAtStart tags if we've already emitted text
                 if (tagPair.onlyAtStart && this.hasEmittedText) {
                     continue;
@@ -371,6 +412,14 @@ export interface StreamOptions {
     toolChoice?: ToolChoice;
     /** Optional max tokens for completion generation (mapped to OpenAI `max_tokens`). */
     maxTokens?: number;
+    /**
+     * When enabled, suppress chain-of-thought transmission:
+     * - strips leading `<think>...</think>` blocks from visible output (does not forward them)
+     * - does NOT forward `reasoning_content`/`reasoning`/`thinking` fields
+     *
+     * Note: `<thinking>...</thinking>` blocks are still forwarded as thinking content.
+     */
+    suppressChainOfThought?: boolean;
 }
 
 export class OpenAIClient {
@@ -459,8 +508,10 @@ export class OpenAIClient {
     ): Promise<string> {
         let fullContent = '';
         let thinkingChars = 0;
+        let sawAnyModelOutput = false;
 
-        const thinkTagParser = new ThinkTagStreamParser({
+        const thinkTagParser = new ThinkTagStreamParser(
+            {
             onText: (chunk) => {
                 fullContent += chunk;
                 streamOptions.onChunk?.(chunk);
@@ -471,7 +522,11 @@ export class OpenAIClient {
                     streamOptions.onThinkingChunk?.(chunk);
                 }
                 : undefined
-        });
+            },
+            {
+                thinkTagHandling: streamOptions.suppressChainOfThought ? 'drop' : 'thinking'
+            }
+        );
 
         // Convert to OpenAI message format
         const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
@@ -520,19 +575,24 @@ export class OpenAIClient {
                 const messageAny = (choice0 as any)?.message as Record<string, unknown> | undefined;
                 const messageContent = messageAny?.content;
                 if (typeof messageContent === 'string' && messageContent.length > 0) {
+                    sawAnyModelOutput = true;
                     thinkTagParser.ingest(messageContent);
                 }
 
                 const messageReasoningRaw = (messageAny as any)?.reasoning_content ?? (messageAny as any)?.reasoning ?? (messageAny as any)?.thinking;
                 const messageReasoning = this.coerceThinkingText(messageReasoningRaw);
                 if (messageReasoning && messageReasoning.length > 0) {
-                    thinkingChars += messageReasoning.length;
-                    thinkTagParser.notifyThinkingReceived();
-                    streamOptions.onThinkingChunk?.(messageReasoning);
+                    sawAnyModelOutput = true;
+                    if (!streamOptions.suppressChainOfThought) {
+                        thinkingChars += messageReasoning.length;
+                        thinkTagParser.notifyThinkingReceived();
+                        streamOptions.onThinkingChunk?.(messageReasoning);
+                    }
                 }
 
                 const messageToolCalls = messageAny?.tool_calls;
                 if (Array.isArray(messageToolCalls) && messageToolCalls.length > 0) {
+                    sawAnyModelOutput = true;
                     for (let i = 0; i < messageToolCalls.length; i++) {
                         const tc: any = messageToolCalls[i];
                         const index = i;
@@ -563,14 +623,18 @@ export class OpenAIClient {
                 const reasoningRaw = (deltaAny as any)?.reasoning_content ?? (deltaAny as any)?.reasoning ?? (deltaAny as any)?.thinking;
                 const reasoningContent = this.coerceThinkingText(reasoningRaw);
                 if (reasoningContent && reasoningContent.length > 0) {
-                    thinkingChars += reasoningContent.length;
-                    thinkTagParser.notifyThinkingReceived();
-                    streamOptions.onThinkingChunk?.(reasoningContent);
+                    sawAnyModelOutput = true;
+                    if (!streamOptions.suppressChainOfThought) {
+                        thinkingChars += reasoningContent.length;
+                        thinkTagParser.notifyThinkingReceived();
+                        streamOptions.onThinkingChunk?.(reasoningContent);
+                    }
                 }
 
                 // Handle text content
                 const content = delta?.content || '';
                 if (content) {
+                    sawAnyModelOutput = true;
                     // Some models embed thinking in <think>...</think> inside the normal content stream.
                     // Parse and route those parts to onThinkingChunk when available.
                     thinkTagParser.ingest(content);
@@ -578,6 +642,9 @@ export class OpenAIClient {
 
                 // Handle tool calls in streaming response
                 if (delta?.tool_calls) {
+                    if (delta.tool_calls.length > 0) {
+                        sawAnyModelOutput = true;
+                    }
                     for (const toolCallDelta of delta.tool_calls) {
                         const index = toolCallDelta.index;
 
@@ -641,7 +708,7 @@ export class OpenAIClient {
             }
 
             // If the stream produced nothing at all (no text/thinking/tool calls), fall back to non-streaming once.
-            if (fullContent.length === 0 && thinkingChars === 0 && completedToolCalls.length === 0 && !streamOptions.signal?.aborted) {
+            if (!sawAnyModelOutput && completedToolCalls.length === 0 && !streamOptions.signal?.aborted) {
                 logger.warn('Empty streaming response detected; falling back to non-streaming', 'OpenAI');
                 logger.debug('Empty streaming response details', {
                     model,
@@ -662,18 +729,23 @@ export class OpenAIClient {
                 const msgAny = response.choices?.[0]?.message as unknown as Record<string, unknown> | undefined;
                 const nonStreamContent = msgAny?.content;
                 if (typeof nonStreamContent === 'string' && nonStreamContent.length > 0) {
+                    sawAnyModelOutput = true;
                     thinkTagParser.ingest(nonStreamContent);
                 }
 
                 const nonStreamReasoningRaw = msgAny?.reasoning_content ?? msgAny?.reasoning ?? msgAny?.thinking;
                 const nonStreamReasoning = this.coerceThinkingText(nonStreamReasoningRaw);
                 if (nonStreamReasoning && nonStreamReasoning.length > 0) {
-                    thinkingChars += nonStreamReasoning.length;
-                    streamOptions.onThinkingChunk?.(nonStreamReasoning);
+                    sawAnyModelOutput = true;
+                    if (!streamOptions.suppressChainOfThought) {
+                        thinkingChars += nonStreamReasoning.length;
+                        streamOptions.onThinkingChunk?.(nonStreamReasoning);
+                    }
                 }
 
                 const nonStreamToolCalls = msgAny?.tool_calls;
                 if (Array.isArray(nonStreamToolCalls) && nonStreamToolCalls.length > 0 && streamOptions.onToolCallsComplete) {
+                    sawAnyModelOutput = true;
                     const mapped: CompletedToolCall[] = nonStreamToolCalls
                         .map((tc: Record<string, unknown>) => {
                             const tcFunction = tc?.function as Record<string, unknown> | undefined;

@@ -398,6 +398,48 @@ suite('ThinkTagStreamParser Unit Tests', () => {
 		assert.strictEqual(textChunks.join(''), 'hello');
 	});
 
+	test('Should strip and DROP <think>...</think> at the start when configured', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser(
+			{
+				onText: (c) => textChunks.push(c),
+				onThinking: (c) => thinkingChunks.push(c)
+			},
+			{
+				thinkTagHandling: 'drop'
+			}
+		);
+
+		parser.ingest('<think>abc</think>hello');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), '');
+		assert.strictEqual(textChunks.join(''), 'hello');
+	});
+
+	test('Should still emit <thinking>...</thinking> when <think> is configured to drop', () => {
+		const textChunks: string[] = [];
+		const thinkingChunks: string[] = [];
+
+		const parser = new ThinkTagStreamParser(
+			{
+				onText: (c) => textChunks.push(c),
+				onThinking: (c) => thinkingChunks.push(c)
+			},
+			{
+				thinkTagHandling: 'drop'
+			}
+		);
+
+		parser.ingest('<think>abc</think>\n<thinking>xyz</thinking>done');
+		parser.flush();
+
+		assert.strictEqual(thinkingChunks.join(''), 'xyz');
+		assert.strictEqual(textChunks.join(''), '\ndone');
+	});
+
 	test('Should NOT match <think> tag after text has been emitted', () => {
 		const textChunks: string[] = [];
 		const thinkingChunks: string[] = [];
@@ -920,6 +962,56 @@ suite('OpenAIClient streamChatCompletion empty-stream and message tool_calls han
 		);
 
 		assert.strictEqual(thinking.join(''), 'abc');
+		assert.strictEqual(calls.length, 1);
+		assert.strictEqual(calls[0].stream, true);
+	});
+
+	test('Should suppress reasoning_content when suppressChainOfThought is enabled and not fall back', async () => {
+		const config: OpenAIConfig = {
+			apiEndpoint: 'https://example.com/v1',
+			apiKey: 'test-key'
+		};
+
+		const client = new OpenAIClient(config);
+		const thinking: string[] = [];
+		const calls: any[] = [];
+
+		const streamWithReasoningOnly = async function* () {
+			yield {
+				choices: [
+					{
+						delta: { reasoning_content: 'abc' },
+						finish_reason: 'stop'
+					}
+				]
+			};
+		};
+
+		(client as any).client = {
+			chat: {
+				completions: {
+					create: async (opts: any) => {
+						calls.push(opts);
+						if (opts.stream === true) {
+							return streamWithReasoningOnly();
+						}
+						throw new Error('Should not fall back to non-streaming');
+					}
+				}
+			}
+		};
+
+		await client.streamChatCompletion(
+			[{ role: 'user', content: 'x' }],
+			'minimax-m2.1',
+			{
+				onThinkingChunk: (c) => thinking.push(c),
+				suppressChainOfThought: true,
+				maxTokens: 128
+			}
+		);
+
+		assert.strictEqual(thinking.join(''), '');
 		assert.strictEqual(calls.length, 1);
 		assert.strictEqual(calls[0].stream, true);
 	});
