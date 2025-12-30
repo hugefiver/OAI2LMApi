@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2025-12-30
+
+### Added
+
+- Add `oai2lmapi.suppressChainOfThought` option to strip leading `<think>...</think>` blocks and avoid forwarding `reasoning_content`/`reasoning`/`thinking` fields, with per-model overrides.
+- Add automated model metadata update agent docs and provider-priority guidance for maintainers.
+
+### Changed
+
+- Expand firewall allowlist for model metadata sources used by maintenance workflows.
+- Update README with VS Code Marketplace installation instructions.
+
 ## [0.2.5] - 2025-12-29
 
 ### Added
