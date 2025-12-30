@@ -208,9 +208,10 @@ function getPlaceholder(paramName: string, type?: string): string {
  * 
  * @param text - The model response text that may contain XML tool calls
  * @param availableTools - List of available tool names to look for
+ * @param options - Optional parsing options
  * @returns Array of parsed tool calls with their names and arguments
  */
-export function parseXmlToolCalls(text: string, availableTools: string[]): ParsedToolCall[] {
+export function parseXmlToolCalls(text: string, availableTools: string[], options: XmlToolParseOptions = {}): ParsedToolCall[] {
     const toolCalls: ParsedToolCall[] = [];
     
     // Pre-compute regex patterns for all tools for efficiency
@@ -224,7 +225,7 @@ export function parseXmlToolCalls(text: string, availableTools: string[]): Parse
         
         while ((match = regex.exec(text)) !== null) {
             const content = match[1];
-            const args = parseXmlParameters(content);
+            const args = parseXmlParameters(content, options);
             
             // Extract callId if provided by the model, otherwise generate one
             let callId: string;
@@ -250,9 +251,13 @@ export function parseXmlToolCalls(text: string, availableTools: string[]): Parse
 /**
  * Parses XML parameters from the content inside a tool tag.
  * Note: This simple regex does not support nested tags with the same name.
+ * 
+ * @param content - The content inside a tool tag to parse
+ * @param options - Optional parsing options
  */
-function parseXmlParameters(content: string): Record<string, unknown> {
+function parseXmlParameters(content: string, options: XmlToolParseOptions = {}): Record<string, unknown> {
     const args: Record<string, unknown> = {};
+    const trimWhitespace = options.trimParameterWhitespace ?? false;
     
     // Match parameter tags: <param_name>value</param_name>
     // Note: This regex uses a backreference (\1) to match closing tags.
@@ -263,7 +268,7 @@ function parseXmlParameters(content: string): Record<string, unknown> {
     
     while ((match = paramRegex.exec(content)) !== null) {
         const paramName = match[1];
-        const paramValue = match[2];
+        const paramValue = trimWhitespace ? match[2].trim() : match[2];
         
         // Skip malformed nested parameters with the same name to avoid incorrect parsing
         // e.g. <param><param>value</param></param>
@@ -375,6 +380,17 @@ export function formatToolResultAsText(toolName: string, result: string): string
 }
 
 /**
+ * Options for XML tool call parsing.
+ */
+export interface XmlToolParseOptions {
+    /**
+     * When true, trims leading/trailing whitespace from parameter values.
+     * Default is false (whitespace is preserved).
+     */
+    trimParameterWhitespace?: boolean;
+}
+
+/**
  * Parsed tool call result
  */
 export interface ParsedToolCall {
@@ -396,14 +412,17 @@ export class XmlToolCallStreamParser {
     private readonly availableTools: string[];
     private readonly emittedToolCallIds = new Set<string>();
     private readonly toolPatterns: Array<{ name: string; regex: RegExp }>;
+    private readonly options: XmlToolParseOptions;
     
     /**
      * Creates a new streaming XML tool call parser.
      * 
      * @param availableTools - List of available tool names to look for
+     * @param options - Optional parsing options
      */
-    constructor(availableTools: string[]) {
+    constructor(availableTools: string[], options: XmlToolParseOptions = {}) {
         this.availableTools = availableTools;
+        this.options = options;
         // Pre-compile regex patterns for each tool
         this.toolPatterns = availableTools.map(toolName => ({
             name: toolName,
@@ -469,7 +488,7 @@ export class XmlToolCallStreamParser {
             
             while ((match = globalRegex.exec(this.buffer)) !== null) {
                 const content = match[1];
-                const args = parseXmlParameters(content);
+                const args = parseXmlParameters(content, this.options);
                 
                 // Extract callId if provided by the model, otherwise generate one
                 let callId: string;

@@ -28,6 +28,12 @@ export interface ModelOverrideConfig {
      * See `oai2lmapi.suppressChainOfThought` for exact behavior.
      */
     suppressChainOfThought?: boolean;
+
+    /**
+     * When true, trims leading/trailing whitespace from XML tool call parameter values.
+     * Default is false (whitespace is preserved).
+     */
+    trimXmlToolParameterWhitespace?: boolean;
 }
 
 /**
