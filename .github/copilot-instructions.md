@@ -229,14 +229,47 @@ Runs on version tags (v*). Publishes to VS Code Marketplace.
 
 # Model Sync Rule
 
-When adding new models to `src/modelMetadata.ts`, you must also check if they are available in `openrouter_models.json`(fetch from `https://openrouter.ai/api/v1/models`).
-1.  **Read `openrouter_models.json`** to get the latest model list.
-2.  **Filter for high-capability models**: Prioritize models with tool calling (`tools` in `supported_parameters`), recent release dates, and large context windows.
-3.  **Update `src/modelMetadata.ts`**:
-    *   Add new `ModelFamilyPattern` entries for new model families.
-    *   Update existing patterns if model capabilities (context length, tool support) have changed.
-    *   Ensure `maxInputTokens`, `maxOutputTokens`, `supportsToolCalling`, and `supportsImageInput` are accurate based on the JSON data.
-4.  **Maintain Hierarchy**: Place more specific patterns (e.g., `gpt-4.1-preview`) before general ones (e.g., `gpt-4`) in the `subPatterns` array or the main list.
+When adding new models to `src/modelMetadata.ts`, follow these guidelines:
+
+## Primary Data Source
+
+Fetch model data from `https://models.dev/api.json`. This aggregated source contains information from multiple providers.
+
+## Provider Priority
+
+**Always prefer official provider data over aggregator data:**
+
+| Model Family | Preferred Provider | Fallback |
+|-------------|-------------------|----------|
+| GPT / o1-o4 / Codex | `openai` | `openrouter` |
+| Claude | `anthropic` | `openrouter` |
+| Gemini / Gemma | `google-vertex` / `google-ai-studio` | `openrouter` |
+| Qwen / Qwen3 | `qwen` / `alibaba` | `openrouter` |
+| Kimi | `moonshot` | `openrouter` |
+| DeepSeek | `deepseek` | `openrouter` |
+| Llama | `meta` / `together` | `openrouter` |
+| Mistral | `mistral` | `openrouter` |
+| Grok | `xai` | `openrouter` |
+| GLM | `zhipu` | `openrouter` |
+
+## Update Process
+
+1. **Fetch data** from `https://models.dev/api.json`
+2. **Filter for high-capability models**: Prioritize models with:
+   - Tool calling support (`supports_tools: true`)
+   - Recent release dates (2024-2025)
+   - Large context windows (≥32K tokens)
+3. **Update `src/modelMetadata.ts`**:
+   - Add new `ModelFamilyPattern` entries for new model families
+   - Update existing patterns if capabilities have changed
+   - Ensure `maxInputTokens`, `maxOutputTokens`, `supportsToolCalling`, `supportsImageInput` are accurate
+4. **Optimize patterns**: Use minimal patterns - consolidate models with identical parameters
+5. **Maintain hierarchy**: Place specific patterns before general ones in `subPatterns`
+
+## Copilot Agent
+
+For automated updates, refer to the detailed agent instructions at:
+`.github/agents/update-model-metadata.agent.md`
 
 ## Validation Checklist
 

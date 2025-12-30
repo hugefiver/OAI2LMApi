@@ -7,3 +7,6 @@ allowed-hosts:
   - "update.code.visualstudio.com"
   # Azure CDN for VSCode binaries
   - "*.vo.msecnd.net"
+  # Model metadata data sources for update-model-metadata agent
+  - "models.dev"
+  - "openrouter.ai"
