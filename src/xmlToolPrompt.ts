@@ -263,7 +263,7 @@ function parseXmlParameters(content: string): Record<string, unknown> {
     
     while ((match = paramRegex.exec(content)) !== null) {
         const paramName = match[1];
-        const paramValue = match[2].trim();
+        const paramValue = match[2];
         
         // Skip malformed nested parameters with the same name to avoid incorrect parsing
         // e.g. <param><param>value</param></param>
