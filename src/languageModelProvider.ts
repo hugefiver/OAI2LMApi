@@ -256,8 +256,9 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const globalSuppressChainOfThought = config.get<boolean>('suppressChainOfThought', false);
         const suppressChainOfThought = modelOverride?.suppressChainOfThought ?? globalSuppressChainOfThought;
 
-        // XML tool parameter whitespace handling
-        const trimXmlToolParameterWhitespace = modelOverride?.trimXmlToolParameterWhitespace ?? false;
+        // XML tool parameter whitespace handling: per-model override takes precedence over global.
+        const globalTrimXmlToolParameterWhitespace = config.get<boolean>('trimXmlToolParameterWhitespace', false);
+        const trimXmlToolParameterWhitespace = modelOverride?.trimXmlToolParameterWhitespace ?? globalTrimXmlToolParameterWhitespace;
         const xmlParseOptions: XmlToolParseOptions = {
             trimParameterWhitespace: trimXmlToolParameterWhitespace
         };

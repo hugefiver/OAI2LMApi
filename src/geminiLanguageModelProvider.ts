@@ -293,8 +293,10 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         const modelOverride = getModelOverride(model.modelId);
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
-        // XML tool parameter whitespace handling
-        const trimXmlToolParameterWhitespace = modelOverride?.trimXmlToolParameterWhitespace ?? false;
+        // XML tool parameter whitespace handling: per-model override takes precedence over global.
+        const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const globalTrimXmlToolParameterWhitespace = config.get<boolean>('trimXmlToolParameterWhitespace', false);
+        const trimXmlToolParameterWhitespace = modelOverride?.trimXmlToolParameterWhitespace ?? globalTrimXmlToolParameterWhitespace;
         const xmlParseOptions: XmlToolParseOptions = {
             trimParameterWhitespace: trimXmlToolParameterWhitespace
         };
