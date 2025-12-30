@@ -13,7 +13,7 @@ import {
 import { GEMINI_API_KEY_SECRET_KEY, GEMINI_CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata } from './modelMetadata';
 import { stripSchemaField } from './schemaUtils';
-import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
+import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser, XmlToolParseOptions } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
 import { logger } from './logger';
 
@@ -293,6 +293,14 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         const modelOverride = getModelOverride(model.modelId);
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
+        // XML tool parameter whitespace handling: per-model override takes precedence over global.
+        const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const globalTrimXmlToolParameterWhitespace = config.get<boolean>('trimXmlToolParameterWhitespace', false);
+        const trimXmlToolParameterWhitespace = modelOverride?.trimXmlToolParameterWhitespace ?? globalTrimXmlToolParameterWhitespace;
+        const xmlParseOptions: XmlToolParseOptions = {
+            trimParameterWhitespace: trimXmlToolParameterWhitespace
+        };
+
         // Convert VSCode messages to Gemini format
         const { contents, systemInstruction, toolCallNames } = this.convertMessages(messages, usePromptBasedToolCalling);
 
@@ -356,7 +364,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
         // For prompt-based tool calling, use streaming parser to detect tool calls incrementally
         const streamParser = usePromptBasedToolCalling && availableToolNames.length > 0 
-            ? new XmlToolCallStreamParser(availableToolNames) 
+            ? new XmlToolCallStreamParser(availableToolNames, xmlParseOptions) 
             : null;
 
         await this.client.streamChatCompletion(

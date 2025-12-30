@@ -87,6 +87,11 @@
           "default": false,
           "description": "Suppress chain-of-thought transmission: strips leading <think>...</think> blocks and does not forward reasoning_content/reasoning/thinking fields. <thinking>...</thinking> blocks are still forwarded as thinking."
         },
+        "oai2lmapi.trimXmlToolParameterWhitespace": {
+          "type": "boolean",
+          "default": false,
+          "description": "Trim leading/trailing whitespace from XML tool call parameter values. Default is false (whitespace is preserved)."
+        },
         "oai2lmapi.enableGeminiChannel": {
           "type": "boolean",
           "default": false,
@@ -135,6 +140,10 @@
               "suppressChainOfThought": {
                 "type": "boolean",
                 "description": "Override oai2lmapi.suppressChainOfThought for matching models. When true, strips leading <think>...</think> blocks and does not forward reasoning_content/reasoning/thinking fields. <thinking>...</thinking> blocks are still forwarded as thinking."
+              },
+              "trimXmlToolParameterWhitespace": {
+                "type": "boolean",
+                "description": "When true, trims leading/trailing whitespace from XML tool call parameter values. Default is false (whitespace is preserved)."
               }
             }
           }

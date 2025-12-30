@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { OpenAIClient, ChatMessage, APIModelInfo, ToolDefinition, ToolChoice, CompletedToolCall } from './openaiClient';
 import { API_KEY_SECRET_KEY, CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, supportsToolCalling, ModelMetadata } from './modelMetadata';
-import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser } from './xmlToolPrompt';
+import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser, XmlToolParseOptions } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
 import { logger } from './logger';
 
@@ -256,6 +256,13 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const globalSuppressChainOfThought = config.get<boolean>('suppressChainOfThought', false);
         const suppressChainOfThought = modelOverride?.suppressChainOfThought ?? globalSuppressChainOfThought;
 
+        // XML tool parameter whitespace handling: per-model override takes precedence over global.
+        const globalTrimXmlToolParameterWhitespace = config.get<boolean>('trimXmlToolParameterWhitespace', false);
+        const trimXmlToolParameterWhitespace = modelOverride?.trimXmlToolParameterWhitespace ?? globalTrimXmlToolParameterWhitespace;
+        const xmlParseOptions: XmlToolParseOptions = {
+            trimParameterWhitespace: trimXmlToolParameterWhitespace
+        };
+
         // Convert VSCode messages to OpenAI format
         let chatMessages: ChatMessage[] = this.convertMessages(messages, usePromptBasedToolCalling);
 
@@ -314,7 +321,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
 
         // For prompt-based tool calling, use streaming parser to detect tool calls incrementally
         const streamParser = usePromptBasedToolCalling && availableToolNames.length > 0 
-            ? new XmlToolCallStreamParser(availableToolNames) 
+            ? new XmlToolCallStreamParser(availableToolNames, xmlParseOptions) 
             : null;
 
         // Stream the response

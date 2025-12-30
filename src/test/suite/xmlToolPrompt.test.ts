@@ -231,6 +231,30 @@ Line 3</content></write_file>`;
             assert.strictEqual(result[0].arguments.content, 'Line 1\nLine 2\nLine 3');
         });
 
+        test('Should preserve leading and trailing whitespace in parameter values', () => {
+            const text = '<write_file><content>  indented text\n\n</content></write_file>';
+            const result = parseXmlToolCalls(text, ['write_file']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.content, '  indented text\n\n');
+        });
+
+        test('Should preserve leading empty lines in parameter values', () => {
+            const text = '<write_file><content>\n\nLine after empty lines</content></write_file>';
+            const result = parseXmlToolCalls(text, ['write_file']);
+            
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.content, '\n\nLine after empty lines');
+        });
+
+        test('Should trim whitespace when trimParameterWhitespace option is enabled', () => {
+            const text = '<write_file><content>  indented text\n\n</content></write_file>';
+            const result = parseXmlToolCalls(text, ['write_file'], { trimParameterWhitespace: true });
+            
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.content, 'indented text');
+        });
+
         test('Should handle special characters in tool names', () => {
             const text = '<my-tool><param>value</param></my-tool>';
             const result = parseXmlToolCalls(text, ['my-tool']);
@@ -455,6 +479,22 @@ Line 3</content></write_file>`;
             parser.addChunk(' After');
             
             assert.strictEqual(parser.getNonToolCallText(), 'Before  After');
+        });
+
+        test('Should preserve whitespace in parameter values by default', () => {
+            const parser = new XmlToolCallStreamParser(['write_file']);
+            
+            const result = parser.addChunk('<write_file><content>  indented\n\n</content></write_file>');
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.content, '  indented\n\n');
+        });
+
+        test('Should trim whitespace when option is enabled', () => {
+            const parser = new XmlToolCallStreamParser(['write_file'], { trimParameterWhitespace: true });
+            
+            const result = parser.addChunk('<write_file><content>  indented\n\n</content></write_file>');
+            assert.strictEqual(result.length, 1);
+            assert.strictEqual(result[0].arguments.content, 'indented');
         });
         
     });
