@@ -9,7 +9,7 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      github-actions:
+      all-github-actions:
         patterns:
           - "*"
   - package-ecosystem: "npm" # Handles pnpm-lock.yaml
