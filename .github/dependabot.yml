@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      all-github-actions:
+        patterns:
+          - "*"
+  - package-ecosystem: "npm" # Handles pnpm-lock.yaml
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    versioning-strategy: "lockfile-only"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      types:
+        patterns:
+          - "@types/*"
