@@ -48,7 +48,7 @@ jobs:
         run: pnpm run lint
 
       - name: Compile TypeScript
-        run: pnpm run compile
+        run: pnpm run build
 
       - name: Run tests
         run: xvfb-run -a pnpm test

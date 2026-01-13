@@ -44,15 +44,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Compile TypeScript
-        run: pnpm run compile
+      - name: Build
+        run: pnpm run build
 
       - name: Package extension
-        run: pnpm run package
+        run: pnpm run vscode:package
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v6
         with:
           name: vscode-extension
-          path: '*.vsix'
+          path: packages/vscode-extension/*.vsix
           retention-days: 30

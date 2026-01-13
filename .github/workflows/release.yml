@@ -46,18 +46,18 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./packages/vscode-extension/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using release version $VERSION"
 
       - name: Package extension
-        run: pnpm run package
+        run: pnpm run vscode:package
 
       - name: Get VSIX filename
         id: vsix
         shell: bash
         run: |
-          VSIX_FILE=$(ls *.vsix)
+          VSIX_FILE=$(ls packages/vscode-extension/*.vsix | head -n 1)
           echo "filename=$VSIX_FILE" >> $GITHUB_OUTPUT
 
       - name: Publish to VS Code Marketplace

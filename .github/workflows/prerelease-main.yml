@@ -46,7 +46,7 @@ jobs:
         run: pnpm run lint
 
       - name: Compile TypeScript
-        run: pnpm run compile
+        run: pnpm run build
 
       - name: Run tests
         run: xvfb-run -a pnpm test
@@ -59,6 +59,7 @@ jobs:
       - name: Get and adjust version for prerelease
         id: version
         shell: bash
+        working-directory: packages/vscode-extension
         run: |
           MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
           MINOR=$(node -p "require('./package.json').version.split('.')[1]")
@@ -76,14 +77,16 @@ jobs:
 
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
+        working-directory: packages/vscode-extension
         run: pnpm exec vsce package --no-dependencies --pre-release
 
       - name: Get VSIX filename
         id: vsix
         shell: bash
+        working-directory: packages/vscode-extension
         run: |
-          VSIX_FILE=$(ls *.vsix)
-          echo "filename=$VSIX_FILE" >> $GITHUB_OUTPUT
+          VSIX_FILE=$(ls *.vsix | head -n 1)
+          echo "filename=packages/vscode-extension/$VSIX_FILE" >> $GITHUB_OUTPUT
 
       - name: Publish to VS Code Marketplace (Preview)
         uses: HaaLeo/publish-vscode-extension@v2

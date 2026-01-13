@@ -1,186 +1,26 @@
 {
-  "name": "oai2lmapi",
-  "displayName": "OpenAI to Language Model API Bridge",
-  "description": "Connect OpenAI-compatible APIs to VSCode's Language Model API for Copilot",
+  "name": "@oai2lmapi/root",
   "version": "0.2.6",
-  "publisher": "oai2lmapi",
+  "private": true,
+  "description": "OpenAI-compatible API bridge for VSCode and OpenCode",
   "repository": {
     "type": "git",
     "url": "https://github.com/hugefiver/OAI2LMApi.git"
   },
-  "engines": {
-    "vscode": "^1.107.0"
-  },
-  "categories": [
-    "AI",
-    "Chat"
-  ],
-  "activationEvents": [
-    "*"
-  ],
-  "main": "./out/extension.js",
-  "contributes": {
-    "languageModelChatProviders": [
-      {
-        "vendor": "oai2lmapi",
-        "displayName": "OpenAI to Language Model API Bridge",
-        "managementCommand": "oai2lmapi.manage"
-      },
-      {
-        "vendor": "gemini2lmapi",
-        "displayName": "Gemini to Language Model API Bridge",
-        "managementCommand": "oai2lmapi.manage"
-      }
-    ],
-    "commands": [
-      {
-        "command": "oai2lmapi.refreshModels",
-        "title": "OAI2LMApi: Refresh Models"
-      },
-      {
-        "command": "oai2lmapi.manage",
-        "title": "OAI2LMApi: Manage Provider Settings"
-      },
-      {
-        "command": "oai2lmapi.setApiKey",
-        "title": "OAI2LMApi: Set API Key"
-      },
-      {
-        "command": "oai2lmapi.clearApiKey",
-        "title": "OAI2LMApi: Clear API Key"
-      },
-      {
-        "command": "oai2lmapi.setGeminiApiKey",
-        "title": "OAI2LMApi: Set Gemini API Key"
-      },
-      {
-        "command": "oai2lmapi.clearGeminiApiKey",
-        "title": "OAI2LMApi: Clear Gemini API Key"
-      }
-    ],
-    "configuration": {
-      "title": "OpenAI to Language Model API",
-      "properties": {
-        "oai2lmapi.apiEndpoint": {
-          "type": "string",
-          "default": "https://api.openai.com/v1",
-          "description": "OpenAI-compatible API endpoint URL"
-        },
-        "oai2lmapi.apiKey": {
-          "type": "string",
-          "default": "",
-          "description": "DEPRECATED: API key is now stored securely. Use the 'OAI2LMApi: Set API Key' command instead. Any value here will be migrated automatically.",
-          "deprecationMessage": "API key is now stored securely using VSCode's SecretStorage. Use the 'OAI2LMApi: Set API Key' command to set your API key."
-        },
-        "oai2lmapi.autoLoadModels": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically load models from API on startup"
-        },
-        "oai2lmapi.showModelsWithoutToolCalling": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show models that do not support tool/function calling. By default, only models with tool calling support are displayed."
-        },
-        "oai2lmapi.suppressChainOfThought": {
-          "type": "boolean",
-          "default": false,
-          "description": "Suppress chain-of-thought transmission: strips leading <think>...</think> blocks and does not forward reasoning_content/reasoning/thinking fields. <thinking>...</thinking> blocks are still forwarded as thinking."
-        },
-        "oai2lmapi.trimXmlToolParameterWhitespace": {
-          "type": "boolean",
-          "default": false,
-          "description": "Trim leading/trailing whitespace from XML tool call parameter values. Default is false (whitespace is preserved)."
-        },
-        "oai2lmapi.enableGeminiChannel": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable the Gemini channel provider. When disabled, only the OpenAI-compatible provider is active."
-        },
-        "oai2lmapi.geminiApiEndpoint": {
-          "type": "string",
-          "default": "https://generativelanguage.googleapis.com",
-          "description": "Google Gemini API endpoint URL (without version suffix)"
-        },
-        "oai2lmapi.modelOverrides": {
-          "type": "object",
-          "default": {},
-          "description": "Per-model configuration overrides. Keys are model name patterns (supports wildcards like 'gemini-*'), values are objects with optional: maxInputTokens, maxOutputTokens, supportsToolCalling, supportsImageInput, temperature, thinkingLevel (number for budget, or 'low'/'medium'/'high'/'auto'), usePromptBasedToolCalling (boolean to use XML-based prompt engineering for tool calling), suppressChainOfThought (boolean to suppress chain-of-thought transmission for matching models).",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "maxInputTokens": {
-                "type": "number",
-                "description": "Override max input tokens for matching models"
-              },
-              "maxOutputTokens": {
-                "type": "number",
-                "description": "Override max output tokens for matching models"
-              },
-              "supportsToolCalling": {
-                "type": "boolean",
-                "description": "Override tool calling support for matching models"
-              },
-              "supportsImageInput": {
-                "type": "boolean",
-                "description": "Override image input support for matching models"
-              },
-              "temperature": {
-                "type": "number",
-                "description": "Default temperature for matching models"
-              },
-              "thinkingLevel": {
-                "type": ["string", "number"],
-                "description": "Thinking level: number for token budget, or 'low'/'medium'/'high'/'auto'/'none'"
-              },
-              "usePromptBasedToolCalling": {
-                "type": "boolean",
-                "description": "When enabled, tools are converted to XML-format instructions in the system prompt instead of using native function calling. Useful for models that don't support native tool calling."
-              },
-              "suppressChainOfThought": {
-                "type": "boolean",
-                "description": "Override oai2lmapi.suppressChainOfThought for matching models. When true, strips leading <think>...</think> blocks and does not forward reasoning_content/reasoning/thinking fields. <thinking>...</thinking> blocks are still forwarded as thinking."
-              },
-              "trimXmlToolParameterWhitespace": {
-                "type": "boolean",
-                "description": "When true, trims leading/trailing whitespace from XML tool call parameter values. Default is false (whitespace is preserved)."
-              }
-            }
-          }
-        }
-      }
-    }
-  },
   "scripts": {
-    "vscode:prepublish": "pnpm run check-types && node esbuild.js --production",
-    "compile": "pnpm run check-types && node esbuild.js",
-    "compile:tests": "tsc -p ./",
-    "check-types": "tsc --noEmit",
-    "watch": "npm-run-all -p watch:*",
-    "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "pretest": "pnpm run compile:tests && pnpm run lint",
-    "lint": "eslint src",
-    "test": "node ./out/test/runTest.js",
-    "package": "vsce package --no-dependencies"
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r run clean",
+    "vscode:compile": "pnpm --filter @oai2lmapi/vscode-extension run compile",
+    "vscode:package": "pnpm --filter @oai2lmapi/vscode-extension run package",
+    "opencode:build": "pnpm --filter @oai2lmapi/opencode-provider run build"
   },
   "devDependencies": {
-    "@types/glob": "^9.0.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.3",
-    "@types/vscode": "^1.107.0",
-    "@typescript-eslint/eslint-plugin": "^8.50.0",
-    "@typescript-eslint/parser": "^8.50.0",
-    "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.7.1",
-    "esbuild": "^0.27.2",
-    "eslint": "^9.39.2",
-    "glob": "^13.0.0",
-    "mocha": "^11.7.5",
-    "npm-run-all": "^4.1.5",
     "typescript": "^5.9.3"
   },
-  "dependencies": {
-    "openai": "^6.15.0"
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=10.0.0"
   }
 }

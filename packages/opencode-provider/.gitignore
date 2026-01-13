@@ -1,0 +1,7 @@
+# @oai2lmapi/opencode-provider
+
+dist/
+node_modules/
+*.log
+*.tsbuildinfo
+.DS_Store
