@@ -6,6 +6,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { OAI2LMProviderSettings, ModelOverride, ModelMetadata } from './types.js';
 import { ModelDiscovery } from './modelDiscovery.js';
 import { findBestMatch } from './utils.js';
+import { createSettingsFromConfig } from './config.js';
 
 export class OAI2LMProvider {
   private baseProvider: ReturnType<typeof createOpenAICompatible>;
@@ -42,6 +43,22 @@ export class OAI2LMProvider {
         console.warn('Failed to auto-discover models:', err);
       });
     }
+  }
+
+  /**
+   * Create a provider from config file (oai2lm.json)
+   * 
+   * This factory method:
+   * 1. Loads config from ~/.local/share/opencode/oai2lm.json or ~/.config/opencode/oai2lm.json
+   * 2. Applies explicit overrides on top of config
+   * 3. Creates and returns a configured provider
+   * 
+   * @param overrides - Optional settings to override config file values
+   * @throws Error if API key is not found in env, config, or overrides
+   */
+  static fromConfig(overrides?: Partial<OAI2LMProviderSettings>): OAI2LMProvider {
+    const settings = createSettingsFromConfig(overrides);
+    return new OAI2LMProvider(settings);
   }
 
   /**
@@ -102,4 +119,21 @@ export class OAI2LMProvider {
  */
 export function createOAI2LMProvider(settings: OAI2LMProviderSettings): OAI2LMProvider {
   return new OAI2LMProvider(settings);
+}
+
+/**
+ * Factory function to create a provider from config file
+ * 
+ * This is a convenience function that:
+ * 1. Loads config from ~/.local/share/opencode/oai2lm.json
+ * 2. Falls back to ~/.config/opencode/oai2lm.json
+ * 3. Applies explicit overrides on top
+ * 
+ * @param overrides - Optional settings to override config file values
+ * @throws Error if API key is not found
+ */
+export function createOAI2LMProviderFromConfig(
+  overrides?: Partial<OAI2LMProviderSettings>
+): OAI2LMProvider {
+  return OAI2LMProvider.fromConfig(overrides);
 }

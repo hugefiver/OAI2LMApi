@@ -220,6 +220,63 @@ interface ModelOverride {
 5. **Request Translation**: Converts AI SDK requests to OpenAI-compatible format
 6. **Response Parsing**: Handles special formats like `<think>` tags and XML tool calls
 
+## Configuration with OpenCode
+
+This provider integrates with OpenCode's data directory for configuration. Create a config file at:
+
+- `~/.local/share/opencode/oai2lm.json` (primary location)
+- `~/.config/opencode/oai2lm.json` (alternative location)
+
+### Config File Format
+
+```json
+{
+  "apiKey": "your-api-key",
+  "baseURL": "https://api.example.com/v1",
+  "name": "my-provider",
+  "autoDiscoverModels": true,
+  "modelOverrides": {
+    "deepseek-*": {
+      "usePromptBasedToolCalling": true,
+      "suppressChainOfThought": true
+    },
+    "gpt-4-vision": {
+      "supportsImageInput": true,
+      "maxInputTokens": 128000
+    }
+  }
+}
+```
+
+### Using Config File
+
+```typescript
+import { createOAI2LMProviderFromConfig, OAI2LMProvider } from '@oai2lmapi/opencode-provider';
+
+// Create provider from config file
+const provider = createOAI2LMProviderFromConfig();
+
+// Or use the static method
+const provider2 = OAI2LMProvider.fromConfig();
+
+// Override specific settings
+const provider3 = createOAI2LMProviderFromConfig({
+  baseURL: 'https://api.custom.com/v1', // Override base URL
+});
+```
+
+### Environment Variables
+
+You can also configure via environment variables:
+
+- `OAI2LM_API_KEY` - API key for authentication
+- `OAI2LM_BASE_URL` - Base URL for API calls
+
+Priority order (highest to lowest):
+1. Explicit settings passed to function
+2. Environment variables
+3. Config file values
+
 ## Integration with OpenCode
 
 This provider is designed to work seamlessly with OpenCode's configuration system:
