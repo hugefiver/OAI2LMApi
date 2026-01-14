@@ -12,7 +12,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, isAbsolute } from 'node:path';
 import { OAI2LMProviderSettings, ModelOverride } from './types.js';
 
 /**
@@ -25,7 +25,14 @@ export interface OAI2LMConfig {
   baseURL?: string;
   /** Provider name (defaults to 'oai2lm') */
   name?: string;
-  /** Custom headers */
+  /**
+   * Custom headers applied to all requests.
+   * 
+   * When combined with override headers (e.g. from model overrides or
+   * runtime settings), config file headers are applied first and then
+   * override headers are spread on top. This means any override header
+   * with the same key will replace the corresponding config file value.
+   */
   headers?: Record<string, string>;
   /** Auto-discover models on initialization (default: true) */
   autoDiscoverModels?: boolean;
@@ -36,10 +43,11 @@ export interface OAI2LMConfig {
 /**
  * Get the OpenCode data directory path
  * Follows XDG Base Directory Specification
+ * Note: XDG spec requires absolute paths; relative paths are ignored
  */
 export function getDataDir(): string {
   const xdgDataHome = process.env['XDG_DATA_HOME'];
-  if (xdgDataHome) {
+  if (xdgDataHome && isAbsolute(xdgDataHome)) {
     return join(xdgDataHome, 'opencode');
   }
   return join(homedir(), '.local', 'share', 'opencode');
@@ -48,10 +56,11 @@ export function getDataDir(): string {
 /**
  * Get the OpenCode config directory path
  * Follows XDG Base Directory Specification
+ * Note: XDG spec requires absolute paths; relative paths are ignored
  */
 export function getConfigDir(): string {
   const xdgConfigHome = process.env['XDG_CONFIG_HOME'];
-  if (xdgConfigHome) {
+  if (xdgConfigHome && isAbsolute(xdgConfigHome)) {
     return join(xdgConfigHome, 'opencode');
   }
   return join(homedir(), '.config', 'opencode');
@@ -73,7 +82,12 @@ function readJsonFile<T>(filepath: string): T | undefined {
     const content = readFileSync(filepath, 'utf-8');
     return JSON.parse(content) as T;
   } catch (error) {
-    console.warn(`Failed to read config file ${filepath}:`, error);
+    if (error instanceof SyntaxError) {
+      const message = (error as SyntaxError).message ?? 'Unknown JSON parse error';
+      console.warn(`Failed to parse JSON in config file ${filepath}: ${message}`);
+    } else {
+      console.warn(`Failed to read config file ${filepath}:`, error);
+    }
     return undefined;
   }
 }
@@ -169,7 +183,7 @@ export function createSettingsFromConfig(
   if (!apiKey) {
     throw new Error(
       'API key not found. Please set OAI2LM_API_KEY environment variable, ' +
-      'or add apiKey to ~/.local/share/opencode/oai2lm.json, ' +
+      'or add apiKey to ' + getConfigFilePath() + ', ' +
       'or pass apiKey in settings.'
     );
   }

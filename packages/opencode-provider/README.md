@@ -224,8 +224,10 @@ interface ModelOverride {
 
 This provider integrates with OpenCode's data directory for configuration. Create a config file at:
 
-- `~/.local/share/opencode/oai2lm.json` (primary location)
-- `~/.config/opencode/oai2lm.json` (alternative location)
+- `~/.local/share/opencode/oai2lm.json` (primary location, checked first)
+- `~/.config/opencode/oai2lm.json` (alternative location, checked second as a fallback)
+
+The provider searches these locations in the order shown and uses the first config file it finds, so the data directory location takes precedence if both files exist.
 
 ### Config File Format
 
