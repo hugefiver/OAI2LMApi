@@ -130,7 +130,7 @@ export function resolveApiKey(
   explicitKey?: string,
   config?: OAI2LMConfig
 ): string | undefined {
-  if (explicitKey) {
+  if (typeof explicitKey === 'string' && explicitKey.trim().length > 0) {
     return explicitKey;
   }
   

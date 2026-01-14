@@ -222,12 +222,12 @@ interface ModelOverride {
 
 ## Configuration with OpenCode
 
-This provider integrates with OpenCode's data directory for configuration. Create a config file at:
+This provider integrates with OpenCode's data directory for configuration. By default (following the XDG base directory spec), it looks for a config file at:
 
-- `~/.local/share/opencode/oai2lm.json` (primary location, checked first)
-- `~/.config/opencode/oai2lm.json` (alternative location, checked second as a fallback)
+- `~/.local/share/opencode/oai2lm.json` (primary location, checked first — corresponds to `$XDG_DATA_HOME/opencode/oai2lm.json` with the common default of `~/.local/share`)
+- `~/.config/opencode/oai2lm.json` (alternative location, checked second as a fallback — corresponds to `$XDG_CONFIG_HOME/opencode/oai2lm.json` with the common default of `~/.config`)
 
-The provider searches these locations in the order shown and uses the first config file it finds, so the data directory location takes precedence if both files exist.
+If you are on a non-standard system or use custom XDG paths, you can override these locations by setting `XDG_DATA_HOME` and/or `XDG_CONFIG_HOME`. The provider will then resolve the config file as `$XDG_DATA_HOME/opencode/oai2lm.json` and `$XDG_CONFIG_HOME/opencode/oai2lm.json` respectively, and it will still search these locations in the order shown, using the first config file it finds (so the data directory location takes precedence if both files exist).
 
 ### Config File Format
 
