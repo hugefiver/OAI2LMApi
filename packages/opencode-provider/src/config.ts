@@ -83,7 +83,7 @@ function readJsonFile<T>(filepath: string): T | undefined {
     return JSON.parse(content) as T;
   } catch (error) {
     if (error instanceof SyntaxError) {
-      const message = (error as SyntaxError).message ?? 'Unknown JSON parse error';
+      const message = error.message;
       console.warn(`Failed to parse JSON in config file ${filepath}: ${message}`);
     } else {
       console.warn(`Failed to read config file ${filepath}:`, error);
@@ -95,11 +95,12 @@ function readJsonFile<T>(filepath: string): T | undefined {
 /**
  * Load configuration from oai2lm.json
  * 
- * Search order:
- * 1. ~/.local/share/opencode/oai2lm.json
- * 2. ~/.config/opencode/oai2lm.json
+ * Search order (by precedence):
+ * 1. ~/.local/share/opencode/oai2lm.json (data directory)
+ * 2. ~/.config/opencode/oai2lm.json (config directory)
  * 
- * First found file wins.
+ * The data directory location takes precedence over the config directory;
+ * the first readable file found in this order is used.
  */
 export function loadConfig(): OAI2LMConfig | undefined {
   const paths = [
@@ -134,7 +135,8 @@ export function resolveApiKey(
   }
   
   const envKey = process.env['OAI2LM_API_KEY'];
-  if (envKey) {
+  // Treat empty-string environment values as "not set" and fall back to config
+  if (typeof envKey === 'string' && envKey.trim() !== '') {
     return envKey;
   }
   
@@ -154,16 +156,23 @@ export function resolveBaseURL(
   explicitURL?: string,
   config?: OAI2LMConfig
 ): string {
-  if (explicitURL) {
+  // Explicit setting takes precedence if it is a non-empty string
+  if (typeof explicitURL === 'string' && explicitURL.trim().length > 0) {
     return explicitURL;
   }
-  
+
+  // Environment variable takes precedence over config if it is a non-empty string
   const envURL = process.env['OAI2LM_BASE_URL'];
-  if (envURL) {
+  if (typeof envURL === 'string' && envURL.trim().length > 0) {
     return envURL;
   }
-  
-  return config?.baseURL ?? 'https://api.openai.com/v1';
+
+  // Fall back to config baseURL if provided and non-empty, otherwise use default
+  if (typeof config?.baseURL === 'string' && config.baseURL.trim().length > 0) {
+    return config.baseURL;
+  }
+
+  return 'https://api.openai.com/v1';
 }
 
 /**
@@ -181,9 +190,11 @@ export function createSettingsFromConfig(
   
   const apiKey = resolveApiKey(overrides?.apiKey, config);
   if (!apiKey) {
+    const dataPath = join(getDataDir(), CONFIG_FILENAME);
+    const configPath = join(getConfigDir(), CONFIG_FILENAME);
     throw new Error(
       'API key not found. Please set OAI2LM_API_KEY environment variable, ' +
-      'or add apiKey to ' + getConfigFilePath() + ', ' +
+      'or add apiKey to ' + dataPath + ' or ' + configPath + ', ' +
       'or pass apiKey in settings.'
     );
   }
