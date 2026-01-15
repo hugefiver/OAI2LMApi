@@ -68,6 +68,14 @@ jobs:
             versionFromTag = versionFromTag.slice(2);
           }
 
+          const semverRegex = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+          if (!semverRegex.test(versionFromTag)) {
+            console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
+            console.error(`  Extracted version: "${versionFromTag}"`);
+            console.error('  Expected format: oc<major>.<minor>.<patch> (e.g., oc1.2.3)');
+            process.exit(1);
+          }
+
           const pkgPath = path.join(process.cwd(), 'packages', 'opencode-provider', 'package.json');
 
           let pkg;
@@ -96,13 +104,12 @@ jobs:
           console.log('Version check passed: tag version matches package.json version.');
           EOF
 
-      - name: Verify tag includes opencode-provider changes
+      - name: Verify tag contains opencode-provider package
         shell: bash
         run: |
           TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
-          CHANGED_FILES=$(git show --name-only --pretty='' "${TAG_REF}" | grep -E '^packages/opencode-provider/' || true)
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "Tag ${TAG_REF} does not include changes under packages/opencode-provider."
+          if ! git ls-tree -r --name-only "${TAG_REF}" | grep -q '^packages/opencode-provider/package.json$'; then
+            echo "Tag ${TAG_REF} does not contain packages/opencode-provider/package.json."
             exit 1
           fi
 

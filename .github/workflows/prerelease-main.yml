@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'packages/vscode-extension/**'
+      - '.github/workflows/prerelease-main.yml'
 
 jobs:
   prerelease:
