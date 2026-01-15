@@ -12,7 +12,7 @@ jobs:
   prerelease:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # npm-only publish; update if GitHub releases are added
 
     steps:
       - name: Checkout code
@@ -54,8 +54,9 @@ jobs:
         working-directory: packages/opencode-provider
         run: |
           BASE_VERSION=$(node -p "require('./package.json').version")
-          SUFFIX=$(($(date +%s) % 10000000))
-          VERSION="${BASE_VERSION}-prerelease.${SUFFIX}"
+          TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+          GIT_SHA_SHORT=${GITHUB_SHA::7}
+          VERSION="${BASE_VERSION}-prerelease.${TIMESTAMP}.${GIT_SHA_SHORT}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 

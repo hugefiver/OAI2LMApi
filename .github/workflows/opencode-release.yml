@@ -75,7 +75,7 @@ jobs:
           if (!semanticVersionPattern.test(versionFromTag)) {
             console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
             console.error(`  Extracted version: "${versionFromTag}"`);
-            console.error('  Expected format: oc<major>.<minor>.<patch> (e.g., oc1.2.3)');
+            console.error('  Expected format: oc<major>.<minor>.<patch>[-prerelease][+build] (e.g., oc1.2.3, oc1.2.3-rc.1, oc1.2.3+build.7)');
             process.exit(1);
           }
 
