@@ -131,13 +131,13 @@ export function resolveApiKey(
   config?: OAI2LMConfig
 ): string | undefined {
   if (typeof explicitKey === 'string' && explicitKey.trim().length > 0) {
-    return explicitKey;
+    return explicitKey.trim();
   }
   
   const envKey = process.env['OAI2LM_API_KEY'];
   // Treat empty-string environment values as "not set" and fall back to config
   if (typeof envKey === 'string' && envKey.trim() !== '') {
-    return envKey;
+    return envKey.trim();
   }
   
   return config?.apiKey;
@@ -158,18 +158,18 @@ export function resolveBaseURL(
 ): string {
   // Explicit setting takes precedence if it is a non-empty string
   if (typeof explicitURL === 'string' && explicitURL.trim().length > 0) {
-    return explicitURL;
+    return explicitURL.trim();
   }
 
   // Environment variable takes precedence over config if it is a non-empty string
   const envURL = process.env['OAI2LM_BASE_URL'];
   if (typeof envURL === 'string' && envURL.trim().length > 0) {
-    return envURL;
+    return envURL.trim();
   }
 
   // Fall back to config baseURL if provided and non-empty, otherwise use default
   if (typeof config?.baseURL === 'string' && config.baseURL.trim().length > 0) {
-    return config.baseURL;
+    return config.baseURL.trim();
   }
 
   return 'https://api.openai.com/v1';
