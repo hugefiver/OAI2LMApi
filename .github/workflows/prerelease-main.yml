@@ -45,13 +45,13 @@ jobs:
 
       # Run lint and tests before packaging
       - name: Run ESLint
-        run: pnpm run lint
+        run: pnpm --filter ./packages/vscode-extension run lint
 
       - name: Compile TypeScript
-        run: pnpm run build
+        run: pnpm --filter ./packages/vscode-extension run build
 
       - name: Run tests
-        run: xvfb-run -a pnpm test
+        run: xvfb-run -a pnpm --filter ./packages/vscode-extension run test
 
       # Get version from package.json for VS Code Marketplace prerelease
       # For pre-releases, use MAJOR.MINOR.X format where X = PATCH * 10^7 + SUFFIX (timestamp % 10^7).
