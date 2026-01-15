@@ -1,0 +1,129 @@
+name: OpenCode Provider - Release
+
+on:
+  push:
+    tags:
+      - 'oc*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      OPENCODE_PACKAGE_JSON_PATH: packages/opencode-provider/package.json
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter @oai2lmapi/opencode-provider run build
+
+      - name: Verify package version matches tag
+        run: |
+          node - << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const fullRef = process.env.GITHUB_REF || '';
+          const refName = process.env.GITHUB_REF_NAME || '';
+
+          const rawTag = fullRef.startsWith('refs/tags/')
+            ? fullRef.substring('refs/tags/'.length)
+            : refName || fullRef;
+
+          if (!rawTag) {
+            console.error('Unable to determine git tag from GITHUB_REF/GITHUB_REF_NAME.');
+            process.exit(1);
+          }
+
+          let versionFromTag = rawTag;
+          if (versionFromTag.startsWith('oc')) {
+            versionFromTag = versionFromTag.slice(2);
+          }
+
+          /* SemVer pattern: major.minor.patch with dot-separated prerelease/build identifiers (alphanumeric + hyphen). */
+          const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+          if (!semanticVersionPattern.test(versionFromTag)) {
+            console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
+            console.error(`  Extracted version: "${versionFromTag}"`);
+            console.error('  Expected format: oc<major>.<minor>.<patch>[-prerelease][+build] (e.g., oc1.2.3, oc1.2.3-rc.1, oc1.2.3+build.7)');
+            process.exit(1);
+          }
+
+          const packageJsonRelativePath = process.env.OPENCODE_PACKAGE_JSON_PATH;
+          if (!packageJsonRelativePath) {
+            console.error('OPENCODE_PACKAGE_JSON_PATH is not set.');
+            process.exit(1);
+          }
+          const packageJsonPath = path.join(process.cwd(), packageJsonRelativePath);
+
+          let pkg;
+          try {
+            const pkgJson = fs.readFileSync(packageJsonPath, 'utf8');
+            pkg = JSON.parse(pkgJson);
+          } catch (err) {
+            console.error('Failed to read or parse package.json at', packageJsonPath);
+            console.error(err);
+            process.exit(1);
+          }
+
+          const pkgVersion = pkg && pkg.version;
+          if (!pkgVersion) {
+            console.error('Version field not found in package.json at', packageJsonPath);
+            process.exit(1);
+          }
+
+          if (pkgVersion !== versionFromTag) {
+            console.error('Version mismatch between tag and package.json.');
+            console.error(`  Tag version: ${versionFromTag}`);
+            console.error(`  package.json version: ${pkgVersion}`);
+            process.exit(1);
+          }
+
+          console.log('Version check passed: tag version matches package.json version.');
+          EOF
+
+      - name: Verify tag contains opencode-provider package
+        shell: bash
+        run: |
+          TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
+          # Check file existence at the tag to support release tags on merge commits.
+          if ! git cat-file -e "${TAG_REF}:${OPENCODE_PACKAGE_JSON_PATH}" 2>/dev/null; then
+            echo "Tag ${TAG_REF} does not contain ${OPENCODE_PACKAGE_JSON_PATH}."
+            exit 1
+          fi
+
+      - name: Publish to npm
+        working-directory: packages/opencode-provider
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

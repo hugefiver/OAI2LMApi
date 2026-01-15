@@ -1,12 +1,16 @@
-name: Build and Package
+name: VSCode Extension - Build and Package
 
 on:
   push:
     branches:
       - '**'  # Run on all branches
+    paths:
+      - 'packages/vscode-extension/**'
   pull_request:
     branches:
       - '**'
+    paths:
+      - 'packages/vscode-extension/**'
 
 jobs:
   build-package:
@@ -45,10 +49,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: pnpm --filter ./packages/vscode-extension run build
 
       - name: Package extension
-        run: pnpm run vscode:package
+        run: pnpm --filter ./packages/vscode-extension run package
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v6
