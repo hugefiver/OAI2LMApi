@@ -228,6 +228,7 @@ suite('ModelMetadata Unit Tests', () => {
 		assert.strictEqual(merged.maxInputTokens, patternMetadata.maxInputTokens);
 		assert.strictEqual(merged.maxOutputTokens, 9999);
 		assert.strictEqual(merged.supportsToolCalling, patternMetadata.supportsToolCalling);
+		assert.strictEqual(merged.supportsImageInput, patternMetadata.supportsImageInput);
 		assert.strictEqual(merged.modelType, patternMetadata.modelType);
 	});
 

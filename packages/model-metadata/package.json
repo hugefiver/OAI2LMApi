@@ -8,7 +8,6 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
       "require": "./dist/index.js"
     }
   },
@@ -18,7 +17,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "echo \"Tests not yet implemented\"",
+    "test": "pnpm run build && node --test test",
     "lint": "echo \"Linting not yet configured\""
   },
   "license": "MIT",
