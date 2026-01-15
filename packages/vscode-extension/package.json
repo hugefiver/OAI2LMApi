@@ -1,5 +1,5 @@
 {
-  "name": "@oai2lmapi/vscode-extension",
+  "name": "oai2lmapi",
   "displayName": "OpenAI to Language Model API Bridge",
   "description": "Connect OpenAI-compatible APIs to VSCode's Language Model API for Copilot",
   "version": "0.2.6",
