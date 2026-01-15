@@ -70,7 +70,7 @@ jobs:
             versionFromTag = versionFromTag.slice(2);
           }
 
-          // SemVer pattern: major.minor.patch with optional prerelease (-alpha.1) and build metadata (+build.7).
+          /* SemVer pattern: major.minor.patch with optional prerelease (-alpha.1) and build metadata (+build.7). */
           const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
           if (!semanticVersionPattern.test(versionFromTag)) {
             console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
@@ -116,6 +116,7 @@ jobs:
         shell: bash
         run: |
           TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
+          # Check file existence at the tag to support release tags on merge commits.
           if ! git cat-file -e "${TAG_REF}:${OPENCODE_PACKAGE_JSON_PATH}" 2>/dev/null; then
             echo "Tag ${TAG_REF} does not contain ${OPENCODE_PACKAGE_JSON_PATH}."
             exit 1
