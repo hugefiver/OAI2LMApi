@@ -70,8 +70,8 @@ jobs:
             versionFromTag = versionFromTag.slice(2);
           }
 
-          /* SemVer pattern: major.minor.patch with optional alphanumeric prerelease/build identifiers. */
-          const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$/;
+          /* SemVer pattern: major.minor.patch with dot-separated prerelease/build identifiers (alphanumeric + hyphen). */
+          const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
           if (!semanticVersionPattern.test(versionFromTag)) {
             console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
             console.error(`  Extracted version: "${versionFromTag}"`);
