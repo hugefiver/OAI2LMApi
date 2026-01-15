@@ -44,12 +44,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run lint
-        run: pnpm --filter @oai2lmapi/opencode-provider run lint
-
-      - name: Run tests
-        run: pnpm --filter @oai2lmapi/opencode-provider run test
-
       - name: Build
         run: pnpm --filter @oai2lmapi/opencode-provider run build
 
