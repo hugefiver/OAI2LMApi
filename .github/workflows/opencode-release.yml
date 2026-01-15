@@ -68,29 +68,29 @@ jobs:
             versionFromTag = versionFromTag.slice(2);
           }
 
-          const semverRegex = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
-          if (!semverRegex.test(versionFromTag)) {
+          const semanticVersionPattern = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+          if (!semanticVersionPattern.test(versionFromTag)) {
             console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
             console.error(`  Extracted version: "${versionFromTag}"`);
             console.error('  Expected format: oc<major>.<minor>.<patch> (e.g., oc1.2.3)');
             process.exit(1);
           }
 
-          const pkgPath = path.join(process.cwd(), 'packages', 'opencode-provider', 'package.json');
+          const packageJsonPath = path.join(process.cwd(), 'packages', 'opencode-provider', 'package.json');
 
           let pkg;
           try {
-            const pkgJson = fs.readFileSync(pkgPath, 'utf8');
+            const pkgJson = fs.readFileSync(packageJsonPath, 'utf8');
             pkg = JSON.parse(pkgJson);
           } catch (err) {
-            console.error('Failed to read or parse package.json at', pkgPath);
+            console.error('Failed to read or parse package.json at', packageJsonPath);
             console.error(err);
             process.exit(1);
           }
 
           const pkgVersion = pkg && pkg.version;
           if (!pkgVersion) {
-            console.error('Version field not found in package.json at', pkgPath);
+            console.error('Version field not found in package.json at', packageJsonPath);
             process.exit(1);
           }
 
@@ -108,8 +108,9 @@ jobs:
         shell: bash
         run: |
           TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
-          if ! git ls-tree -r --name-only "${TAG_REF}" | grep -q '^packages/opencode-provider/package.json$'; then
-            echo "Tag ${TAG_REF} does not contain packages/opencode-provider/package.json."
+          PACKAGE_JSON_PATH="packages/opencode-provider/package.json"
+          if ! git ls-tree -r --name-only "${TAG_REF}" | grep -q "^${PACKAGE_JSON_PATH}$"; then
+            echo "Tag ${TAG_REF} does not contain ${PACKAGE_JSON_PATH}."
             exit 1
           fi
 
