@@ -12,6 +12,12 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/model-metadata:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/opencode-provider:
     dependencies:
       '@ai-sdk/openai-compatible':
@@ -23,6 +29,9 @@ importers:
       '@ai-sdk/provider-utils':
         specifier: ^2.0.0
         version: 2.2.8(zod@3.25.76)
+      '@oai2lmapi/model-metadata':
+        specifier: workspace:*
+        version: link:../model-metadata
       ai:
         specifier: ^4.0.0
         version: 4.3.19(react@19.2.3)(zod@3.25.76)
@@ -36,6 +45,9 @@ importers:
 
   packages/vscode-extension:
     dependencies:
+      '@oai2lmapi/model-metadata':
+        specifier: workspace:*
+        version: link:../model-metadata
       openai:
         specifier: ^6.15.0
         version: 6.15.0(zod@3.25.76)

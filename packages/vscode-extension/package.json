@@ -183,6 +183,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@oai2lmapi/model-metadata": "workspace:*",
     "openai": "^6.15.0"
   }
 }

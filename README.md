@@ -177,6 +177,10 @@ This extension works with any API that implements the OpenAI chat completions fo
 - Use `usePromptBasedToolCalling: true` in model overrides for XML-based fallback
 - Check model capabilities in the Output Channel logs
 
+## Development Notes
+
+- Model metadata patterns are maintained in `@oai2lmapi/model-metadata` (`packages/model-metadata/src/index.ts`) and shared across all packages.
+
 ## License
 
 MIT - See [LICENSE](LICENSE) for details.
