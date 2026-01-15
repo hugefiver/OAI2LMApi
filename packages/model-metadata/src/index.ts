@@ -19,7 +19,7 @@ export interface ModelMetadata {
     /** Whether the model supports image/vision input */
     supportsImageInput: boolean;
     /** Model type: 'llm', 'embedding', 'rerank', 'image', 'audio', 'other' */
-    modelType?: 'llm' | 'embedding' | 'rerank' | 'image' | 'audio' | 'other';
+    modelType: 'llm' | 'embedding' | 'rerank' | 'image' | 'audio' | 'other';
 }
 
 /**
