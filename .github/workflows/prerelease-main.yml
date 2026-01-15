@@ -1,9 +1,11 @@
-name: Prerelease Main
+name: VSCode Extension - Prerelease Main
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'packages/vscode-extension/**'
 
 jobs:
   prerelease:

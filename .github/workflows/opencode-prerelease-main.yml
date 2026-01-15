@@ -1,0 +1,70 @@
+name: OpenCode Provider - Prerelease Main
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/opencode-provider/**'
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        run: pnpm --filter @oai2lmapi/opencode-provider run lint
+
+      - name: Run tests
+        run: pnpm --filter @oai2lmapi/opencode-provider run test
+
+      - name: Build
+        run: pnpm --filter @oai2lmapi/opencode-provider run build
+
+      - name: Get and adjust version for prerelease
+        id: version
+        shell: bash
+        working-directory: packages/opencode-provider
+        run: |
+          BASE_VERSION=$(node -p "require('./package.json').version")
+          SUFFIX=$(($(date +%s) % 10000000))
+          VERSION="${BASE_VERSION}-prerelease.${SUFFIX}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Publish to npm (prerelease)
+        working-directory: packages/opencode-provider
+        run: npm publish --tag prerelease --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

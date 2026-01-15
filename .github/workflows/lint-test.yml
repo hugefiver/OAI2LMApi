@@ -1,12 +1,16 @@
-name: Lint and Test
+name: VSCode Extension - Lint and Test
 
 on:
   push:
     branches:
       - '**'  # Run on all branches
+    paths:
+      - 'packages/vscode-extension/**'
   pull_request:
     branches:
       - '**'
+    paths:
+      - 'packages/vscode-extension/**'
 
 jobs:
   lint-test:

@@ -1,23 +1,16 @@
-name: VSCode Extension - Build and Package
+name: OpenCode Provider - Release
 
 on:
   push:
-    branches:
-      - '**'  # Run on all branches
-    paths:
-      - 'packages/vscode-extension/**'
-  pull_request:
-    branches:
-      - '**'
-    paths:
-      - 'packages/vscode-extension/**'
+    tags:
+      - 'oc*'
 
 jobs:
-  build-package:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -49,14 +42,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: pnpm --filter @oai2lmapi/opencode-provider run build
 
-      - name: Package extension
-        run: pnpm run vscode:package
-
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: vscode-extension
-          path: packages/vscode-extension/*.vsix
-          retention-days: 30
+      - name: Publish to npm
+        working-directory: packages/opencode-provider
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
