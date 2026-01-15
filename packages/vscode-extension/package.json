@@ -152,9 +152,11 @@
     }
   },
   "scripts": {
+    "precheck-types": "pnpm --filter @oai2lmapi/model-metadata run build",
     "vscode:prepublish": "pnpm run check-types && node esbuild.js --production",
     "compile": "pnpm run check-types && node esbuild.js",
     "build": "pnpm run compile",
+    "precompile:tests": "pnpm --filter @oai2lmapi/model-metadata run build",
     "compile:tests": "tsc -p ./",
     "check-types": "tsc --noEmit",
     "watch": "npm-run-all -p watch:*",
