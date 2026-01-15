@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      OPENCODE_PACKAGE_JSON_PATH: packages/opencode-provider/package.json
 
     steps:
       - name: Checkout code
@@ -68,7 +70,7 @@ jobs:
             versionFromTag = versionFromTag.slice(2);
           }
 
-          // SemVer pattern: major.minor.patch with optional prerelease and build metadata segments.
+          // SemVer pattern: major.minor.patch with optional prerelease (-alpha.1) and build metadata (+build.7).
           const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
           if (!semanticVersionPattern.test(versionFromTag)) {
             console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
@@ -77,7 +79,12 @@ jobs:
             process.exit(1);
           }
 
-          const packageJsonPath = path.join(process.cwd(), 'packages', 'opencode-provider', 'package.json');
+          const packageJsonRelativePath = process.env.OPENCODE_PACKAGE_JSON_PATH;
+          if (!packageJsonRelativePath) {
+            console.error('OPENCODE_PACKAGE_JSON_PATH is not set.');
+            process.exit(1);
+          }
+          const packageJsonPath = path.join(process.cwd(), packageJsonRelativePath);
 
           let pkg;
           try {
@@ -109,9 +116,8 @@ jobs:
         shell: bash
         run: |
           TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
-          PACKAGE_JSON_PATH="packages/opencode-provider/package.json"
-          if ! git cat-file -e "${TAG_REF}:${PACKAGE_JSON_PATH}" 2>/dev/null; then
-            echo "Tag ${TAG_REF} does not contain ${PACKAGE_JSON_PATH}."
+          if ! git cat-file -e "${TAG_REF}:${OPENCODE_PACKAGE_JSON_PATH}" 2>/dev/null; then
+            echo "Tag ${TAG_REF} does not contain ${OPENCODE_PACKAGE_JSON_PATH}."
             exit 1
           fi
 
