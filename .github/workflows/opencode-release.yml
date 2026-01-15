@@ -68,6 +68,7 @@ jobs:
             versionFromTag = versionFromTag.slice(2);
           }
 
+          // SemVer pattern: major.minor.patch with optional prerelease and build metadata segments.
           const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
           if (!semanticVersionPattern.test(versionFromTag)) {
             console.error(`Tag "${rawTag}" does not contain a valid semantic version after the 'oc' prefix.`);
@@ -109,7 +110,7 @@ jobs:
         run: |
           TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
           PACKAGE_JSON_PATH="packages/opencode-provider/package.json"
-          if ! git ls-tree -r --name-only "${TAG_REF}" | grep -Fxq "${PACKAGE_JSON_PATH}"; then
+          if ! git cat-file -e "${TAG_REF}:${PACKAGE_JSON_PATH}" 2>/dev/null; then
             echo "Tag ${TAG_REF} does not contain ${PACKAGE_JSON_PATH}."
             exit 1
           fi
