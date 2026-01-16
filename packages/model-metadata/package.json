@@ -17,7 +17,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.esm.json && node -e \"const fs=require('fs');const path=require('path');const esmDir=path.join(process.cwd(),'dist','esm');const js=path.join(esmDir,'index.js');const map=path.join(esmDir,'index.js.map');if(fs.existsSync(js)){fs.renameSync(js,path.join(esmDir,'index.mjs'));}if(fs.existsSync(map)){fs.renameSync(map,path.join(esmDir,'index.mjs.map'));}\"",
+    "build": "tsc && tsc -p tsconfig.esm.json && node scripts/rename-esm-output.cjs",
     "clean": "rm -rf dist",
     "test": "pnpm run build && node --test test",
     "lint": "eslint src"

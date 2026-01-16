@@ -28,7 +28,8 @@ function getLatestMtime(fileOrDirPath) {
 const root = path.resolve(__dirname, '..', '..', 'model-metadata');
 const srcDir = path.join(root, 'src');
 const dist = path.join(root, 'dist', 'index.js');
-const distEsm = path.join(root, 'dist', 'esm', 'index.mjs');
+const distEsmFile = 'index.mjs';
+const distEsm = path.join(root, 'dist', 'esm', distEsmFile);
 
 const distExists = fs.existsSync(dist);
 const distEsmExists = fs.existsSync(distEsm);
