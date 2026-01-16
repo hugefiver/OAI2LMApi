@@ -2,24 +2,47 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+function getLatestMtime(fileOrDirPath) {
+  const stats = fs.statSync(fileOrDirPath);
+
+  if (!stats.isDirectory()) {
+    return stats.mtimeMs;
+  }
+
+  let latestMtime = stats.mtimeMs;
+  const entries = fs.readdirSync(fileOrDirPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(fileOrDirPath, entry.name);
+    const entryMtime = entry.isDirectory()
+      ? getLatestMtime(fullPath)
+      : fs.statSync(fullPath).mtimeMs;
+    if (entryMtime > latestMtime) {
+      latestMtime = entryMtime;
+    }
+  }
+
+  return latestMtime;
+}
+
 const root = path.resolve(__dirname, '..', '..', 'model-metadata');
-const src = path.join(root, 'src', 'index.ts');
+const srcDir = path.join(root, 'src');
 const dist = path.join(root, 'dist', 'index.js');
-const distEsm = path.join(root, 'dist', 'esm', 'index.js');
+const distEsm = path.join(root, 'dist', 'esm', 'index.mjs');
 
 const distExists = fs.existsSync(dist);
 const distEsmExists = fs.existsSync(distEsm);
-const srcExists = fs.existsSync(src);
+const srcExists = fs.existsSync(srcDir);
 
 if (!srcExists) {
-  throw new Error(`Model metadata source not found: ${src}`);
+  throw new Error(`Model metadata source directory not found: ${srcDir}`);
 }
 
 let needsBuild = !distExists || !distEsmExists;
 
 if (!needsBuild) {
   try {
-    const srcMtime = fs.statSync(src).mtimeMs;
+    const srcMtime = getLatestMtime(srcDir);
     const distMtime = fs.statSync(dist).mtimeMs;
     const distEsmMtime = fs.statSync(distEsm).mtimeMs;
     needsBuild = srcMtime > distMtime || srcMtime > distEsmMtime;

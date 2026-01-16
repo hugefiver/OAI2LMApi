@@ -8,7 +8,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/esm/index.js",
+      "import": "./dist/esm/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     }
@@ -17,10 +17,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.esm.json",
+    "build": "tsc && tsc -p tsconfig.esm.json && node -e \"const fs=require('fs');const path=require('path');const esmDir=path.join(process.cwd(),'dist','esm');const js=path.join(esmDir,'index.js');const map=path.join(esmDir,'index.js.map');if(fs.existsSync(js)){fs.renameSync(js,path.join(esmDir,'index.mjs'));}if(fs.existsSync(map)){fs.renameSync(map,path.join(esmDir,'index.mjs.map'));}\"",
     "clean": "rm -rf dist",
     "test": "pnpm run build && node --test test",
-    "lint": "echo \"Linting not yet configured\""
+    "lint": "eslint src"
   },
   "license": "MIT",
   "repository": {
@@ -29,6 +29,9 @@
     "directory": "packages/model-metadata"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.50.0",
+    "@typescript-eslint/parser": "^8.50.0",
+    "eslint": "^9.39.2",
     "typescript": "^5.9.3"
   }
 }

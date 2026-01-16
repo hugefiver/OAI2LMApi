@@ -7,6 +7,7 @@ import {
 	supportsToolCalling,
 	DEFAULT_MODEL_METADATA
 } from '../../modelMetadata';
+import { mergeMetadata as sharedMergeMetadata } from '@oai2lmapi/model-metadata';
 
 suite('ModelMetadata Unit Tests', () => {
 
@@ -222,14 +223,11 @@ suite('ModelMetadata Unit Tests', () => {
 
 	// ============== Default Metadata Tests ==============
 
-	test('Should merge API metadata with pattern metadata', () => {
+	test('Should re-export mergeMetadata from shared package', () => {
+		assert.strictEqual(mergeMetadata, sharedMergeMetadata);
 		const patternMetadata = getModelMetadataFromPatterns('gpt-4o');
 		const merged = mergeMetadata({ maxOutputTokens: 9999 }, patternMetadata);
-		assert.strictEqual(merged.maxInputTokens, patternMetadata.maxInputTokens);
 		assert.strictEqual(merged.maxOutputTokens, 9999);
-		assert.strictEqual(merged.supportsToolCalling, patternMetadata.supportsToolCalling);
-		assert.strictEqual(merged.supportsImageInput, patternMetadata.supportsImageInput);
-		assert.strictEqual(merged.modelType, patternMetadata.modelType);
 	});
 
 	test('Should return default metadata for unknown models', () => {
