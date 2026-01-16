@@ -29,6 +29,7 @@ test('mergeMetadata preserves pattern defaults', () => {
   assert.equal(merged.maxOutputTokens, 9999);
   assert.equal(merged.supportsToolCalling, patternMetadata.supportsToolCalling);
   assert.equal(merged.supportsImageInput, patternMetadata.supportsImageInput);
+  assert.equal(merged.modelType, patternMetadata.modelType);
 });
 
 test('supportsToolCalling returns false for unknown models', () => {
