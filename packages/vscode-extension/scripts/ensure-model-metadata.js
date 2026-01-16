@@ -11,9 +11,13 @@ const distExists = fs.existsSync(dist);
 const distEsmExists = fs.existsSync(distEsm);
 const srcExists = fs.existsSync(src);
 
+if (!srcExists) {
+  throw new Error(`Model metadata source not found: ${src}`);
+}
+
 let needsBuild = !distExists || !distEsmExists;
 
-if (!needsBuild && srcExists) {
+if (!needsBuild) {
   try {
     const srcMtime = fs.statSync(src).mtimeMs;
     const distMtime = fs.statSync(dist).mtimeMs;
