@@ -19,7 +19,7 @@ test('matches provider-prefixed model IDs', () => {
 test('supports ESM import in consumers', async () => {
   const esmModule = await import('@oai2lmapi/model-metadata');
   assert.equal(typeof esmModule.getModelMetadata, 'function');
-  const metadata = esmModule.getModelMetadata('gpt-4o');
+  const metadata = esmModule.getModelMetadata('openai/gpt-4o');
   assert.equal(metadata.maxInputTokens, 128000);
 });
 
