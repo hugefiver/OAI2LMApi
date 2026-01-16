@@ -18,7 +18,7 @@ if (!needsBuild && srcExists) {
     const srcMtime = fs.statSync(src).mtimeMs;
     const distMtime = fs.statSync(dist).mtimeMs;
     const distEsmMtime = fs.statSync(distEsm).mtimeMs;
-    needsBuild = srcMtime > Math.min(distMtime, distEsmMtime);
+    needsBuild = srcMtime > distMtime || srcMtime > distEsmMtime;
   } catch (error) {
     needsBuild = true;
   }
