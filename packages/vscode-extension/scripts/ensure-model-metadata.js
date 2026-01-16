@@ -29,5 +29,10 @@ if (!needsBuild) {
 }
 
 if (needsBuild) {
-  execSync('pnpm --filter @oai2lmapi/model-metadata run build', { stdio: 'inherit' });
+  try {
+    execSync('pnpm --filter @oai2lmapi/model-metadata run build', { stdio: 'inherit' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to build model-metadata: ${message}`);
+  }
 }
