@@ -152,7 +152,7 @@
     }
   },
   "scripts": {
-    "ensure:model-metadata": "node -e \"const fs=require('fs');const path=require('path');const src=path.resolve(__dirname,'../model-metadata/src/index.ts');const dist=path.resolve(__dirname,'../model-metadata/dist/index.js');const needsBuild=!fs.existsSync(dist)||fs.statSync(src).mtimeMs>fs.statSync(dist).mtimeMs;if(needsBuild){require('child_process').execSync('pnpm --filter @oai2lmapi/model-metadata run build',{stdio:'inherit'});}\"",
+    "ensure:model-metadata": "node -e \"const fs=require('fs');const path=require('path');const root=path.resolve(__dirname,'../model-metadata');const src=path.join(root,'src/index.ts');const dist=path.join(root,'dist/index.js');const distExists=fs.existsSync(dist);const srcExists=fs.existsSync(src);const needsBuild=!distExists||(srcExists&&fs.statSync(src).mtimeMs>fs.statSync(dist).mtimeMs);if(needsBuild){require('child_process').execSync('pnpm --filter @oai2lmapi/model-metadata run build',{stdio:'inherit'});}\"",
     "vscode:prepublish": "pnpm run check-types && node esbuild.js --production",
     "compile": "pnpm run ensure:model-metadata && pnpm run check-types && node esbuild.js",
     "build": "pnpm run compile",
