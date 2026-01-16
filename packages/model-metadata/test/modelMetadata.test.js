@@ -16,6 +16,14 @@ test('matches provider-prefixed model IDs', () => {
   assert.equal(metadata.supportsToolCalling, true);
 });
 
+test('supports ESM import in consumers', async () => {
+  const esmModule = await import('@oai2lmapi/model-metadata');
+  const getMetadata = esmModule.getModelMetadata ?? esmModule.default?.getModelMetadata;
+  assert.equal(typeof getMetadata, 'function');
+  const metadata = getMetadata('gpt-4o');
+  assert.equal(metadata.maxInputTokens, 128000);
+});
+
 test('classifies non-LLM embedding models', () => {
   const metadata = getModelMetadata('text-embedding-3-large');
   assert.equal(metadata.modelType, 'embedding');
