@@ -153,7 +153,7 @@
   },
   "scripts": {
     "ensure:model-metadata": "node scripts/ensure-model-metadata.js",
-    "vscode:prepublish": "pnpm run check-types && node esbuild.js --production",
+    "vscode:prepublish": "pnpm run ensure:model-metadata && pnpm run check-types && node esbuild.js --production",
     "compile": "pnpm run ensure:model-metadata && pnpm run check-types && node esbuild.js",
     "build": "pnpm run compile",
     "compile:tests": "tsc -p ./",
