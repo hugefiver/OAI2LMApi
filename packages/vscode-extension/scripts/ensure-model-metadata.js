@@ -28,9 +28,11 @@ function getLatestMtime(fileOrDirPath) {
 const root = path.resolve(__dirname, '..', '..', 'model-metadata');
 const srcDir = path.join(root, 'src');
 const dist = path.join(root, 'dist', 'index.js');
+const distDts = path.join(root, 'dist', 'index.d.ts');
 const distEsm = path.join(root, 'dist', 'esm', 'index.mjs');
 
 const distExists = fs.existsSync(dist);
+const distDtsExists = fs.existsSync(distDts);
 const distEsmExists = fs.existsSync(distEsm);
 const srcExists = fs.existsSync(srcDir);
 
@@ -38,14 +40,16 @@ if (!srcExists) {
   throw new Error(`Model metadata source directory not found: ${srcDir}`);
 }
 
-let needsBuild = !distExists || !distEsmExists;
+let needsBuild = !distExists || !distDtsExists || !distEsmExists;
 
 if (!needsBuild) {
   try {
     const srcMtime = getLatestMtime(srcDir);
     const distMtime = fs.statSync(dist).mtimeMs;
+    const distDtsMtime = fs.statSync(distDts).mtimeMs;
     const distEsmMtime = fs.statSync(distEsm).mtimeMs;
-    needsBuild = srcMtime > distMtime || srcMtime > distEsmMtime;
+    needsBuild =
+      srcMtime > distMtime || srcMtime > distDtsMtime || srcMtime > distEsmMtime;
   } catch (error) {
     needsBuild = true;
   }
