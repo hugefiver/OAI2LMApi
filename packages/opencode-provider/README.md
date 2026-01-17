@@ -215,10 +215,11 @@ interface ModelOverride {
 
 1. **Model Discovery**: On initialization, the provider fetches the `/models` endpoint
 2. **Capability Detection**: Analyzes model metadata to determine capabilities
-3. **Metadata Caching**: Model info is cached to reduce API calls
-4. **Override Application**: User-defined overrides are applied on top of discovered capabilities
-5. **Request Translation**: Converts AI SDK requests to OpenAI-compatible format
-6. **Response Parsing**: Handles special formats like `<think>` tags and XML tool calls
+3. **Shared Metadata Registry**: Uses `@oai2lmapi/model-metadata` for fallback model info
+4. **Metadata Caching**: Model info is cached to reduce API calls
+5. **Override Application**: User-defined overrides are applied on top of discovered capabilities
+6. **Request Translation**: Converts AI SDK requests to OpenAI-compatible format
+7. **Response Parsing**: Handles special formats like `<think>` tags and XML tool calls
 
 ## Configuration with OpenCode
 

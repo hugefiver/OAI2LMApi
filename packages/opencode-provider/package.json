@@ -41,7 +41,8 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.0",
     "@ai-sdk/provider": "^1.0.0",
-    "@ai-sdk/provider-utils": "^2.0.0"
+    "@ai-sdk/provider-utils": "^2.0.0",
+    "@oai2lmapi/model-metadata": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

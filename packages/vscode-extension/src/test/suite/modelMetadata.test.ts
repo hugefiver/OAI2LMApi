@@ -1,5 +1,13 @@
 import * as assert from 'assert';
-import { getModelMetadata, isLLMModel, supportsToolCalling, DEFAULT_MODEL_METADATA } from '../../modelMetadata';
+import {
+	getModelMetadata,
+	getModelMetadataFromPatterns,
+	isLLMModel,
+	mergeMetadata,
+	supportsToolCalling,
+	DEFAULT_MODEL_METADATA
+} from '../../modelMetadata';
+import { mergeMetadata as sharedMergeMetadata } from '@oai2lmapi/model-metadata';
 
 suite('ModelMetadata Unit Tests', () => {
 
@@ -214,6 +222,13 @@ suite('ModelMetadata Unit Tests', () => {
 	});
 
 	// ============== Default Metadata Tests ==============
+
+	test('Should re-export mergeMetadata from shared package', () => {
+		assert.strictEqual(mergeMetadata, sharedMergeMetadata);
+		const patternMetadata = getModelMetadataFromPatterns('gpt-4o');
+		const merged = mergeMetadata({ maxOutputTokens: 9999 }, patternMetadata);
+		assert.strictEqual(merged.maxOutputTokens, 9999);
+	});
 
 	test('Should return default metadata for unknown models', () => {
 		const metadata = getModelMetadata('unknown-model-xyz');

@@ -16,13 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prompt-based tool calling for models without native function calling
   - Per-model configuration overrides with wildcard pattern matching
   - Based on Vercel AI SDK's `@ai-sdk/openai-compatible`
+- New package: `@oai2lmapi/model-metadata` - shared model metadata registry for all packages
 
 ### Changed
 - Restructured VSCode extension into `packages/vscode-extension`
 - Updated build scripts to support workspace structure
 - Renamed VSCode extension package to `@oai2lmapi/vscode-extension`
+- Centralized model metadata lookups in the shared metadata package
 
-## [0.2.6] - 2025-01-XX
+## [0.2.6] - 2025-01-17
 
 ### VSCode Extension
 See [packages/vscode-extension/CHANGELOG.md](./packages/vscode-extension/CHANGELOG.md) for previous versions.

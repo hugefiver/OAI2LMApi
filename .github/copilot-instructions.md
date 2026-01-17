@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**OAI2LMApi** is a VSCode extension that bridges OpenAI-compatible APIs to VSCode's Language Model API, enabling integration with GitHub Copilot Chat and other AI-powered features. This is a TypeScript-based VSCode extension (~2,300 lines of code) that uses esbuild for bundling.
+**OAI2LMApi** is a monorepo that includes a VSCode extension, an OpenCode provider, and a shared model metadata package. The VSCode extension bridges OpenAI-compatible APIs to VSCode's Language Model API for GitHub Copilot Chat and other AI-powered features.
 
 ### Technology Stack
 - **Language**: TypeScript 5.9.3
@@ -16,36 +16,37 @@
 
 ```
 /
-├── .github/workflows/      # CI/CD pipelines
-│   ├── lint-test.yml       # Linting and testing workflow
+├── .github/workflows/          # CI/CD pipelines
+│   ├── lint-test.yml           # Linting and testing workflow
 │   ├── build-test-package.yml  # Build and package workflow
-│   └── release.yml         # Release to marketplace workflow
-├── .vscode/                # VSCode workspace settings
-│   ├── launch.json         # Debug configurations
-│   ├── tasks.json          # Build tasks
-│   └── extensions.json     # Recommended extensions
-├── src/                    # Source code
-│   ├── extension.ts        # Main extension entry point
-│   ├── languageModelProvider.ts  # VSCode LM API provider implementation
-│   ├── openaiClient.ts     # OpenAI API client wrapper
-│   ├── modelMetadata.ts    # Model metadata and capabilities
-│   ├── constants.ts        # Shared constants
-│   └── test/               # Test suite
-│       ├── runTest.ts      # Test runner entry point
-│       └── suite/          # Test suites
-├── out/                    # Build output (generated, gitignored)
-├── package.json            # Project manifest and scripts
-├── tsconfig.json           # TypeScript configuration
-├── eslint.config.mjs       # ESLint configuration
-├── esbuild.js              # Custom esbuild bundler
-└── .mocharc.json           # Mocha test configuration
+│   └── release.yml             # Release to marketplace workflow
+├── .vscode/                    # VSCode workspace settings
+│   ├── launch.json             # Debug configurations
+│   ├── tasks.json              # Build tasks
+│   └── extensions.json         # Recommended extensions
+├── packages/                   # Workspace packages
+│   ├── vscode-extension/       # VSCode extension package
+│   │   ├── src/                # Extension source code
+│   │   ├── out/                # Build output (generated, gitignored)
+│   │   ├── esbuild.js          # Custom esbuild bundler
+│   │   └── package.json        # Extension manifest and scripts
+│   ├── opencode-provider/      # OpenCode provider package
+│   │   ├── src/                # Provider source code
+│   │   └── package.json        # Provider manifest and scripts
+│   └── model-metadata/         # Shared model metadata package
+│       ├── src/index.ts        # Shared model metadata registry
+│       └── package.json        # Shared metadata manifest and scripts
+├── package.json                # Root workspace scripts
+├── pnpm-workspace.yaml         # Workspace configuration
+└── README.workspace.md         # Monorepo overview
 ```
 
 ### Key Files
-- **entry point**: `src/extension.ts` - exports `activate()` and `deactivate()`
-- **package.json**: defines VSCode extension metadata, commands, and configuration
-- **esbuild.js**: bundles extension into single `out/extension.js` file
-- **tsconfig.json**: TypeScript compiler settings (ES2020 target, strict mode)
+- **entry point**: `packages/vscode-extension/src/extension.ts` - exports `activate()` and `deactivate()`
+- **extension manifest**: `packages/vscode-extension/package.json` - VSCode extension metadata, commands, and configuration
+- **shared metadata**: `packages/model-metadata/src/index.ts` - model metadata registry used by all packages
+- **esbuild.js**: `packages/vscode-extension/esbuild.js` bundles extension into `packages/vscode-extension/out/extension.js`
+- **tsconfig.json**: `packages/vscode-extension/tsconfig.json` TypeScript compiler settings for the extension
 
 ## Build & Development Workflow
 
@@ -63,6 +64,8 @@ npm install -g pnpm@10
    - Time: ~5-10 seconds (with cache)
    - Creates `node_modules/` with 545 packages
    - You may see warnings about ignored build scripts (safe to ignore)
+
+> **Monorepo note**: VSCode extension commands (`check-types`, `lint`, `compile`, `test`, `package`) are run from `packages/vscode-extension` (or via `pnpm --filter @oai2lmapi/vscode-extension`).
 
 ### Build Commands
 
@@ -225,11 +228,11 @@ Runs on version tags (v*). Publishes to VS Code Marketplace.
 - Dispose resources in `deactivate()` and via Disposable pattern
 
 ### Known TODOs
-- `src/openaiClient.ts:195`: Chain-of-thought (reasoning_content) transmission not implemented
+- `packages/vscode-extension/src/openaiClient.ts:195`: Chain-of-thought (reasoning_content) transmission not implemented
 
 # Model Sync Rule
 
-When adding new models to `src/modelMetadata.ts`, follow these guidelines:
+When adding new models to `packages/model-metadata/src/index.ts`, follow these guidelines:
 
 ## Primary Data Source
 
@@ -259,7 +262,7 @@ Fetch model data from `https://models.dev/api.json`. This aggregated source cont
    - Tool calling support (`supports_tools: true`)
    - Recent release dates (2024-2025)
    - Large context windows (≥32K tokens)
-3. **Update `src/modelMetadata.ts`**:
+3. **Update `packages/model-metadata/src/index.ts`**:
    - Add new `ModelFamilyPattern` entries for new model families
    - Update existing patterns if capabilities have changed
    - Ensure `maxInputTokens`, `maxOutputTokens`, `supportsToolCalling`, `supportsImageInput` are accurate
