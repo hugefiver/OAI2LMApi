@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed VSCode extension package to `@oai2lmapi/vscode-extension`
 - Centralized model metadata lookups in the shared metadata package
 
-## [0.2.6] - 2026-01-17
+## [0.2.6] - 2025-01-17
 
 ### VSCode Extension
 See [packages/vscode-extension/CHANGELOG.md](./packages/vscode-extension/CHANGELOG.md) for previous versions.
