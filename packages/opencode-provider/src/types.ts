@@ -2,16 +2,9 @@
  * Types for the OpenAI-compatible provider
  */
 
-export interface ModelMetadata {
-  /** Maximum input tokens the model can accept */
-  maxInputTokens: number;
-  /** Maximum output tokens the model can generate */
-  maxOutputTokens: number;
-  /** Whether the model supports tool/function calling */
-  supportsToolCalling: boolean;
-  /** Whether the model supports image/vision input */
-  supportsImageInput: boolean;
-}
+import type { ModelMetadata } from '@oai2lmapi/model-metadata';
+
+export type { ModelMetadata };
 
 export interface ModelOverride {
   /** Max input tokens */

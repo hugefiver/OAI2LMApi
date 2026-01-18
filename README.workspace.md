@@ -21,6 +21,12 @@ OpenAI-compatible provider plugin for [OpenCode](https://github.com/anomalyco/op
 
 [View README](./packages/opencode-provider/README.md)
 
+### @oai2lmapi/model-metadata
+
+Shared model metadata registry used by both the VSCode extension and the OpenCode provider.
+
+[View README](./packages/model-metadata/README.md)
+
 ## Development
 
 This project uses pnpm workspaces.
@@ -51,6 +57,9 @@ pnpm run vscode:compile
 
 # OpenCode Provider
 pnpm run opencode:build
+
+# Shared Model Metadata
+pnpm --filter @oai2lmapi/model-metadata run build
 ```
 
 ### Testing

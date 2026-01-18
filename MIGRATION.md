@@ -2,10 +2,11 @@
 
 ## Overview
 
-Successfully converted OAI2LMApi from a single-package repository to a pnpm workspace monorepo structure with two packages:
+Successfully converted OAI2LMApi from a single-package repository to a pnpm workspace monorepo structure with three packages:
 
 1. **@oai2lmapi/vscode-extension** - VSCode extension (existing)
 2. **@oai2lmapi/opencode-provider** - OpenCode provider plugin (new)
+3. **@oai2lmapi/model-metadata** - Shared model metadata registry (new)
 
 ## Changes Made
 
@@ -15,7 +16,8 @@ Successfully converted OAI2LMApi from a single-package repository to a pnpm work
 OAI2LMApi/
 ├── packages/
 │   ├── vscode-extension/     # Existing VSCode extension
-│   └── opencode-provider/    # New OpenCode provider
+│   ├── opencode-provider/    # New OpenCode provider
+│   └── model-metadata/       # Shared model metadata
 ├── pnpm-workspace.yaml       # Workspace configuration
 ├── package.json              # Root package.json with workspace scripts
 ├── README.md                 # Updated monorepo README
@@ -43,9 +45,13 @@ New package that provides OpenAI-compatible provider for OpenCode:
 **Core Modules:**
 - `provider.ts` - Main provider implementation
 - `modelDiscovery.ts` - Model discovery from API
-- `modelMetadata.ts` - Fallback metadata for known model families
+- `modelMetadata.ts` - Shared metadata re-export for known model families
 - `types.ts` - TypeScript type definitions
 - `utils.ts` - Wildcard pattern matching utilities
+
+### Model Metadata (@oai2lmapi/model-metadata)
+
+Shared model metadata registry used by both packages.
 
 **Dependencies:**
 - `@ai-sdk/openai-compatible` - Base provider

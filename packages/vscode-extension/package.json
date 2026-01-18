@@ -152,15 +152,16 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run check-types && node esbuild.js --production",
-    "compile": "pnpm run check-types && node esbuild.js",
+    "ensure:model-metadata": "node scripts/ensure-model-metadata.js",
+    "vscode:prepublish": "pnpm run ensure:model-metadata && pnpm run check-types && node esbuild.js --production",
+    "compile": "pnpm run ensure:model-metadata && pnpm run check-types && node esbuild.js",
     "build": "pnpm run compile",
     "compile:tests": "tsc -p ./",
     "check-types": "tsc --noEmit",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "pretest": "pnpm run compile:tests && pnpm run lint",
+    "pretest": "pnpm run ensure:model-metadata && pnpm run compile:tests && pnpm run lint",
     "lint": "eslint src",
     "test": "node ./out/test/runTest.js",
     "package": "vsce package --no-dependencies",
@@ -183,6 +184,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@oai2lmapi/model-metadata": "workspace:*",
     "openai": "^6.15.0"
   }
 }
