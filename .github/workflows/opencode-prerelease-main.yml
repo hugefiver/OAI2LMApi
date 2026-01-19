@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'packages/opencode-provider/**'
+      - 'packages/model-metadata/**'
       - 'pnpm-lock.yaml'
       - 'package.json'
       - '.github/workflows/opencode-prerelease-main.yml'
@@ -48,7 +49,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm --filter @oai2lmapi/opencode-provider run build
+        run: pnpm --filter @oai2lmapi/opencode-provider... run build
 
       - name: Get and adjust version for prerelease
         id: version

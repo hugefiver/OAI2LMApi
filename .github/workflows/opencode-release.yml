@@ -45,7 +45,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm --filter @oai2lmapi/opencode-provider run build
+        run: pnpm --filter @oai2lmapi/opencode-provider... run build
 
       - name: Verify package version matches tag
         run: |
