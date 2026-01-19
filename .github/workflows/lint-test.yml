@@ -6,11 +6,15 @@ on:
       - '**'  # Run on all branches
     paths:
       - 'packages/vscode-extension/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
   pull_request:
     branches:
       - '**'
     paths:
       - 'packages/vscode-extension/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
 
 jobs:
   lint-test:

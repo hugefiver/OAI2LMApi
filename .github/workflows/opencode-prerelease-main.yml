@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'packages/opencode-provider/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
       - '.github/workflows/opencode-prerelease-main.yml'
 
 jobs:
