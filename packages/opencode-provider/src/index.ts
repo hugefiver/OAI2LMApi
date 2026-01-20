@@ -28,8 +28,9 @@ export type {
 // Model metadata utilities (functions only, no constants that could be mistaken for plugins)
 export { getModelMetadataFromPatterns } from './modelMetadata.js';
 
-// Model discovery class
-export { ModelDiscovery } from './modelDiscovery.js';
+// Model discovery: expose type only from main entry to avoid class being treated as a plugin
+// To use the runtime class, import directly from './modelDiscovery.js'
+export type { ModelDiscovery } from './modelDiscovery.js';
 
 // Configuration utilities - export functions only from main entry
 // Constants are available via direct import from './config.js'
@@ -45,6 +46,6 @@ export {
 
 export type { OAI2LMConfig } from './config.js';
 
-// Re-export DEFAULT_MODEL_METADATA for convenience, but note this is an object not a function
-// Users who need CONFIG_FILENAME should import directly from './config.js'
-export { DEFAULT_MODEL_METADATA } from './modelMetadata.js';
+// DEFAULT_MODEL_METADATA is intentionally not exported from the main entry point
+// to avoid OpenCode's plugin loader attempting to call it as a function.
+// Users who need DEFAULT_MODEL_METADATA should import directly from './modelMetadata.js'
