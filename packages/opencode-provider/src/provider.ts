@@ -111,7 +111,7 @@ export function createOAI2LMProvider(settings: OAI2LMProviderSettings): OAI2LMPr
     return bestMatch ? modelOverrides[bestMatch] : undefined;
   }
 
-  // Auto-discover models if enabled (call public method for consistency)
+  // Auto-discover models if enabled (trigger auto-discovery)
   if (settings.autoDiscoverModels !== false) {
     discoverModels().catch((err) => {
       console.warn('Failed to auto-discover models:', err);
