@@ -15,8 +15,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "node esbuild.cjs && tsc --emitDeclarationOnly",
-    "build:types": "tsc --emitDeclarationOnly",
+    "build": "node esbuild.cjs && tsc",
+    "build:types": "tsc",
     "watch": "node esbuild.cjs --watch",
     "clean": "rm -rf dist",
     "test": "echo \"Tests not yet implemented\"",
