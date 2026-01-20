@@ -81,24 +81,17 @@ export function createOAI2LMProvider(settings: OAI2LMProviderSettings): OAI2LMPr
     fetchFn
   );
 
-  // Auto-discover models if enabled
-  if (settings.autoDiscoverModels !== false) {
-    modelDiscovery.fetchModels().catch((err) => {
-      console.warn('Failed to auto-discover models:', err);
-    });
-  }
-
   /**
    * Discover available models from API
    */
-  function discoverModels(): Promise<ModelInfo[]> {
+  async function discoverModels(): Promise<ModelInfo[]> {
     return modelDiscovery.fetchModels();
   }
 
   /**
    * Get metadata for a specific model
    */
-  function getModelMetadata(modelId: string): Promise<ModelMetadata | undefined> {
+  async function getModelMetadata(modelId: string): Promise<ModelMetadata | undefined> {
     return modelDiscovery.getModelMetadata(modelId);
   }
 
@@ -116,6 +109,13 @@ export function createOAI2LMProvider(settings: OAI2LMProviderSettings): OAI2LMPr
     const patterns = Object.keys(modelOverrides);
     const bestMatch = findBestMatch(modelId, patterns);
     return bestMatch ? modelOverrides[bestMatch] : undefined;
+  }
+
+  // Auto-discover models if enabled (call public method for consistency)
+  if (settings.autoDiscoverModels !== false) {
+    discoverModels().catch((err) => {
+      console.warn('Failed to auto-discover models:', err);
+    });
   }
 
   // Create the callable provider function
