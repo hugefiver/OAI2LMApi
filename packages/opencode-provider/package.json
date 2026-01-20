@@ -1,6 +1,6 @@
 {
   "name": "@oai2lmapi/opencode-provider",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenAI-compatible provider for OpenCode with auto-discovery and advanced features",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,8 +15,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch",
+    "build": "node esbuild.cjs && tsc",
+    "build:types": "tsc",
+    "watch": "node esbuild.cjs --watch",
     "clean": "rm -rf dist",
     "test": "echo \"Tests not yet implemented\"",
     "lint": "echo \"Linting not yet configured\""
@@ -41,11 +42,12 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.0",
     "@ai-sdk/provider": "^1.0.0",
-    "@ai-sdk/provider-utils": "^2.0.0",
-    "@oai2lmapi/model-metadata": "workspace:*"
+    "@ai-sdk/provider-utils": "^2.0.0"
   },
   "devDependencies": {
+    "@oai2lmapi/model-metadata": "workspace:*",
     "@types/node": "^22.0.0",
+    "esbuild": "^0.27.2",
     "typescript": "^5.9.3"
   }
 }
