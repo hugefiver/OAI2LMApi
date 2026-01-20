@@ -2,9 +2,22 @@
  * Types for the OpenAI-compatible provider
  */
 
-import type { ModelMetadata } from '@oai2lmapi/model-metadata';
-
-export type { ModelMetadata };
+/**
+ * Metadata for a model, describing its capabilities and limits.
+ * This is a local definition that matches @oai2lmapi/model-metadata.
+ */
+export interface ModelMetadata {
+  /** Maximum input tokens the model can accept */
+  maxInputTokens: number;
+  /** Maximum output tokens the model can generate */
+  maxOutputTokens: number;
+  /** Whether the model supports tool/function calling */
+  supportsToolCalling: boolean;
+  /** Whether the model supports image/vision input */
+  supportsImageInput: boolean;
+  /** Model type: 'llm', 'embedding', 'rerank', 'image', 'audio', 'other' */
+  modelType: 'llm' | 'embedding' | 'rerank' | 'image' | 'audio' | 'other';
+}
 
 export interface ModelOverride {
   /** Max input tokens */

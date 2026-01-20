@@ -15,8 +15,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch",
+    "build": "node esbuild.cjs && tsc --emitDeclarationOnly",
+    "build:types": "tsc --emitDeclarationOnly",
+    "watch": "node esbuild.cjs --watch",
     "clean": "rm -rf dist",
     "test": "echo \"Tests not yet implemented\"",
     "lint": "echo \"Linting not yet configured\""
@@ -41,11 +42,12 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.0",
     "@ai-sdk/provider": "^1.0.0",
-    "@ai-sdk/provider-utils": "^2.0.0",
-    "@oai2lmapi/model-metadata": "workspace:*"
+    "@ai-sdk/provider-utils": "^2.0.0"
   },
   "devDependencies": {
+    "@oai2lmapi/model-metadata": "workspace:*",
     "@types/node": "^22.0.0",
+    "esbuild": "^0.27.2",
     "typescript": "^5.9.3"
   }
 }
