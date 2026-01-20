@@ -672,6 +672,11 @@ function matchHierarchicalPattern(modelId: string, patterns: ModelFamilyPattern[
  * 4. Return default metadata for unknown models
  */
 export function getModelMetadata(modelId: string): ModelMetadata {
+    // Validate input: return default metadata if modelId is not a valid string
+    if (typeof modelId !== 'string' || !modelId) {
+        return DEFAULT_MODEL_METADATA;
+    }
+
     // Try matching with original ID
     const directMatch = matchHierarchicalPattern(modelId, MODEL_FAMILY_PATTERNS);
     if (directMatch) {
