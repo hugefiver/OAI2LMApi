@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Consume shared metadata from `@oai2lmapi/model-metadata` for pattern-based capabilities.
+- **BREAKING**: Converted `OAI2LMProvider` from a class to a callable function factory pattern following AI SDK conventions. Use `createOAI2LMProvider()` to create provider instances.
+- **BREAKING**: Removed `CONFIG_FILENAME` constant from main entry point exports. Import directly from `'@oai2lmapi/opencode-provider/config.js'` if needed.
+- **BREAKING**: Removed `DEFAULT_MODEL_METADATA` object from main entry point exports. Import directly from `'@oai2lmapi/opencode-provider/modelMetadata.js'` if needed.
+- **BREAKING**: Changed `ModelDiscovery` to type-only export from main entry point. Import directly from `'@oai2lmapi/opencode-provider/modelDiscovery.js'` for runtime class.
+
+### Fixed
+- Fixed OpenCode plugin loader crash caused by non-function exports being called as functions.
 
 ## [0.1.0] - 2026-01-13
 

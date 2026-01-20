@@ -28,8 +28,9 @@ export type {
 // Model metadata utilities (functions only, no constants that could be mistaken for plugins)
 export { getModelMetadataFromPatterns } from './modelMetadata.js';
 
-// Model discovery: expose type only from main entry to avoid class being treated as a plugin
-// To use the runtime class, import directly from './modelDiscovery.js'
+// Model discovery is an internal implementation detail and is intentionally
+// not exported from the main entry point to avoid being treated as a plugin.
+// Advanced users who need the runtime class should import directly from './modelDiscovery.js'
 export type { ModelDiscovery } from './modelDiscovery.js';
 
 // Configuration utilities - export functions only from main entry
