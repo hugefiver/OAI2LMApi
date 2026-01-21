@@ -1,7 +1,7 @@
 {
   "name": "@oai2lmapi/opencode-provider",
-  "version": "0.1.3",
-  "description": "OpenAI-compatible provider for OpenCode with auto-discovery and advanced features",
+  "version": "0.2.0",
+  "description": "AI SDK Provider for OpenAI-compatible APIs with automatic model discovery for OpenCode",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,10 +27,12 @@
   },
   "keywords": [
     "opencode",
-    "openai",
     "ai-sdk",
-    "provider",
-    "llm"
+    "ai-sdk-provider",
+    "openai-compatible",
+    "auto-discovery",
+    "llm",
+    "language-model"
   ],
   "author": "OAI2LMApi Contributors",
   "license": "MIT",
@@ -39,16 +41,19 @@
     "url": "https://github.com/hugefiver/OAI2LMApi.git",
     "directory": "packages/opencode-provider"
   },
-  "peerDependencies": {
-    "ai": "^4.0.0"
-  },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.0",
-    "@ai-sdk/provider": "^1.0.0",
-    "@ai-sdk/provider-utils": "^2.0.0"
+    "@oai2lmapi/model-metadata": "workspace:*"
+  },
+  "peerDependencies": {
+    "ai": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@oai2lmapi/model-metadata": "workspace:*",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
     "@typescript-eslint/parser": "^8.50.0",

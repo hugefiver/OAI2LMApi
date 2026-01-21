@@ -1,24 +1,34 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/@oai2lmapi/opencode-provider/oai2lm.schema.json",
-  "title": "OAI2LM OpenCode Provider Config (oai2lm.json)",
-  "description": "Configuration file for @oai2lmapi/opencode-provider. Used by createOAI2LMProviderFromConfig() and createSettingsFromConfig().",
+  "title": "OAI2LM OpenCode Plugin Config (oai2lm.json)",
+  "description": "Configuration file for @oai2lmapi/opencode-provider OpenCode plugin. Auto-discovers models from OpenAI-compatible APIs.",
   "type": "object",
   "additionalProperties": false,
+  "required": ["baseURL"],
   "properties": {
-    "apiKey": {
+    "$schema": {
       "type": "string",
-      "description": "API key for authentication. Optional if OAI2LM_API_KEY is set.",
-      "minLength": 1
+      "description": "JSON Schema reference."
     },
     "baseURL": {
       "type": "string",
-      "description": "Base URL for API calls (OpenAI-compatible). If omitted, defaults to https://api.openai.com/v1.",
+      "description": "Base URL for API calls (required). Example: https://api.example.com/v1",
+      "minLength": 1
+    },
+    "apiKey": {
+      "type": "string",
+      "description": "API key for authentication. Supports {env:VAR} and {file:path} syntax. Falls back to OAI2LM_API_KEY env var.",
       "minLength": 1
     },
     "name": {
       "type": "string",
-      "description": "Provider name used by the AI SDK provider (defaults to 'oai2lm').",
+      "description": "Provider ID used in OpenCode model selection (defaults to 'oai2lm').",
+      "minLength": 1
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Display name shown in OpenCode UI.",
       "minLength": 1
     },
     "headers": {
@@ -28,9 +38,9 @@
         "type": "string"
       }
     },
-    "autoDiscoverModels": {
-      "type": "boolean",
-      "description": "Auto-discover models on initialization (default: true)."
+    "modelFilter": {
+      "type": "string",
+      "description": "Wildcard pattern to filter models. Only matching models are registered."
     },
     "modelOverrides": {
       "type": "object",
@@ -62,37 +72,6 @@
         "supportsImageInput": {
           "type": "boolean",
           "description": "Override whether the model supports image inputs."
-        },
-        "temperature": {
-          "type": "number",
-          "description": "Default temperature (reserved / forward compatibility).",
-          "minimum": 0
-        },
-        "usePromptBasedToolCalling": {
-          "type": "boolean",
-          "description": "Use XML prompt-based tool calling instead of native tools (reserved / forward compatibility)."
-        },
-        "suppressChainOfThought": {
-          "type": "boolean",
-          "description": "Strip <think>...</think> blocks from output (reserved / forward compatibility)."
-        },
-        "captureReasoning": {
-          "type": "boolean",
-          "description": "Capture reasoning content separately (reserved / forward compatibility)."
-        },
-        "thinkingLevel": {
-          "description": "Thinking level: token budget or preset (reserved / forward compatibility).",
-          "oneOf": [
-            { "type": "number", "minimum": 0 },
-            {
-              "type": "string",
-              "enum": ["low", "medium", "high", "auto", "none"]
-            }
-          ]
-        },
-        "trimXmlToolParameterWhitespace": {
-          "type": "boolean",
-          "description": "Trim whitespace in XML tool parameters (reserved / forward compatibility)."
         }
       }
     }

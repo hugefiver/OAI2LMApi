@@ -5,21 +5,42 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-01-21
 
 ### Changed
-- Consume shared metadata from `@oai2lmapi/model-metadata` for pattern-based capabilities.
-- **BREAKING**: Converted `OAI2LMProvider` from a class to a callable function factory pattern following AI SDK conventions. Use `createOAI2LMProvider()` to create provider instances.
-- **BREAKING**: Removed `CONFIG_FILENAME` constant from main entry point exports. Import directly from `'@oai2lmapi/opencode-provider/config.js'` if needed.
-- **BREAKING**: Removed `DEFAULT_MODEL_METADATA` object from main entry point exports. Import directly from `'@oai2lmapi/opencode-provider/modelMetadata.js'` if needed.
-- **BREAKING**: Changed `ModelDiscovery` to type-only export from main entry point. Import directly from `'@oai2lmapi/opencode-provider/modelDiscovery.js'` for runtime class.
 
-### Fixed
-- Fixed `TypeError: undefined is not an object (evaluating 'hook.config')` when OpenCode's plugin loader calls exported functions as plugin factories. All exports now return empty hooks objects when called with OpenCode's PluginInput.
+- **BREAKING**: Complete refactor to AI SDK Provider
+
+### Added
+
+- AI SDK Provider interface compatible with OpenCode and Vercel AI SDK
+- `createOai2lm()` function that creates a provider instance
+- Automatic model discovery from `/models` endpoint at runtime
+- `provider.listModels()` - list all discovered models
+- `provider.getModelMetadata(id)` - get enriched metadata for a model
+- `provider.refreshModels()` - force refresh model cache
+- Support for `@ai-sdk/openai-compatible` as the underlying provider
+
+### How to use in OpenCode
+
+```json
+{
+  "provider": {
+    "my-api": {
+      "npm": "@oai2lmapi/opencode-provider",
+      "options": {
+        "baseURL": "https://api.example.com/v1",
+        "apiKey": "your-api-key"
+      }
+    }
+  }
+}
+```
 
 ## [0.1.0] - 2026-01-13
 
 ### Added
+
 - Initial release of @oai2lmapi/opencode-provider
 - Auto-discovery of models from API `/models` endpoint
 - Smart capability detection (tool calling, vision, context limits)

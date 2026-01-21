@@ -12,12 +12,12 @@ VSCode extension that bridges OpenAI-compatible APIs to VSCode's Language Model 
 
 ### @oai2lmapi/opencode-provider
 
-OpenAI-compatible provider plugin for [OpenCode](https://github.com/anomalyco/opencode), featuring:
+AI SDK Provider for [OpenCode](https://github.com/anomalyco/opencode), featuring:
 
+- Native AI SDK provider interface (`createOai2lm`)
 - Automatic model discovery from API `/models` endpoint
-- Support for chain-of-thought via `<think>` tags
-- Prompt-based tool calling for models without native function calling
-- Configurable model overrides
+- Model metadata enrichment from `@oai2lmapi/model-metadata`
+- Configurable model overrides with wildcard patterns
 
 [View README](./packages/opencode-provider/README.md)
 

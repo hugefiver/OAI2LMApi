@@ -1,194 +1,238 @@
 # @oai2lmapi/opencode-provider
 
-OpenAI-compatible provider for [OpenCode](https://github.com/anomalyco/opencode), built on top of the Vercel AI SDK.
+AI SDK Provider for **OpenAI-compatible APIs** with **automatic model discovery**.
 
-This package focuses on **connection + model discovery + metadata enrichment**, so you can point OpenCode (or any Vercel AI SDK based app) to an OpenAI-compatible endpoint.
+Use this provider in [OpenCode](https://opencode.ai) to connect to any OpenAI-compatible API endpoint. Unlike static configurations, this provider automatically discovers all available models from your API's `/models` endpoint.
 
 ## Features
 
-- **OpenAI-compatible transport** via `@ai-sdk/openai-compatible`
-- **Model discovery**: fetches `$baseURL/models`
-- **Metadata enrichment**: merges API-returned hints + `@oai2lmapi/model-metadata` registry
-- **Config file support**: optional `oai2lm.json` with env override support
-
-> Note: Some fields in `ModelOverride` (e.g. reasoning / prompt-based tool calling) are currently **reserved for forward compatibility**. The current provider exposes overrides via `provider.getModelOverride(modelId)` but does not automatically rewrite prompts or strip `<think>` output.
+- **AI SDK Provider**: Native provider for OpenCode and Vercel AI SDK
+- **Auto-discovery**: Automatically fetches models from `$baseURL/models`
+- **Zero model configuration**: No need to manually list each model
+- **Metadata enrichment**: Merges API-returned metadata with `@oai2lmapi/model-metadata` registry
+- **Wildcard overrides**: Apply settings to multiple models using patterns like `gpt-4*`
+- **Config file support**: Optional `oai2lm.json` for persistent configuration
 
 ## Installation
 
 ```bash
+npm install @oai2lmapi/opencode-provider
+# or
 pnpm add @oai2lmapi/opencode-provider
 ```
 
-## Usage
+## Usage with OpenCode
 
-### Recommended: OpenCode native JSON/JSONC config (`opencode.json` / `opencode.jsonc`)
-
-OpenCode supports **JSON and JSONC** (JSON with comments) natively and provides an official schema:
-
-- `$schema`: `https://opencode.ai/config.json`
-
-If your goal is simply “use an OpenAI-compatible endpoint in OpenCode”, you typically **do not need a TS/JS config file**. Use OpenCode’s custom provider configuration directly.
-
-Create `opencode.jsonc` in your project root (or global `~/.config/opencode/opencode.json`):
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-
-  // Your own provider id (used by the `model` field)
-  "provider": {
-    "my-oai2lm": {
-      // OpenCode uses AI SDK provider packages; use this for OpenAI-compatible endpoints
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "My OpenAI-Compatible",
-      "options": {
-        "baseURL": "https://api.example.com/v1",
-
-        // Recommended: variable substitution
-        // 1) env:  {env:VAR}
-        // 2) file: {file:path}
-        "apiKey": "{env:OAI2LM_API_KEY}",
-
-        // Optional: add headers to every request
-        "headers": {
-          "X-Trace": "true",
-        },
-      },
-
-      // Optional: list common models and provide token limits (helps OpenCode estimate budget)
-      "models": {
-        "gpt-4o": {
-          "name": "gpt-4o",
-          "limit": { "context": 128000, "output": 16384 },
-        },
-      },
-    },
-  },
-
-  // Choose default model: providerID/modelID
-  "model": "my-oai2lm/gpt-4o",
-}
-```
-
-For config locations, precedence, and variable substitution, see the official docs:
-
-- <https://opencode.ai/docs/config/>
-- <https://opencode.ai/docs/providers/>
-
-### Code usage (when you want to reuse this provider in your JS/TS app)
-
-In your `opencode.config.ts` (or similar):
-
-```ts
-import { createOAI2LMProvider } from "@oai2lmapi/opencode-provider";
-
-export default {
-  providers: {
-    myapi: createOAI2LMProvider({
-      apiKey: process.env.OAI2LM_API_KEY!,
-      baseURL: "https://api.example.com/v1",
-    }),
-  },
-};
-```
-
-### Using `oai2lm.json` (recommended)
-
-If you prefer not to hard-code settings in your config, use:
-
-```ts
-import { createOAI2LMProviderFromConfig } from "@oai2lmapi/opencode-provider";
-
-export default {
-  providers: {
-    myapi: createOAI2LMProviderFromConfig(),
-  },
-};
-```
-
-You can still override specific fields:
-
-```ts
-import { createOAI2LMProviderFromConfig } from "@oai2lmapi/opencode-provider";
-
-const provider = createOAI2LMProviderFromConfig({
-  baseURL: "https://api.custom.com/v1",
-  headers: { "X-My-Header": "demo" },
-});
-```
-
-## Config file (`oai2lm.json`)
-
-This package looks for `oai2lm.json` in the following order (first match wins):
-
-1. `$XDG_DATA_HOME/opencode/oai2lm.json` (default: `~/.local/share/opencode/oai2lm.json`)
-2. `$XDG_CONFIG_HOME/opencode/oai2lm.json` (default: `~/.config/opencode/oai2lm.json`)
-
-On Windows, the default paths become:
-
-- `%USERPROFILE%\.local\share\opencode\oai2lm.json`
-- `%USERPROFILE%\.config\opencode\oai2lm.json`
-
-### Priority order
-
-Highest → lowest:
-
-1. Explicit overrides passed to `createOAI2LMProviderFromConfig({ ... })`
-2. Environment variables (`OAI2LM_API_KEY`, `OAI2LM_BASE_URL`)
-3. `oai2lm.json`
-
-### This package's `oai2lm.json` (package-level JSON config)
-
-If you are using `@oai2lmapi/opencode-provider` inside **your own JS/TS app** (instead of only configuring OpenCode), put connection settings in `oai2lm.json` and call `createOAI2LMProviderFromConfig()` in code.
-
-> Important: this `oai2lm.json` is read by **this package**, and is separate from OpenCode’s `opencode.json`.
-
-#### JSON Schema（补全与校验）
-
-We ship a schema file at `@oai2lmapi/opencode-provider/oai2lm.schema.json`.
-
-You can reference it in your config:
+Add to your `opencode.json`:
 
 ```json
 {
-  "$schema": "https://unpkg.com/@oai2lmapi/opencode-provider/oai2lm.schema.json",
-  "baseURL": "https://api.example.com/v1",
-  "name": "myapi",
-  "headers": {
-    "X-Trace": "true"
-  },
-  "autoDiscoverModels": true,
-  "modelOverrides": {
-    "gpt-4o*": {
-      "maxInputTokens": 128000,
-      "supportsImageInput": true
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "my-api": {
+      "npm": "@oai2lmapi/opencode-provider",
+      "options": {
+        "baseURL": "https://api.example.com/v1",
+        "apiKey": "your-api-key"
+      }
     }
   }
 }
 ```
 
-If you prefer a local schema reference (no network dependency), use:
+That's it! OpenCode will automatically discover all available models from your API.
 
-- `./node_modules/@oai2lmapi/opencode-provider/oai2lm.schema.json`
+### Using environment variables
 
-URL-based schema (works well for most editors):
+```json
+{
+  "provider": {
+    "my-api": {
+      "npm": "@oai2lmapi/opencode-provider",
+      "env": ["MY_API_KEY"],
+      "options": {
+        "baseURL": "https://api.example.com/v1"
+      }
+    }
+  }
+}
+```
 
-- `https://unpkg.com/@oai2lmapi/opencode-provider/oai2lm.schema.json`
+Set `MY_API_KEY` in your environment:
 
-### Config fields
+```bash
+export MY_API_KEY=your-api-key
+```
 
-- `apiKey` (string, optional): can be omitted if you use `OAI2LM_API_KEY`.
-- `baseURL` (string, optional): defaults to `https://api.openai.com/v1` if not set.
-- `name` (string, optional): provider name, defaults to `oai2lm`.
-- `headers` (object, optional): extra headers added to every request.
-- `autoDiscoverModels` (boolean, optional): defaults to `true`.
-- `modelOverrides` (object, optional): per-model overrides keyed by wildcard patterns (`*` / `?`).
+## Programmatic Usage
 
-## How it works (high level)
+```typescript
+import { createOai2lm } from "@oai2lmapi/opencode-provider";
+import { streamText } from "ai";
 
-1. Creates an OpenAI-compatible provider using `@ai-sdk/openai-compatible`.
-2. Optionally fetches `$baseURL/models` and caches results for 5 minutes.
-3. Enriches each model with best-effort metadata (context length / tool calling / vision), plus fallback patterns from `@oai2lmapi/model-metadata`.
+// Create provider
+const provider = createOai2lm({
+  baseURL: "https://api.example.com/v1",
+  apiKey: "your-api-key",
+});
+
+// List discovered models
+const models = await provider.listModels();
+console.log(models);
+
+// Use a model
+const model = provider.languageModel("gpt-4");
+const result = await streamText({
+  model,
+  messages: [{ role: "user", content: "Hello!" }],
+});
+```
+
+## Provider Options
+
+| Option           | Type      | Required | Description                                                 |
+| ---------------- | --------- | -------- | ----------------------------------------------------------- |
+| `baseURL`        | `string`  | Yes      | Base URL for API calls (e.g., `https://api.example.com/v1`) |
+| `apiKey`         | `string`  | No       | API key for authentication                                  |
+| `name`           | `string`  | No       | Provider name (default: `"oai2lm"`)                         |
+| `headers`        | `object`  | No       | Custom headers for all requests                             |
+| `modelFilter`    | `string`  | No       | Regex pattern to filter models                              |
+| `modelOverrides` | `object`  | No       | Per-model configuration overrides (supports wildcards)      |
+| `useConfigFile`  | `boolean` | No       | Merge settings from `oai2lm.json` (default: `true`)         |
+
+## Config File
+
+For persistent configuration, create `oai2lm.json` in one of these locations:
+
+1. `~/.local/share/opencode/oai2lm.json`
+2. `~/.config/opencode/oai2lm.json`
+
+```jsonc
+{
+  // Base URL for your OpenAI-compatible API
+  "baseURL": "https://api.example.com/v1",
+
+  // API key (supports variable substitution)
+  "apiKey": "{env:MY_API_KEY}",
+
+  // Provider ID
+  "name": "myapi",
+
+  // Display name
+  "displayName": "My API",
+
+  // Custom headers
+  "headers": {
+    "X-Custom-Header": "value",
+  },
+
+  // Filter models by regex
+  "modelFilter": "^(gpt-|claude-)",
+
+  // Override model metadata (supports wildcards)
+  "modelOverrides": {
+    "gpt-4*": {
+      "maxInputTokens": 128000,
+      "supportsImageInput": true,
+    },
+  },
+}
+```
+
+### Variable substitution
+
+The `apiKey` field supports:
+
+- `{env:VAR_NAME}` - Read from environment variable
+- `{file:/path/to/file}` - Read from file
+
+## Extended API
+
+### `provider.listModels()`
+
+Returns a list of discovered models with metadata:
+
+```typescript
+const models = await provider.listModels();
+// [{ id: "gpt-4", name: "GPT-4", object: "model", ... }]
+```
+
+### `provider.getModelMetadata(modelId)`
+
+Returns enriched metadata for a specific model:
+
+```typescript
+const metadata = await provider.getModelMetadata("gpt-4");
+// { maxInputTokens: 128000, maxOutputTokens: 4096, supportsToolCalling: true, ... }
+```
+
+### `provider.refreshModels()`
+
+Force refresh the model list from the API:
+
+```typescript
+await provider.refreshModels();
+```
+
+## Example Configurations
+
+### OpenRouter
+
+```json
+{
+  "provider": {
+    "openrouter": {
+      "npm": "@oai2lmapi/opencode-provider",
+      "env": ["OPENROUTER_API_KEY"],
+      "options": {
+        "baseURL": "https://openrouter.ai/api/v1"
+      }
+    }
+  }
+}
+```
+
+### Local Ollama
+
+```json
+{
+  "provider": {
+    "ollama": {
+      "npm": "@oai2lmapi/opencode-provider",
+      "options": {
+        "baseURL": "http://localhost:11434/v1",
+        "apiKey": "ollama"
+      }
+    }
+  }
+}
+```
+
+### Together AI
+
+```json
+{
+  "provider": {
+    "together": {
+      "npm": "@oai2lmapi/opencode-provider",
+      "env": ["TOGETHER_API_KEY"],
+      "options": {
+        "baseURL": "https://api.together.xyz/v1"
+      }
+    }
+  }
+}
+```
+
+## How It Works
+
+1. When loaded, the provider creates an `@ai-sdk/openai-compatible` instance
+2. On first model request or `listModels()` call, it fetches `/models` from your API
+3. Each model is enriched with metadata from:
+   - API response (context_length, max_tokens, etc.)
+   - `@oai2lmapi/model-metadata` pattern matching
+   - Your config file overrides
+4. The provider then works like any standard AI SDK provider
 
 ## License
 

@@ -1,113 +1,336 @@
 /**
  * @oai2lmapi/opencode-provider
- * 
- * OpenAI-compatible provider for OpenCode with auto-discovery and advanced features
- * 
- * Main exports:
- * - createOAI2LMProvider: Factory function to create a callable provider
- * - createOAI2LMProviderFromConfig: Factory function to create provider from config file
- * 
- * For configuration utilities, import from './config.js'
+ *
+ * AI SDK Provider for OpenAI-compatible APIs with automatic model discovery.
+ *
+ * This provider:
+ * 1. Reads configuration from oai2lm.json (baseURL, apiKey, etc.)
+ * 2. Auto-discovers models from the /models endpoint
+ * 3. Provides LanguageModelV2 instances for each discovered model
+ *
+ * Usage in opencode.json:
+ *   {
+ *     "provider": {
+ *       "my-provider": {
+ *         "npm": "@oai2lmapi/opencode-provider",
+ *         "options": {
+ *           "baseURL": "https://api.example.com/v1",
+ *           "apiKey": "your-api-key"
+ *         }
+ *       }
+ *     }
+ *   }
  */
 
-// Import original functions from provider and config modules
 import {
-  createOAI2LMProvider as _createOAI2LMProvider,
-  createOAI2LMProviderFromConfig as _createOAI2LMProviderFromConfig,
-  type OAI2LMProvider,
-} from './provider.js';
-
+  createOpenAICompatible,
+  type OpenAICompatibleProvider,
+} from "@ai-sdk/openai-compatible";
 import {
-  loadConfig as _loadConfig,
-  createSettingsFromConfig as _createSettingsFromConfig,
-  getConfigFilePath as _getConfigFilePath,
-  getDataDir as _getDataDir,
-  getConfigDir as _getConfigDir,
-  resolveApiKey as _resolveApiKey,
-  resolveBaseURL as _resolveBaseURL,
+  loadConfig,
+  resolveApiKey,
   type OAI2LMConfig,
-} from './config.js';
+  type ModelOverride,
+} from "./config.js";
+import { discoverModels, type DiscoveredModel } from "./discover.js";
+import {
+  getModelMetadataFromPatterns,
+  mergeMetadata,
+  type ModelMetadata,
+} from "./metadata.js";
 
-import { getModelMetadataFromPatterns as _getModelMetadataFromPatterns } from './modelMetadata.js';
-
-// Re-export types
-export type { OAI2LMProvider };
-export type {
-  OAI2LMProviderSettings,
-  ModelOverride,
-  ModelMetadata,
-  ModelInfo,
-} from './types.js';
-export type { OAI2LMConfig };
-export type { ModelDiscovery } from './modelDiscovery.js';
+// Re-export for convenience
+export {
+  loadConfig,
+  resolveApiKey,
+  discoverModels,
+  type OAI2LMConfig,
+  type ModelOverride,
+  type DiscoveredModel,
+  type ModelMetadata,
+};
 
 /**
- * Detects if the first argument looks like OpenCode's PluginInput.
- * OpenCode's plugin loader calls every export as a function with PluginInput,
- * which has a `client` property. If detected, we return an empty hooks object
- * to prevent crashes in the plugin loader.
- * 
- * Uses multiple checks to reduce false positives from legitimate function
- * arguments that might happen to have a `client` property.
+ * Provider settings that extend OpenAI-compatible settings
  */
-function isPluginInput(arg: unknown): arg is { client: unknown } {
-  if (typeof arg !== 'object' || arg === null) {
-    return false;
-  }
+export interface Oai2lmProviderSettings {
+  /**
+   * Base URL for API calls (required).
+   * Example: "https://api.example.com/v1"
+   */
+  baseURL: string;
 
-  // Require an own (non-inherited) `client` property to reduce false positives
-  if (!Object.prototype.hasOwnProperty.call(arg, 'client')) {
-    return false;
-  }
+  /**
+   * API key for authentication.
+   * If not provided, will try to load from config file or environment.
+   */
+  apiKey?: string;
 
-  const client = (arg as { client?: unknown }).client;
+  /**
+   * Provider name (used for identification in logs).
+   * Defaults to "oai2lm".
+   */
+  name?: string;
 
-  // PluginInput.client is expected to be a non-null object (e.g., an API client instance)
-  if (typeof client !== 'object' || client === null) {
-    return false;
-  }
+  /**
+   * Custom headers to include in all requests.
+   */
+  headers?: Record<string, string>;
 
-  return true;
+  /**
+   * Model filter pattern (regex). Only models matching this pattern will be available.
+   */
+  modelFilter?: string;
+
+  /**
+   * Per-model configuration overrides.
+   * Keys can use wildcards (e.g., "gpt-*", "claude-*").
+   */
+  modelOverrides?: Record<string, ModelOverride>;
+
+  /**
+   * Whether to use config file for additional settings.
+   * If true, will merge settings from oai2lm.json.
+   * @default true
+   */
+  useConfigFile?: boolean;
 }
 
 /**
- * Empty hooks object returned when functions are mistakenly called as plugin factories.
- * This prevents OpenCode's plugin loader from crashing when iterating over exports.
+ * Extended provider interface with model discovery
  */
-const EMPTY_HOOKS = Object.freeze({});
+export interface Oai2lmProvider extends OpenAICompatibleProvider<
+  string,
+  string,
+  string,
+  string
+> {
+  /**
+   * Get list of available models (discovered from API)
+   */
+  listModels(): Promise<DiscoveredModel[]>;
+
+  /**
+   * Get metadata for a specific model
+   */
+  getModelMetadata(modelId: string): Promise<ModelMetadata | undefined>;
+
+  /**
+   * Refresh the model list from the API
+   */
+  refreshModels(): Promise<void>;
+}
+
+// Cached models f{or each provider }instance
+const modelCache = new WeakMap<
+  object,
+  {
+    models: DiscoveredModel[];
+    metadata: Map<string, ModelMetadata>;
+    lastRefresh: number;
+  }
+>();
 
 /**
- * Type for a guarded function that may return EMPTY_HOOKS when called with PluginInput.
+ * Find matching model override by pattern (supports wildcards)
  */
-type Guarded<T extends (...args: any[]) => any> = (...args: Parameters<T>) => ReturnType<T> | typeof EMPTY_HOOKS;
+function findModelOverride(
+  modelId: string,
+  overrides?: Record<string, ModelOverride>,
+): ModelOverride | undefined {
+  if (!overrides) return undefined;
 
-/**
- * Wraps a function to guard against being called as an OpenCode plugin factory.
- * If called with PluginInput, returns an empty hooks object instead of the normal result.
- */
-function guardPluginCall<T extends (...args: any[]) => any>(fn: T): Guarded<T> {
-  return (...args: Parameters<T>) => {
-    if (args.length > 0 && isPluginInput(args[0])) {
-      return EMPTY_HOOKS;
+  // Direct match first
+  if (overrides[modelId]) {
+    return overrides[modelId];
+  }
+
+  // Wildcard pattern matching
+  for (const [pattern, override] of Object.entries(overrides)) {
+    if (pattern.includes("*") || pattern.includes("?")) {
+      const regex = new RegExp(
+        "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
+      );{}
+      if (regex.test(modelId)) {
+        return override;
+      }
     }
-    return fn(...args);
+  }
+
+  return undefined;
+}
+
+/**
+ * Merge settings from config file with provided options
+ */
+function mergeWithConfig(
+  options: Oai2lmProviderSettings,
+  config: OAI2LMConfig | undefined,
+): Oai2lmProviderSettings {
+  if (!config) return options;
+
+  return {
+    // Options take precedence over config
+    baseURL: options.baseURL || config.baseURL || "",
+    apiKey: options.apiKey || resolveApiKey(config),
+    name: options.name || config.name,
+    headers: {
+      ...config.headers,
+      ...options.headers,
+    },
+    modelFilter: options.modelFilter || config.modelFilter,
+    modelOverrides: {
+      ...config.modelOverrides,
+      ...options.modelOverrides,
+    },
+    useConfigFile: options.useConfigFile,
   };
 }
 
-// Wrapped exports that are safe to call as plugin factories
-// These return empty hooks when called with PluginInput instead of crashing
+/**
+ * Create an Oai2lm provider instance.
+ *
+ * This provider wraps @ai-sdk/openai-compatible and adds:
+ * - Automatic model discovery from /models endpoint
+ * - Configuration file support (oai2lm.json)
+ * - Model metadata from pattern matching
+ *
+ * @example
+ * ```typescript
+ * import { createOai2lm } from "@oai2lmapi/opencode-provider";
+ *
+ * const provider = createOai2lm({
+ *   baseURL: "https://api.example.com/v1",
+ *   apiKey: "your-api-key",
+ * });
+ *
+ * // Use any model
+ * const model = provider.languageModel("gpt-4");
+ * ```
+ */
+export function createOai2lm(options: Oai2lmProviderSettings): Oai2lmProvider {
+  // Load config file if enabled (default: true)
+  const config = options.useConfigFile !== false ? loadConfig() : undefined;
+  const mergedOptions = mergeWithConfig(options, config);
 
-export const createOAI2LMProvider = guardPluginCall(_createOAI2LMProvider);
-export const createOAI2LMProviderFromConfig = guardPluginCall(_createOAI2LMProviderFromConfig);
-export const loadConfig = guardPluginCall(_loadConfig);
-export const createSettingsFromConfig = guardPluginCall(_createSettingsFromConfig);
-export const getConfigFilePath = guardPluginCall(_getConfigFilePath);
-export const getDataDir = guardPluginCall(_getDataDir);
-export const getConfigDir = guardPluginCall(_getConfigDir);
-export const resolveApiKey = guardPluginCall(_resolveApiKey);
-export const resolveBaseURL = guardPluginCall(_resolveBaseURL);
-export const getModelMetadataFromPatterns = guardPluginCall(_getModelMetadataFromPatterns);
+  // Validate required settings
+  if (!mergedOptions.baseURL) {
+    throw new Error(
+      "baseURL is required. Provide it in options or in oai2lm.json config file.",
+    );
+  }
 
-// DEFAULT_MODEL_METADATA is intentionally not exported from the main entry point
-// to avoid OpenCode's plugin loader attempting to call it as a function.
-// Users who need DEFAULT_MODEL_METADATA should import directly from './modelMetadata.js'
+  // Create the underlying OpenAI-compatible provider
+  const baseProvider = createOpenAICompatible({
+    baseURL: mergedOptions.baseURL.replace(/\/+$/, ""),
+    name: mergedOptions.name || "oai2lm",
+    apiKey: mergedOptions.apiKey,
+    headers: mergedOptions.headers,
+  });
+
+  // Cache key for this provider instance
+  const cacheKey = {};
+
+  /**
+   * Discover models from API and build metadata
+   */
+  async function discoverAndCache(): Promise<void> {
+    const apiKey = mergedOptions.apiKey || "";
+    const models = await discoverModels(
+      mergedOptions.baseURL,
+      apiKey,
+      mergedOptions.headers,
+    );
+
+    // Apply filter if configured
+    let filteredModels = models;
+    if (mergedOptions.modelFilter) {
+      const filterRegex = new RegExp(mergedOptions.modelFilter);
+      filteredModels = models.filter((m) => filterRegex.test(m.id));
+    }
+
+    // Build metadata map
+    const metadataMap = new Map<string, ModelMetadata>();
+    for (const model of filteredModels) {
+      // Get metadata from pattern matching
+      const patternMetadata = getModelMetadataFromPatterns(model.id);
+      // Merge with API-returned metadata
+      const metadata = mergeMetadata(model.metadata, patternMetadata);
+      // Apply any model overrides
+      const override = findModelOverride(
+        model.id,
+        mergedOptions.modelOverrides,
+      );
+
+      if (override) {
+        if (override.maxInputTokens !== undefined) {
+          metadata.maxInputTokens = override.maxInputTokens;
+        }
+        if (override.maxOutputTokens !== undefined) {
+          metadata.maxOutputTokens = override.maxOutputTokens;
+        }
+        if (override.supportsToolCalling !== undefined) {
+          metadata.supportsToolCalling = override.supportsToolCalling;
+        }
+        if (override.supportsImageInput !== undefined) {
+          metadata.supportsImageInput = override.supportsImageInput;
+        }
+      }
+
+      metadataMap.set(model.id, metadata);
+    }
+
+    modelCache.set(cacheKey, {
+      models: filteredModels,
+      metadata: metadataMap,
+      lastRefresh: Date.now(),
+    });
+  }
+
+  /**
+   * Get cached data, discovering if necessary
+   */
+  async function getCache() {
+    let cache = modelCache.get(cacheKey);
+    if (!cache) {
+      await discoverAndCache();
+      cache = modelCache.get(cacheKey)!;
+    }
+    return cache;
+  }
+
+  // Create the extended provider
+  const provider = function (modelId: string) {
+    return baseProvider(modelId);
+  } as Oai2lmProvider;
+
+  // Copy all methods from base provider (V2 interface)
+  provider.languageModel = (modelId: string) =>
+    baseProvider.languageModel(modelId);
+  provider.chatModel = (modelId: string) => baseProvider.chatModel(modelId);
+  provider.completionModel = (modelId: string) =>
+    baseProvider.completionModel(modelId);
+  provider.textEmbeddingModel = (modelId: string) =>
+    baseProvider.textEmbeddingModel(modelId);
+  provider.imageModel = (modelId: string) => baseProvider.imageModel(modelId);
+
+  // Add discovery methods
+  provider.listModels = async () => {
+    const cache = await getCache();
+    return cache.models;
+  };
+
+  provider.getModelMetadata = async (modelId: string) => {
+    const cache = await getCache();
+    return cache.metadata.get(modelId);
+  };
+
+  provider.refreshModels = async () => {
+    await discoverAndCache();
+  };
+
+  return provider;
+}
+
+// Default export for convenience
+export default createOai2lm;

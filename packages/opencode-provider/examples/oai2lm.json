@@ -1,15 +1,22 @@
 {
   "$schema": "https://unpkg.com/@oai2lmapi/opencode-provider/oai2lm.schema.json",
   "baseURL": "https://api.example.com/v1",
+  "apiKey": "{env:MY_API_KEY}",
   "name": "myapi",
-  "autoDiscoverModels": true,
+  "displayName": "My OpenAI-Compatible API",
   "headers": {
     "X-Trace": "true"
   },
   "modelOverrides": {
-    "gpt-4o*": {
+    "gpt-4*": {
       "maxInputTokens": 128000,
-      "supportsImageInput": true
+      "supportsImageInput": true,
+      "supportsToolCalling": true
+    },
+    "claude-*": {
+      "maxInputTokens": 200000,
+      "maxOutputTokens": 8192,
+      "supportsToolCalling": true
     }
   }
 }
