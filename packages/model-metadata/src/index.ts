@@ -671,11 +671,11 @@ function matchHierarchicalPattern(modelId: string, patterns: ModelFamilyPattern[
  * 3. Check for non-LLM patterns (embedding, image, audio, etc.)
  * 4. Return default metadata for unknown models
  * 
- * @param modelId - The model identifier string. If undefined, null, empty, 
+ * @param modelId - The model identifier. If undefined, null, empty,
  *                  or non-string, returns DEFAULT_MODEL_METADATA as a fallback.
  * @returns ModelMetadata for the specified model
  */
-export function getModelMetadata(modelId: string): ModelMetadata {
+export function getModelMetadata(modelId: unknown): ModelMetadata {
     // Validate input: return default metadata if modelId is not a valid string
     if (typeof modelId !== 'string' || !modelId) {
         return DEFAULT_MODEL_METADATA;
