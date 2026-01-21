@@ -69,3 +69,35 @@ test('supportsToolCalling respects model capabilities', () => {
   assert.equal(supportsToolCalling('gpt-4o'), true);
   assert.equal(supportsToolCalling('text-embedding-3-large'), false);
 });
+
+test('handles undefined modelId gracefully', () => {
+  const metadata = getModelMetadata(undefined);
+  assert.deepEqual(metadata, DEFAULT_MODEL_METADATA);
+});
+
+test('handles null modelId gracefully', () => {
+  const metadata = getModelMetadata(null);
+  assert.deepEqual(metadata, DEFAULT_MODEL_METADATA);
+});
+
+test('handles empty string modelId gracefully', () => {
+  const metadata = getModelMetadata('');
+  assert.deepEqual(metadata, DEFAULT_MODEL_METADATA);
+});
+
+test('handles non-string modelId gracefully', () => {
+  const metadata = getModelMetadata(123);
+  assert.deepEqual(metadata, DEFAULT_MODEL_METADATA);
+});
+
+test('isLLMModel handles invalid modelId gracefully', () => {
+  assert.equal(isLLMModel(undefined), true); // DEFAULT_MODEL_METADATA.modelType is 'llm'
+  assert.equal(isLLMModel(null), true);
+  assert.equal(isLLMModel(''), true);
+});
+
+test('supportsToolCalling handles invalid modelId gracefully', () => {
+  assert.equal(supportsToolCalling(undefined), false); // DEFAULT_MODEL_METADATA.supportsToolCalling is false
+  assert.equal(supportsToolCalling(null), false);
+  assert.equal(supportsToolCalling(''), false);
+});
