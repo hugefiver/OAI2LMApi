@@ -9,10 +9,12 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./oai2lm.schema.json": "./oai2lm.schema.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "oai2lm.schema.json"
   ],
   "scripts": {
     "build": "node esbuild.cjs && tsc",

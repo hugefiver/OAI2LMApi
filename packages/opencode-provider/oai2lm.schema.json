@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/@oai2lmapi/opencode-provider/oai2lm.schema.json",
+  "title": "OAI2LM OpenCode Provider Config (oai2lm.json)",
+  "description": "Configuration file for @oai2lmapi/opencode-provider. Used by createOAI2LMProviderFromConfig() and createSettingsFromConfig().",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "apiKey": {
+      "type": "string",
+      "description": "API key for authentication. Optional if OAI2LM_API_KEY is set.",
+      "minLength": 1
+    },
+    "baseURL": {
+      "type": "string",
+      "description": "Base URL for API calls (OpenAI-compatible). If omitted, defaults to https://api.openai.com/v1.",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "description": "Provider name used by the AI SDK provider (defaults to 'oai2lm').",
+      "minLength": 1
+    },
+    "headers": {
+      "type": "object",
+      "description": "Custom headers applied to all requests.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "autoDiscoverModels": {
+      "type": "boolean",
+      "description": "Auto-discover models on initialization (default: true)."
+    },
+    "modelOverrides": {
+      "type": "object",
+      "description": "Per-model configuration overrides keyed by wildcard patterns (* and ?).",
+      "additionalProperties": {
+        "$ref": "#/$defs/modelOverride"
+      }
+    }
+  },
+  "$defs": {
+    "modelOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxInputTokens": {
+          "type": "number",
+          "description": "Override maximum input tokens.",
+          "minimum": 1
+        },
+        "maxOutputTokens": {
+          "type": "number",
+          "description": "Override maximum output tokens.",
+          "minimum": 1
+        },
+        "supportsToolCalling": {
+          "type": "boolean",
+          "description": "Override whether the model supports native tool/function calling."
+        },
+        "supportsImageInput": {
+          "type": "boolean",
+          "description": "Override whether the model supports image inputs."
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Default temperature (reserved / forward compatibility).",
+          "minimum": 0
+        },
+        "usePromptBasedToolCalling": {
+          "type": "boolean",
+          "description": "Use XML prompt-based tool calling instead of native tools (reserved / forward compatibility)."
+        },
+        "suppressChainOfThought": {
+          "type": "boolean",
+          "description": "Strip <think>...</think> blocks from output (reserved / forward compatibility)."
+        },
+        "captureReasoning": {
+          "type": "boolean",
+          "description": "Capture reasoning content separately (reserved / forward compatibility)."
+        },
+        "thinkingLevel": {
+          "description": "Thinking level: token budget or preset (reserved / forward compatibility).",
+          "oneOf": [
+            { "type": "number", "minimum": 0 },
+            {
+              "type": "string",
+              "enum": ["low", "medium", "high", "auto", "none"]
+            }
+          ]
+        },
+        "trimXmlToolParameterWhitespace": {
+          "type": "boolean",
+          "description": "Trim whitespace in XML tool parameters (reserved / forward compatibility)."
+        }
+      }
+    }
+  }
+}

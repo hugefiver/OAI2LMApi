@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@oai2lmapi/opencode-provider/oai2lm.schema.json",
+  "baseURL": "https://api.example.com/v1",
+  "name": "myapi",
+  "autoDiscoverModels": true,
+  "headers": {
+    "X-Trace": "true"
+  },
+  "modelOverrides": {
+    "gpt-4o*": {
+      "maxInputTokens": 128000,
+      "supportsImageInput": true
+    }
+  }
+}
