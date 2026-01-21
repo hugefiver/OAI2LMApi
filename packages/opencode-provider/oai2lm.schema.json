@@ -51,6 +51,20 @@
     }
   },
   "$defs": {
+    "thinkingLevel": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high", "auto"],
+          "description": "Preset thinking level for chain-of-thought reasoning."
+        },
+        {
+          "type": "number",
+          "description": "Explicit token budget for thinking.",
+          "minimum": 0
+        }
+      ]
+    },
     "modelOverride": {
       "type": "object",
       "additionalProperties": false,
@@ -72,6 +86,28 @@
         "supportsImageInput": {
           "type": "boolean",
           "description": "Override whether the model supports image inputs."
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Default temperature for this model (0.0-2.0).",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "thinkingLevel": {
+          "$ref": "#/$defs/thinkingLevel",
+          "description": "Thinking level for chain-of-thought reasoning. 'none'/'low'/'medium'/'high'/'auto' or explicit token budget."
+        },
+        "suppressChainOfThought": {
+          "type": "boolean",
+          "description": "Suppress chain-of-thought output in the response."
+        },
+        "usePromptBasedToolCalling": {
+          "type": "boolean",
+          "description": "Use XML-based tool calling in system prompt instead of native function calling."
+        },
+        "trimXmlToolParameterWhitespace": {
+          "type": "boolean",
+          "description": "Trim whitespace from XML tool parameter values (only when usePromptBasedToolCalling is true)."
         }
       }
     }

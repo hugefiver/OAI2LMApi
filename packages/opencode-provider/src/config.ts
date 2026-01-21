@@ -15,7 +15,21 @@ import { homedir } from "node:os";
 import { join, isAbsolute } from "node:path";
 
 /**
+ * Thinking level configuration for models that support chain-of-thought reasoning.
+ * Can be a string preset or a numeric token budget.
+ */
+export type ThinkingLevel =
+  | "none"
+  | "low"
+  | "medium"
+  | "high"
+  | "auto"
+  | number;
+
+/**
  * Model override configuration.
+ *
+ * Supports advanced features like prompt-based tool calling and thinking tags.
  */
 export interface ModelOverride {
   /** Max input tokens */
@@ -26,6 +40,46 @@ export interface ModelOverride {
   supportsToolCalling?: boolean;
   /** Supports image inputs */
   supportsImageInput?: boolean;
+
+  // Advanced features
+
+  /**
+   * Default temperature for this model.
+   * Range: 0.0-2.0 (model dependent)
+   */
+  temperature?: number;
+
+  /**
+   * Thinking level for models that support chain-of-thought reasoning.
+   * - 'none': Disable thinking
+   * - 'low'/'medium'/'high': Preset token budgets
+   * - 'auto': Let the model decide
+   * - number: Explicit token budget for thinking
+   *
+   * Used for models like Claude 3.7, DeepSeek-R1, o1, etc.
+   */
+  thinkingLevel?: ThinkingLevel;
+
+  /**
+   * Whether to suppress chain-of-thought output in the response.
+   * When true, thinking content is not included in the final output.
+   */
+  suppressChainOfThought?: boolean;
+
+  /**
+   * Use prompt-based tool calling instead of native function calling.
+   * Converts tools to XML format in the system prompt.
+   *
+   * Useful for models that don't support native function calling
+   * but can follow structured instructions (e.g., QwQ, older models).
+   */
+  usePromptBasedToolCalling?: boolean;
+
+  /**
+   * Trim leading/trailing whitespace from XML tool parameter values.
+   * Only applies when usePromptBasedToolCalling is true.
+   */
+  trimXmlToolParameterWhitespace?: boolean;
 }
 
 /**

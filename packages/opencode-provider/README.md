@@ -1,29 +1,77 @@
 # @oai2lmapi/opencode-provider
 
-AI SDK Provider for **OpenAI-compatible APIs** with **automatic model discovery**.
+AI SDK Provider and OpenCode Plugin for **OpenAI-compatible APIs** with **automatic model discovery**.
 
-Use this provider in [OpenCode](https://opencode.ai) to connect to any OpenAI-compatible API endpoint. Unlike static configurations, this provider automatically discovers all available models from your API's `/models` endpoint.
+Use this package to connect [OpenCode](https://opencode.ai) or any Vercel AI SDK application to any OpenAI-compatible API endpoint. It automatically discovers all available models from your API's `/models` endpoint.
 
 ## Features
 
-- **AI SDK Provider**: Native provider for OpenCode and Vercel AI SDK
-- **Auto-discovery**: Automatically fetches models from `$baseURL/models`
-- **Zero model configuration**: No need to manually list each model
-- **Metadata enrichment**: Merges API-returned metadata with `@oai2lmapi/model-metadata` registry
-- **Wildcard overrides**: Apply settings to multiple models using patterns like `gpt-4*`
-- **Config file support**: Optional `oai2lm.json` for persistent configuration
+- **CLI Tool**: Generate `opencode.json` model configuration automatically
+- **OpenCode Plugin**: Adds `oai2lm_discover` tool inside OpenCode
+- **AI SDK Provider**: Native provider for Vercel AI SDK and OpenCode
+- **Auto-discovery**: Fetches models from `$baseURL/models`
+- **Metadata enrichment**: Merges API metadata with `@oai2lmapi/model-metadata` registry
 
-## Installation
+## Quick Start
+
+### Option 1: CLI Tool (Recommended)
+
+Generate model configuration for your `opencode.json`:
 
 ```bash
-npm install @oai2lmapi/opencode-provider
-# or
-pnpm add @oai2lmapi/opencode-provider
+# Discover models and output opencode.json config
+npx @oai2lmapi/opencode-provider --baseURL https://api.example.com/v1 --apiKey sk-xxx --provider my-api
 ```
 
-## Usage with OpenCode
+This outputs ready-to-use configuration:
 
-Add to your `opencode.json`:
+```json
+{
+  "provider": {
+    "my-api": {
+      "name": "my-api",
+      "npm": "@oai2lmapi/opencode-provider",
+      "options": {
+        "baseURL": "YOUR_API_BASE_URL",
+        "apiKey": "{env:YOUR_API_KEY_ENV}"
+      },
+      "models": {
+        "gpt-4o": {
+          "name": "gpt-4o",
+          "tool_call": true,
+          "attachment": true,
+          "limit": { "context": 128000, "output": 16384 }
+        }
+      }
+    }
+  }
+}
+```
+
+Copy this into your `opencode.json` and adjust the `baseURL` and `apiKey`.
+
+### Option 2: OpenCode Plugin
+
+Add as a plugin to get the `oai2lm_discover` tool inside OpenCode:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@oai2lmapi/opencode-provider"]
+}
+```
+
+Then in OpenCode, use the tool:
+
+```
+/tool oai2lm_discover baseURL=https://api.example.com/v1 apiKey=sk-xxx
+```
+
+The tool will output the configuration you need.
+
+### Option 3: Manual Configuration with npm Provider
+
+Once you have your model list (from CLI or Plugin), add to `opencode.json`:
 
 ```json
 {
@@ -33,38 +81,61 @@ Add to your `opencode.json`:
       "npm": "@oai2lmapi/opencode-provider",
       "options": {
         "baseURL": "https://api.example.com/v1",
-        "apiKey": "your-api-key"
+        "apiKey": "{env:MY_API_KEY}"
+      },
+      "models": {
+        "gpt-4o": {
+          "name": "GPT-4o",
+          "tool_call": true,
+          "limit": { "context": 128000, "output": 16384 }
+        },
+        "claude-sonnet-4-20250514": {
+          "name": "Claude Sonnet 4",
+          "tool_call": true,
+          "limit": { "context": 200000, "output": 64000 }
+        }
       }
     }
   }
 }
 ```
 
-That's it! OpenCode will automatically discover all available models from your API.
+> **Note**: OpenCode requires the `models` field to know which models are available. The CLI and Plugin tools help you generate this automatically.
 
-### Using environment variables
-
-```json
-{
-  "provider": {
-    "my-api": {
-      "npm": "@oai2lmapi/opencode-provider",
-      "env": ["MY_API_KEY"],
-      "options": {
-        "baseURL": "https://api.example.com/v1"
-      }
-    }
-  }
-}
-```
-
-Set `MY_API_KEY` in your environment:
+## CLI Reference
 
 ```bash
-export MY_API_KEY=your-api-key
+oai2lm-discover [options]
+
+OPTIONS:
+  -b, --baseURL <url>     Base URL of the API (e.g., https://api.example.com/v1)
+  -k, --apiKey <key>      API key for authentication
+  -p, --provider <name>   Provider name for config (default: custom-provider)
+  -f, --filter <regex>    Filter models by regex pattern
+  -o, --output <format>   Output format: json, table, or config (default: config)
+  -c, --config            Load settings from oai2lm.json
+  -h, --help              Show help
 ```
 
-## Programmatic Usage
+### Examples
+
+```bash
+# Discover all models and output config
+npx @oai2lmapi/opencode-provider -b https://api.example.com/v1 -k sk-xxx -p my-api
+
+# Filter to specific models
+npx @oai2lmapi/opencode-provider -b https://api.example.com/v1 -k sk-xxx -f "gpt-4|claude"
+
+# Output as table for review
+npx @oai2lmapi/opencode-provider -b https://api.example.com/v1 -k sk-xxx -o table
+
+# Use settings from oai2lm.json config file
+npx @oai2lmapi/opencode-provider --config
+```
+
+## Programmatic Usage (AI SDK)
+
+For use in your own applications with Vercel AI SDK:
 
 ```typescript
 import { createOai2lm } from "@oai2lmapi/opencode-provider";
@@ -88,151 +159,169 @@ const result = await streamText({
 });
 ```
 
-## Provider Options
+## Config File (oai2lm.json)
 
-| Option           | Type      | Required | Description                                                 |
-| ---------------- | --------- | -------- | ----------------------------------------------------------- |
-| `baseURL`        | `string`  | Yes      | Base URL for API calls (e.g., `https://api.example.com/v1`) |
-| `apiKey`         | `string`  | No       | API key for authentication                                  |
-| `name`           | `string`  | No       | Provider name (default: `"oai2lm"`)                         |
-| `headers`        | `object`  | No       | Custom headers for all requests                             |
-| `modelFilter`    | `string`  | No       | Regex pattern to filter models                              |
-| `modelOverrides` | `object`  | No       | Per-model configuration overrides (supports wildcards)      |
-| `useConfigFile`  | `boolean` | No       | Merge settings from `oai2lm.json` (default: `true`)         |
+For persistent configuration, create `oai2lm.json` in:
 
-## Config File
+- `~/.local/share/opencode/oai2lm.json` (Linux)
+- `~/.config/opencode/oai2lm.json` (Linux/macOS)
 
-For persistent configuration, create `oai2lm.json` in one of these locations:
-
-1. `~/.local/share/opencode/oai2lm.json`
-2. `~/.config/opencode/oai2lm.json`
-
-```jsonc
+```json
 {
-  // Base URL for your OpenAI-compatible API
+  "$schema": "https://raw.githubusercontent.com/hugefiver/OAI2LMApi/main/packages/opencode-provider/oai2lm.schema.json",
   "baseURL": "https://api.example.com/v1",
-
-  // API key (supports variable substitution)
   "apiKey": "{env:MY_API_KEY}",
-
-  // Provider ID
-  "name": "myapi",
-
-  // Display name
-  "displayName": "My API",
-
-  // Custom headers
-  "headers": {
-    "X-Custom-Header": "value",
-  },
-
-  // Filter models by regex
+  "name": "my-api",
   "modelFilter": "^(gpt-|claude-)",
-
-  // Override model metadata (supports wildcards)
   "modelOverrides": {
     "gpt-4*": {
       "maxInputTokens": 128000,
-      "supportsImageInput": true,
-    },
-  },
+      "supportsImageInput": true
+    }
+  }
 }
 ```
 
-### Variable substitution
+Then just run:
 
-The `apiKey` field supports:
-
-- `{env:VAR_NAME}` - Read from environment variable
-- `{file:/path/to/file}` - Read from file
-
-## Extended API
-
-### `provider.listModels()`
-
-Returns a list of discovered models with metadata:
-
-```typescript
-const models = await provider.listModels();
-// [{ id: "gpt-4", name: "GPT-4", object: "model", ... }]
+```bash
+npx @oai2lmapi/opencode-provider --config
 ```
 
-### `provider.getModelMetadata(modelId)`
+## Provider Options
 
-Returns enriched metadata for a specific model:
+| Option           | Type      | Required | Description                                            |
+| ---------------- | --------- | -------- | ------------------------------------------------------ |
+| `baseURL`        | `string`  | Yes      | Base URL for API calls                                 |
+| `apiKey`         | `string`  | No       | API key for authentication                             |
+| `name`           | `string`  | No       | Provider name (default: `"oai2lm"`)                    |
+| `headers`        | `object`  | No       | Custom headers for all requests                        |
+| `modelFilter`    | `string`  | No       | Regex pattern to filter models                         |
+| `modelOverrides` | `object`  | No       | Per-model configuration overrides (supports wildcards) |
+| `useConfigFile`  | `boolean` | No       | Merge settings from `oai2lm.json` (default: `true`)    |
 
-```typescript
-const metadata = await provider.getModelMetadata("gpt-4");
-// { maxInputTokens: 128000, maxOutputTokens: 4096, supportsToolCalling: true, ... }
+### Model Override Options
+
+The `modelOverrides` object supports wildcard patterns (`*` and `?`) to match model IDs:
+
+| Option                           | Type                | Description                          |
+| -------------------------------- | ------------------- | ------------------------------------ |
+| `maxInputTokens`                 | `number`            | Maximum input tokens                 |
+| `maxOutputTokens`                | `number`            | Maximum output tokens                |
+| `supportsToolCalling`            | `boolean`           | Native tool/function calling support |
+| `supportsImageInput`             | `boolean`           | Image/vision input support           |
+| `temperature`                    | `number`            | Default temperature (0.0-2.0)        |
+| `thinkingLevel`                  | `string` / `number` | CoT thinking level (see below)       |
+| `suppressChainOfThought`         | `boolean`           | Hide thinking content in response    |
+| `usePromptBasedToolCalling`      | `boolean`           | Use XML tools in system prompt       |
+| `trimXmlToolParameterWhitespace` | `boolean`           | Trim XML parameter whitespace        |
+
+#### Thinking Level
+
+For models that support chain-of-thought reasoning (Claude 3.7, DeepSeek-R1, o1, etc.):
+
+- `"none"` - Disable thinking
+- `"low"` / `"medium"` / `"high"` - Preset token budgets
+- `"auto"` - Let the model decide
+- `number` - Explicit token budget (e.g., `8000`)
+
+#### Prompt-Based Tool Calling
+
+For models without native function calling support:
+
+```json
+{
+  "modelOverrides": {
+    "qwq-*": {
+      "usePromptBasedToolCalling": true,
+      "trimXmlToolParameterWhitespace": true,
+      "supportsToolCalling": false
+    }
+  }
+}
 ```
 
-### `provider.refreshModels()`
-
-Force refresh the model list from the API:
-
-```typescript
-await provider.refreshModels();
-```
+This converts tools to XML format in the system prompt, allowing models to use structured tool calls.
 
 ## Example Configurations
 
 ### OpenRouter
 
-```json
-{
-  "provider": {
-    "openrouter": {
-      "npm": "@oai2lmapi/opencode-provider",
-      "env": ["OPENROUTER_API_KEY"],
-      "options": {
-        "baseURL": "https://openrouter.ai/api/v1"
-      }
-    }
-  }
-}
-```
-
-### Local Ollama
-
-```json
-{
-  "provider": {
-    "ollama": {
-      "npm": "@oai2lmapi/opencode-provider",
-      "options": {
-        "baseURL": "http://localhost:11434/v1",
-        "apiKey": "ollama"
-      }
-    }
-  }
-}
+```bash
+npx @oai2lmapi/opencode-provider -b https://openrouter.ai/api/v1 -k $OPENROUTER_API_KEY -p openrouter
 ```
 
 ### Together AI
 
-```json
-{
-  "provider": {
-    "together": {
-      "npm": "@oai2lmapi/opencode-provider",
-      "env": ["TOGETHER_API_KEY"],
-      "options": {
-        "baseURL": "https://api.together.xyz/v1"
-      }
-    }
-  }
-}
+```bash
+npx @oai2lmapi/opencode-provider -b https://api.together.xyz/v1 -k $TOGETHER_API_KEY -p together
 ```
 
-## How It Works
+### Local Ollama
 
-1. When loaded, the provider creates an `@ai-sdk/openai-compatible` instance
-2. On first model request or `listModels()` call, it fetches `/models` from your API
-3. Each model is enriched with metadata from:
-   - API response (context_length, max_tokens, etc.)
-   - `@oai2lmapi/model-metadata` pattern matching
-   - Your config file overrides
-4. The provider then works like any standard AI SDK provider
+```bash
+npx @oai2lmapi/opencode-provider -b http://localhost:11434/v1 -k ollama -p ollama
+```
+
+## Why Models Must Be Configured?
+
+OpenCode loads provider configurations at startup and needs to know:
+
+- Which models are available
+- Token limits for each model
+- Model capabilities (tool calling, vision, etc.)
+
+Since OpenCode doesn't call our provider's dynamic model discovery at startup, we provide the CLI/Plugin tools to help you generate this configuration once, which you then add to your `opencode.json`.
+
+## XML Tool Utilities
+
+For advanced use cases like building custom middleware, this package exports XML tool utilities:
+
+```typescript
+import {
+  generateXmlToolPrompt,
+  parseXmlToolCalls,
+  formatToolCallAsXml,
+  formatToolResultAsText,
+  findModelOverride,
+} from "@oai2lmapi/opencode-provider";
+
+// Generate XML tool prompt from tool definitions
+const xmlPrompt = generateXmlToolPrompt([
+  {
+    type: "function",
+    name: "search",
+    description: "Search the web",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+  },
+]);
+
+// Parse XML tool calls from model response
+const toolCalls = parseXmlToolCalls(responseText, ["search", "read_file"], {
+  trimParameterWhitespace: true,
+});
+
+// Format a tool call as XML
+const xml = formatToolCallAsXml("search", { query: "hello world" });
+
+// Format a tool result as XML
+const result = formatToolResultAsText("search", "Found 10 results...");
+
+// Find model override by pattern matching
+const override = findModelOverride("qwq-32b", {
+  "qwq-*": { usePromptBasedToolCalling: true },
+});
+```
+
+For models without native function calling, consider using:
+
+- **[@ai-sdk-tool/parser](https://github.com/minpeter/ai-sdk-tool-call-middleware)**: Community middleware for AI SDK
+- **hermesToolMiddleware**: For Hermes & Qwen format function calls
+- **gemmaToolMiddleware**: For Gemma 3 model series
 
 ## License
 

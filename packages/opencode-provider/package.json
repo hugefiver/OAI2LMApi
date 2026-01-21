@@ -1,7 +1,7 @@
 {
   "name": "@oai2lmapi/opencode-provider",
-  "version": "0.2.1",
-  "description": "AI SDK Provider for OpenAI-compatible APIs with automatic model discovery for OpenCode",
+  "version": "0.3.0",
+  "description": "AI SDK Provider and OpenCode Plugin for OpenAI-compatible APIs with automatic model discovery",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,7 +10,14 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./plugin": {
+      "import": "./dist/plugin.js",
+      "types": "./dist/plugin.d.ts"
+    },
     "./oai2lm.schema.json": "./oai2lm.schema.json"
+  },
+  "bin": {
+    "oai2lm-discover": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -27,6 +34,7 @@
   },
   "keywords": [
     "opencode",
+    "opencode-plugin",
     "ai-sdk",
     "ai-sdk-provider",
     "openai-compatible",

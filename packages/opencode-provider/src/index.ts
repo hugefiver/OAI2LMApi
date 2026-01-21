@@ -31,6 +31,7 @@ import {
   resolveApiKey,
   type OAI2LMConfig,
   type ModelOverride,
+  type ThinkingLevel,
 } from "./config.js";
 import { discoverModels, type DiscoveredModel } from "./discover.js";
 import {
@@ -46,9 +47,25 @@ export {
   discoverModels,
   type OAI2LMConfig,
   type ModelOverride,
+  type ThinkingLevel,
   type DiscoveredModel,
   type ModelMetadata,
 };
+
+// Re-export XML tool utilities for custom middleware implementations
+export {
+  generateXmlToolPrompt,
+  parseXmlToolCalls,
+  formatToolCallAsXml,
+  formatToolResultAsText,
+  escapeXml,
+  type ToolDefinition,
+  type ParsedToolCall,
+  type XmlToolParseOptions,
+} from "./xmlTools.js";
+
+// Re-export plugin for OpenCode integration
+export { oai2lmPlugin, generateModelsConfig } from "./plugin.js";
 
 /**
  * Provider settings that extend OpenAI-compatible settings
@@ -132,13 +149,22 @@ const modelCache = new WeakMap<
 >();
 
 /**
- * Find matching model override by pattern (supports wildcards)
+ * Find matching model override by pattern (supports wildcards).
+ *
+ * Use this function to look up ModelOverride settings for a specific model ID.
+ * The overrides can use wildcard patterns (* and ?) to match multiple models.
+ *
+ * @param modelId - The model ID to look up
+ * @param overrides - The model overrides configuration object
+ * @returns The matching ModelOverride or undefined if no match
  */
-function findModelOverride(
+export function findModelOverride(
   modelId: string,
   overrides?: Record<string, ModelOverride>,
 ): ModelOverride | undefined {
-  if (!overrides) return undefined;
+  if (!overrides) {
+    return undefined;
+  }
 
   // Direct match first
   if (overrides[modelId]) {
@@ -150,7 +176,9 @@ function findModelOverride(
     if (pattern.includes("*") || pattern.includes("?")) {
       const regex = new RegExp(
         "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
-      );{}
+      );
+      {
+      }
       if (regex.test(modelId)) {
         return override;
       }
@@ -167,7 +195,9 @@ function mergeWithConfig(
   options: Oai2lmProviderSettings,
   config: OAI2LMConfig | undefined,
 ): Oai2lmProviderSettings {
-  if (!config) return options;
+  if (!config) {
+    return options;
+  }
 
   return {
     // Options take precedence over config

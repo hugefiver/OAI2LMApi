@@ -5,6 +5,38 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-01-21
+
+### Added
+
+- **CLI Tool** (`oai2lm-discover`): Discover models and generate `opencode.json` configuration
+  - `npx @oai2lmapi/opencode-provider -b <baseURL> -k <apiKey> -p <providerName>`
+  - Supports `--filter` for regex model filtering
+  - Supports `--output json|table|config` for different output formats
+  - Supports `--config` to load settings from `oai2lm.json`
+- **OpenCode Plugin**: Adds `oai2lm_discover` tool inside OpenCode
+  - Use as plugin: `"plugin": ["@oai2lmapi/opencode-provider"]`
+  - Run the tool to generate models configuration interactively
+- `generateModelsConfig()` helper function for programmatic config generation
+- `oai2lmPlugin` export for OpenCode plugin integration
+- **Advanced Model Override Options**:
+  - `temperature` - Default temperature for a model
+  - `thinkingLevel` - Chain-of-thought reasoning level ('none'/'low'/'medium'/'high'/'auto' or token budget)
+  - `suppressChainOfThought` - Hide thinking content in responses
+  - `usePromptBasedToolCalling` - Use XML tools in system prompt (for models without native function calling)
+  - `trimXmlToolParameterWhitespace` - Trim whitespace from XML tool parameter values
+- **XML Tool Utilities** for custom middleware:
+  - `generateXmlToolPrompt()` - Convert tool definitions to XML format system prompt
+  - `parseXmlToolCalls()` - Parse XML tool calls from model response
+  - `formatToolCallAsXml()` - Format a tool call as XML
+  - `formatToolResultAsText()` - Format a tool result as XML
+  - `findModelOverride()` - Find model override by wildcard pattern matching
+
+### Changed
+
+- Package now exports both AI SDK Provider and OpenCode Plugin functionality
+- Updated documentation to explain OpenCode's model configuration requirements
+
 ## [0.2.1] - 2026-01-21
 
 ### Fixed
