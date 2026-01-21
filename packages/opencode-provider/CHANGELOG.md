@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: Changed `ModelDiscovery` to type-only export from main entry point. Import directly from `'@oai2lmapi/opencode-provider/modelDiscovery.js'` for runtime class.
 
 ### Fixed
-- Fixed OpenCode plugin loader crash caused by non-function exports being called as functions.
+- Fixed `TypeError: undefined is not an object (evaluating 'hook.config')` when OpenCode's plugin loader calls exported functions as plugin factories. All exports now return empty hooks objects when called with OpenCode's PluginInput.
 
 ## [0.1.0] - 2026-01-13
 
