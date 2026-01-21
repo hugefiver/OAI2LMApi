@@ -46,13 +46,28 @@ export type { ModelDiscovery } from './modelDiscovery.js';
  * OpenCode's plugin loader calls every export as a function with PluginInput,
  * which has a `client` property. If detected, we return an empty hooks object
  * to prevent crashes in the plugin loader.
+ * 
+ * Uses multiple checks to reduce false positives from legitimate function
+ * arguments that might happen to have a `client` property.
  */
-function isPluginInput(arg: unknown): boolean {
-  return (
-    typeof arg === 'object' &&
-    arg !== null &&
-    'client' in arg
-  );
+function isPluginInput(arg: unknown): arg is { client: unknown } {
+  if (typeof arg !== 'object' || arg === null) {
+    return false;
+  }
+
+  // Require an own (non-inherited) `client` property to reduce false positives
+  if (!Object.prototype.hasOwnProperty.call(arg, 'client')) {
+    return false;
+  }
+
+  const client = (arg as { client?: unknown }).client;
+
+  // PluginInput.client is expected to be a non-null object (e.g., an API client instance)
+  if (typeof client !== 'object' || client === null) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -62,16 +77,21 @@ function isPluginInput(arg: unknown): boolean {
 const EMPTY_HOOKS = Object.freeze({});
 
 /**
+ * Type for a guarded function that may return EMPTY_HOOKS when called with PluginInput.
+ */
+type Guarded<T extends (...args: any[]) => any> = (...args: Parameters<T>) => ReturnType<T> | typeof EMPTY_HOOKS;
+
+/**
  * Wraps a function to guard against being called as an OpenCode plugin factory.
  * If called with PluginInput, returns an empty hooks object instead of the normal result.
  */
-function guardPluginCall<T extends (...args: any[]) => any>(fn: T): T {
-  return ((...args: any[]) => {
+function guardPluginCall<T extends (...args: any[]) => any>(fn: T): Guarded<T> {
+  return (...args: Parameters<T>) => {
     if (args.length > 0 && isPluginInput(args[0])) {
       return EMPTY_HOOKS;
     }
     return fn(...args);
-  }) as T;
+  };
 }
 
 // Wrapped exports that are safe to call as plugin factories

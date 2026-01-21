@@ -66,4 +66,7 @@ jobs:
         run: pnpm --filter ./packages/opencode-provider run build
 
       - name: Run tests
+        # Note: The opencode-provider package's "test" script currently only echoes
+        # "Tests not yet implemented". This step is kept as a placeholder so that
+        # the CI structure is ready for when real tests are added.
         run: pnpm --filter ./packages/opencode-provider run test
