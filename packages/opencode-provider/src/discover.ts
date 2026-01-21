@@ -57,7 +57,21 @@ export async function discoverModels(
   apiKey: string,
   headers?: Record<string, string>,
 ): Promise<DiscoveredModel[]> {
-  const url = `${baseURL}/models`;
+  if (!baseURL || typeof baseURL !== "string") {
+    throw new Error(
+      "baseURL is required for model discovery. Please provide a valid API base URL.",
+    );
+  }
+
+  // Validate URL format
+  const trimmedURL = baseURL.trim().replace(/\/+$/, "");
+  if (!trimmedURL.startsWith("http://") && !trimmedURL.startsWith("https://")) {
+    throw new Error(
+      `Invalid baseURL: "${baseURL}". URL must start with http:// or https://`,
+    );
+  }
+
+  const url = `${trimmedURL}/models`;
 
   const response = await fetch(url, {
     method: "GET",
