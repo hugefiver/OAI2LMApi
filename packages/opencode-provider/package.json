@@ -1,6 +1,6 @@
 {
   "name": "@oai2lmapi/opencode-provider",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "AI SDK Provider for OpenAI-compatible APIs with automatic model discovery for OpenCode",
   "type": "module",
   "main": "./dist/index.js",
@@ -42,8 +42,7 @@
     "directory": "packages/opencode-provider"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^1.0.0",
-    "@oai2lmapi/model-metadata": "workspace:*"
+    "@ai-sdk/openai-compatible": "^1.0.0"
   },
   "peerDependencies": {
     "ai": ">=4.0.0"
@@ -54,6 +53,7 @@
     }
   },
   "devDependencies": {
+    "@oai2lmapi/model-metadata": "workspace:*",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
     "@typescript-eslint/parser": "^8.50.0",

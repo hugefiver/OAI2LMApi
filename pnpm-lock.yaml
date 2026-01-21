@@ -32,13 +32,13 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^1.0.0
         version: 1.0.31(zod@4.1.8)
-      '@oai2lmapi/model-metadata':
-        specifier: workspace:*
-        version: link:../model-metadata
       ai:
         specifier: '>=4.0.0'
         version: 6.0.42(zod@4.1.8)
     devDependencies:
+      '@oai2lmapi/model-metadata':
+        specifier: workspace:*
+        version: link:../model-metadata
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.5
