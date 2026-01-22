@@ -77,6 +77,12 @@ export {
 // Re-export plugin for OpenCode integration
 export { oai2lmPlugin, generateModelsConfig } from "./plugin.js";
 
+// Import enhanced model for prompt-based tool calling
+import { createEnhancedModel } from "./enhancedModel.js";
+
+// Re-export enhanced model utilities
+export { createEnhancedModel, EnhancedLanguageModel } from "./enhancedModel.js";
+
 /**
  * Provider settings that extend OpenAI-compatible settings
  */
@@ -346,15 +352,31 @@ export function createOai2lm(options: Oai2lmProviderSettings): Oai2lmProvider {
     return cache;
   }
 
+  /**
+   * Get model override for a specific model ID
+   */
+  function getOverride(modelId: string): ModelOverride | undefined {
+    return findModelOverride(modelId, mergedOptions.modelOverrides);
+  }
+
   // Create the extended provider
   const provider = function (modelId: string) {
-    return baseProvider(modelId);
+    const baseModel = baseProvider(modelId);
+    const override = getOverride(modelId);
+    return createEnhancedModel(baseModel, modelId, override);
   } as Oai2lmProvider;
 
-  // Copy all methods from base provider (V2 interface)
-  provider.languageModel = (modelId: string) =>
-    baseProvider.languageModel(modelId);
-  provider.chatModel = (modelId: string) => baseProvider.chatModel(modelId);
+  // Copy all methods from base provider (V2 interface) with enhancement
+  provider.languageModel = (modelId: string) => {
+    const baseModel = baseProvider.languageModel(modelId);
+    const override = getOverride(modelId);
+    return createEnhancedModel(baseModel, modelId, override);
+  };
+  provider.chatModel = (modelId: string) => {
+    const baseModel = baseProvider.chatModel(modelId);
+    const override = getOverride(modelId);
+    return createEnhancedModel(baseModel, modelId, override);
+  };
   provider.completionModel = (modelId: string) =>
     baseProvider.completionModel(modelId);
   provider.textEmbeddingModel = (modelId: string) =>
