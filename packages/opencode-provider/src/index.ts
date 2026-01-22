@@ -31,7 +31,7 @@
  */
 
 import {
-  createOpenAICompatible,
+  createOpenAICompatible as createBaseOpenAICompatible,
   type OpenAICompatibleProvider,
 } from "@ai-sdk/openai-compatible";
 import {
@@ -78,10 +78,12 @@ export {
 export { oai2lmPlugin, generateModelsConfig } from "./plugin.js";
 
 // Import enhanced model for prompt-based tool calling
-import { createEnhancedModel } from "./enhancedModel.js";
+import { wrapWithEnhancements } from "./enhancedModel.js";
 
 // Re-export enhanced model utilities
-export { createEnhancedModel, EnhancedLanguageModel } from "./enhancedModel.js";
+// Re-export enhanced model utilities (use wrapWithEnhancements internally)
+// Note: createEnhancedModel alias removed to avoid conflict with OpenCode's create* pattern matching
+export { wrapWithEnhancements, EnhancedLanguageModel } from "./enhancedModel.js";
 
 /**
  * Provider settings that extend OpenAI-compatible settings
@@ -275,7 +277,7 @@ export function createOai2lm(options: Oai2lmProviderSettings = {}): Oai2lmProvid
     const baseURL = mergedOptions.baseURL;
 
     // Create the underlying OpenAI-compatible provider
-    const baseProvider = createOpenAICompatible({
+    const baseProvider = createBaseOpenAICompatible({
       baseURL: baseURL.replace(/\/+$/, ""),
       name: mergedOptions.name || "oai2lm",
       apiKey: mergedOptions.apiKey,
@@ -364,19 +366,19 @@ export function createOai2lm(options: Oai2lmProviderSettings = {}): Oai2lmProvid
     const provider = function (modelId: string) {
       const baseModel = baseProvider(modelId);
       const override = getOverride(modelId);
-      return createEnhancedModel(baseModel, modelId, override);
+      return wrapWithEnhancements(baseModel, modelId, override);
     } as Oai2lmProvider;
 
     // Copy all methods from base provider (V2 interface) with enhancement
     provider.languageModel = (modelId: string) => {
       const baseModel = baseProvider.languageModel(modelId);
       const override = getOverride(modelId);
-      return createEnhancedModel(baseModel, modelId, override);
+      return wrapWithEnhancements(baseModel, modelId, override);
     };
     provider.chatModel = (modelId: string) => {
       const baseModel = baseProvider.chatModel(modelId);
       const override = getOverride(modelId);
-      return createEnhancedModel(baseModel, modelId, override);
+      return wrapWithEnhancements(baseModel, modelId, override);
     };
     provider.completionModel = (modelId: string) =>
       baseProvider.completionModel(modelId);
@@ -406,6 +408,13 @@ export function createOai2lm(options: Oai2lmProviderSettings = {}): Oai2lmProvid
     throw new Error(`[oai2lm] Provider initialization failed: ${message}`);
   }
 }
+
+/**
+ * OpenCode compatibility alias for createOai2lm.
+ * OpenCode looks for exports starting with "create" and expects a function
+ * that returns a provider with languageModel(modelId) method.
+ */
+export const createOpenAICompatible = createOai2lm;
 
 // Default export for convenience
 export default createOai2lm;

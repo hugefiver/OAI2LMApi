@@ -654,7 +654,7 @@ export class EnhancedLanguageModel implements LanguageModelV3 {
  * @param override - Optional model override configuration
  * @returns Enhanced language model with additional features
  */
-export function createEnhancedModel(
+export function wrapWithEnhancements(
   baseModel: LanguageModelV3,
   modelId: string,
   override?: ModelOverride,

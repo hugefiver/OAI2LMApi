@@ -5,6 +5,15 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-01-22
+
+### Fixed
+
+- **OpenCode compatibility**: Fixed `TypeError: sdk.languageModel is not a function` when used with OpenCode
+  - Renamed internal `createEnhancedModel` to `wrapWithEnhancements` to avoid conflict with OpenCode's `create*` pattern matching
+  - Added `createOpenAICompatible` alias export for OpenCode provider discovery
+  - Renamed `@ai-sdk/openai-compatible` import to `createBaseOpenAICompatible` to avoid naming conflicts
+
 ## [0.3.3] - 2026-01-22
 
 ### Changed
