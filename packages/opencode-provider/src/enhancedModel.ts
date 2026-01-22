@@ -648,18 +648,6 @@ export function createEnhancedModel(
 ): LanguageModelV2 {
   // DEBUG: Temporarily bypass EnhancedLanguageModel to diagnose ProviderInitError
   // Uncomment the following line to test if the issue is with EnhancedLanguageModel
-  // return baseModel;
-
-  // Only wrap if there are features to enable
-  if (
-    override?.usePromptBasedToolCalling ||
-    override?.temperature !== undefined ||
-    override?.thinkingLevel !== undefined ||
-    override?.suppressChainOfThought !== undefined
-  ) {
-    return new EnhancedLanguageModel(baseModel, modelId, override);
-  }
-
-  // No enhancements needed, return base model
   return baseModel;
+
 }
