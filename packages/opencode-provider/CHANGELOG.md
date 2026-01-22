@@ -20,14 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `usePromptBasedToolCalling` not being applied - now properly wraps models with `EnhancedLanguageModel`
 - Provider's `languageModel()` and `chatModel()` methods now apply model overrides correctly
 
-## [0.3.1] - 2025-01-21
+## [0.3.1] - 2026-01-21
 
 ### Fixed
 
 - Fix `TypeError: fetch() URL is invalid` when baseURL is empty or undefined
 - Add URL validation with helpful error messages in `discoverModels()`
 
-## [0.3.0] - 2025-01-21
+## [0.3.0] - 2026-01-21
 
 ### Added
 
