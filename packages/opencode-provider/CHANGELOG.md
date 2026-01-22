@@ -5,6 +5,15 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-01-22
+
+### Fixed
+
+- **XML tool calls not showing in OpenCode**: Fixed tool calls not appearing in OpenCode UI
+  - OpenCode's processor requires `tool-input-start` → `tool-input-delta` → `tool-input-end` → `tool-call` lifecycle
+  - Previously only sent `tool-call` directly, which OpenCode ignored because `toolcalls[id]` was undefined
+  - Now properly emits the full lifecycle: `tool-input-start` (registers pending tool), `tool-input-delta` (streams input), `tool-input-end`, then `tool-call` (triggers execution)
+
 ## [0.3.7] - 2026-01-22
 
 ### Added

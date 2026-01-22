@@ -822,13 +822,39 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
               });
             }
 
-            // Emit tool calls (V2 uses 'input')
+            // Emit tool calls with proper V2 lifecycle:
+            // tool-input-start -> tool-input-delta -> tool-input-end -> tool-call
+            // OpenCode's processor.ts requires tool-input-start to register the tool
+            // in toolcalls map before tool-call can update it to "running" status
             for (const tc of xmlToolCalls) {
+              const inputJson = JSON.stringify(tc.arguments);
+
+              // 1. tool-input-start: Creates pending tool part in OpenCode
+              controller.enqueue({
+                type: "tool-input-start",
+                id: tc.id,
+                toolName: tc.name,
+              });
+
+              // 2. tool-input-delta: Stream the input (optional but matches native behavior)
+              controller.enqueue({
+                type: "tool-input-delta",
+                id: tc.id,
+                delta: inputJson,
+              });
+
+              // 3. tool-input-end: Mark input streaming complete
+              controller.enqueue({
+                type: "tool-input-end",
+                id: tc.id,
+              });
+
+              // 4. tool-call: Trigger execution with full input
               controller.enqueue({
                 type: "tool-call",
                 toolCallId: tc.id,
                 toolName: tc.name,
-                input: JSON.stringify(tc.arguments),
+                input: inputJson,
               });
             }
 
