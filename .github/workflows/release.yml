@@ -3,14 +3,14 @@ name: VSCode Extension - Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required for creating releases
-    
+      contents: write # Required for creating releases
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -49,6 +49,9 @@ jobs:
           VERSION=$(node -p "require('./packages/vscode-extension/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using release version $VERSION"
+
+      - name: Copy README to extension
+        run: cp README.md packages/vscode-extension/README.md
 
       - name: Package extension
         run: pnpm run vscode:package

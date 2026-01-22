@@ -5,16 +5,16 @@ on:
     branches:
       - main
     paths:
-      - 'packages/vscode-extension/**'
-      - 'packages/model-metadata/**'
-      - '.github/workflows/prerelease-main.yml'
+      - "packages/vscode-extension/**"
+      - "packages/model-metadata/**"
+      - ".github/workflows/prerelease-main.yml"
 
 jobs:
   prerelease:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required for creating/updating tags and releases
-    
+      contents: write # Required for creating/updating tags and releases
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -79,6 +79,9 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using pre-release version $VERSION (patch: $PATCH, suffix: $SUFFIX, third: $THIRD_COMPONENT)"
 
+      - name: Copy README to extension
+        run: cp README.md packages/vscode-extension/README.md
+
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
         working-directory: packages/vscode-extension
@@ -132,9 +135,9 @@ jobs:
           name: Prerelease (main)
           body: |
             This is an automated prerelease build from the main branch.
-            
+
             **Version:** ${{ steps.version.outputs.version }}
             **Commit:** ${{ github.sha }}
             **Date:** ${{ github.event.head_commit.timestamp }}
-            
+
             This release is automatically updated when the main branch changes.

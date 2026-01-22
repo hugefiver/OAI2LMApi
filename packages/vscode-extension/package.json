@@ -8,6 +8,7 @@
     "type": "git",
     "url": "https://github.com/hugefiver/OAI2LMApi.git"
   },
+  "icon": "assets/LOGO.png",
   "engines": {
     "vscode": "^1.107.0"
   },
@@ -130,7 +131,10 @@
                 "description": "Default temperature for matching models"
               },
               "thinkingLevel": {
-                "type": ["string", "number"],
+                "type": [
+                  "string",
+                  "number"
+                ],
                 "description": "Thinking level: number for token budget, or 'low'/'medium'/'high'/'auto'/'none'"
               },
               "usePromptBasedToolCalling": {
