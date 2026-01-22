@@ -102,6 +102,49 @@ Once you have your model list (from CLI or Plugin), add to `opencode.json`:
 
 > **Note**: OpenCode requires the `models` field to know which models are available. The CLI and Plugin tools help you generate this automatically.
 
+### Configuring Model Overrides in OpenCode
+
+**Important**: Due to how OpenCode passes options to SDK providers, model-specific settings like `usePromptBasedToolCalling` must be configured in `provider.*.options.modelOverrides`, **not** in `provider.*.models.*.options`.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "my-api": {
+      "npm": "@oai2lmapi/opencode-provider",
+      "options": {
+        "baseURL": "https://api.example.com/v1",
+        "apiKey": "{env:MY_API_KEY}",
+        "modelOverrides": {
+          "qwq-*": {
+            "usePromptBasedToolCalling": true,
+            "trimXmlToolParameterWhitespace": true
+          },
+          "deepseek-r1*": {
+            "thinkingLevel": "medium",
+            "suppressChainOfThought": true
+          }
+        }
+      },
+      "models": {
+        "qwq-32b": {
+          "name": "QwQ 32B",
+          "tool_call": false,
+          "limit": { "context": 131072, "output": 65536 }
+        },
+        "deepseek-r1": {
+          "name": "DeepSeek R1",
+          "tool_call": true,
+          "limit": { "context": 65536, "output": 8192 }
+        }
+      }
+    }
+  }
+}
+```
+
+> **Why not `models.*.options`?** OpenCode stores `models.*.options` on the Model object, but only passes `provider.options` to the SDK's creation function. Therefore, `modelOverrides` inside `provider.options` is the correct place to configure advanced model features.
+
 ## CLI Reference
 
 ```bash

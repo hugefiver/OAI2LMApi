@@ -108,6 +108,10 @@
         "trimXmlToolParameterWhitespace": {
           "type": "boolean",
           "description": "Trim whitespace from XML tool parameter values (only when usePromptBasedToolCalling is true)."
+        },
+        "parseThinkingTags": {
+          "type": "boolean",
+          "description": "Parse <think> and <thinking> tags from model output and convert to reasoning content. Useful for models that output thinking in XML tags (e.g., DeepSeek, QwQ)."
         }
       }
     }
