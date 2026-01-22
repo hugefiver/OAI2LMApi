@@ -30,6 +30,10 @@ function generateId(): string {
 
 /**
  * Enhanced Language Model that wraps a base model and adds advanced features.
+ *
+ * This class implements LanguageModelV2 and also proxies any additional
+ * properties from the base model (like supportsStructuredOutputs) to ensure
+ * compatibility with frameworks that may check for these properties.
  */
 export class EnhancedLanguageModel implements LanguageModelV2 {
   readonly specificationVersion = "v2" as const;
@@ -37,6 +41,17 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
   private readonly baseModel: LanguageModelV2;
   private readonly override?: ModelOverride;
+
+  /**
+   * Proxy property: supportsStructuredOutputs from base model.
+   * Some providers (like OpenAI-compatible) expose this property.
+   */
+  get supportsStructuredOutputs(): boolean {
+    return (
+      (this.baseModel as { supportsStructuredOutputs?: boolean })
+        .supportsStructuredOutputs ?? false
+    );
+  }
 
   constructor(
     baseModel: LanguageModelV2,
@@ -46,6 +61,68 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     this.baseModel = baseModel;
     this.modelId = modelId;
     this.override = override;
+
+    // Proxy any additional properties from the base model
+    // This ensures compatibility with frameworks that may access
+    // provider-specific properties not defined in LanguageModelV2
+    this.proxyAdditionalProperties();
+  }
+
+  /**
+   * Proxy additional properties from the base model that are not part of
+   * the LanguageModelV2 interface but may be used by consuming frameworks.
+   */
+  private proxyAdditionalProperties(): void {
+    // Get all property names from the base model's prototype chain
+    const baseModelProto = Object.getPrototypeOf(this.baseModel);
+    const baseModelKeys = new Set([
+      ...Object.keys(this.baseModel),
+      ...Object.getOwnPropertyNames(baseModelProto),
+    ]);
+
+    // List of properties we handle explicitly
+    const handledProperties = new Set([
+      "specificationVersion",
+      "modelId",
+      "provider",
+      "supportedUrls",
+      "supportsStructuredOutputs",
+      "doGenerate",
+      "doStream",
+      "constructor",
+    ]);
+
+    // Proxy any additional properties
+    for (const key of baseModelKeys) {
+      if (handledProperties.has(key)) {
+        continue;
+      }
+      if (key.startsWith("_")) {
+        // Skip private properties
+        continue;
+      }
+
+      const descriptor = Object.getOwnPropertyDescriptor(this.baseModel, key) ||
+        Object.getOwnPropertyDescriptor(baseModelProto, key);
+
+      if (descriptor && !Object.prototype.hasOwnProperty.call(this, key)) {
+        if (typeof descriptor.get === "function") {
+          // It's a getter, define a getter that proxies to base model
+          Object.defineProperty(this, key, {
+            get: () => (this.baseModel as Record<string, unknown>)[key],
+            enumerable: descriptor.enumerable,
+            configurable: true,
+          });
+        } else if (typeof descriptor.value !== "function") {
+          // It's a value property (not a method), proxy it
+          Object.defineProperty(this, key, {
+            get: () => (this.baseModel as Record<string, unknown>)[key],
+            enumerable: descriptor.enumerable,
+            configurable: true,
+          });
+        }
+      }
+    }
   }
 
   get provider(): string {
@@ -569,6 +646,10 @@ export function createEnhancedModel(
   modelId: string,
   override?: ModelOverride,
 ): LanguageModelV2 {
+  // DEBUG: Temporarily bypass EnhancedLanguageModel to diagnose ProviderInitError
+  // Uncomment the following line to test if the issue is with EnhancedLanguageModel
+  // return baseModel;
+
   // Only wrap if there are features to enable
   if (
     override?.usePromptBasedToolCalling ||
