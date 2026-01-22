@@ -251,3 +251,41 @@ export function resolveApiKey(config: OAI2LMConfig): string | undefined {
   // Fall back to environment variable
   return process.env["OAI2LM_API_KEY"];
 }
+
+/**
+ * Find matching model override by pattern (supports wildcards).
+ *
+ * Use this function to look up ModelOverride settings for a specific model ID.
+ * The overrides can use wildcard patterns (* and ?) to match multiple models.
+ *
+ * @param modelId - The model ID to look up
+ * @param overrides - The model overrides configuration object
+ * @returns The matching ModelOverride or undefined if no match
+ */
+export function findModelOverride(
+  modelId: string,
+  overrides?: Record<string, ModelOverride>,
+): ModelOverride | undefined {
+  if (!overrides) {
+    return undefined;
+  }
+
+  // Direct match first
+  if (overrides[modelId]) {
+    return overrides[modelId];
+  }
+
+  // Wildcard pattern matching
+  for (const [pattern, override] of Object.entries(overrides)) {
+    if (pattern.includes("*") || pattern.includes("?")) {
+      const regex = new RegExp(
+        "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
+      );
+      if (regex.test(modelId)) {
+        return override;
+      }
+    }
+  }
+
+  return undefined;
+}

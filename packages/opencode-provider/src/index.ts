@@ -16,6 +16,14 @@
  *         "options": {
  *           "baseURL": "https://api.example.com/v1",
  *           "apiKey": "your-api-key"
+ *         },
+ *         "models": {
+ *           "gpt-4": {
+ *             "name": "GPT-4",
+ *             "options": {
+ *               "usePromptBasedToolCalling": true
+ *             }
+ *           }
  *         }
  *       }
  *     }
@@ -29,6 +37,7 @@ import {
 import {
   loadConfig,
   resolveApiKey,
+  findModelOverride,
   type OAI2LMConfig,
   type ModelOverride,
   type ThinkingLevel,
@@ -45,6 +54,7 @@ export {
   loadConfig,
   resolveApiKey,
   discoverModels,
+  findModelOverride,
   type OAI2LMConfig,
   type ModelOverride,
   type ThinkingLevel,
@@ -112,6 +122,13 @@ export interface Oai2lmProviderSettings {
    * @default true
    */
   useConfigFile?: boolean;
+
+  /**
+   * Per-model options from OpenCode config (provider.*.models.*.options).
+   * This is populated by OpenCode when calling the provider.
+   * @internal
+   */
+  models?: Record<string, { options?: ModelOverride; [key: string]: unknown }>;
 }
 
 /**
@@ -149,72 +166,68 @@ const modelCache = new WeakMap<
   }
 >();
 
-/**
- * Find matching model override by pattern (supports wildcards).
- *
- * Use this function to look up ModelOverride settings for a specific model ID.
- * The overrides can use wildcard patterns (* and ?) to match multiple models.
- *
- * @param modelId - The model ID to look up
- * @param overrides - The model overrides configuration object
- * @returns The matching ModelOverride or undefined if no match
- */
-export function findModelOverride(
-  modelId: string,
-  overrides?: Record<string, ModelOverride>,
-): ModelOverride | undefined {
-  if (!overrides) {
-    return undefined;
-  }
 
-  // Direct match first
-  if (overrides[modelId]) {
-    return overrides[modelId];
-  }
-
-  // Wildcard pattern matching
-  for (const [pattern, override] of Object.entries(overrides)) {
-    if (pattern.includes("*") || pattern.includes("?")) {
-      const regex = new RegExp(
-        "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
-      );
-      {
-      }
-      if (regex.test(modelId)) {
-        return override;
-      }
-    }
-  }
-
-  return undefined;
-}
 
 /**
- * Merge settings from config file with provided options
+ * Merge settings from config file with provided options.
+ *
+ * Priority order (highest to lowest):
+ * 1. options passed to createOai2lm (from OpenCode provider config)
+ * 2. oai2lm.json config file
+ *
+ * For model overrides, also merge options.models.*.options into modelOverrides.
  */
 function mergeWithConfig(
   options: Oai2lmProviderSettings,
   config: OAI2LMConfig | undefined,
 ): Oai2lmProviderSettings {
-  if (!config) {
-    return options;
+  // Start with config file settings as base
+  const baseModelOverrides = config?.modelOverrides ?? {};
+  const optionModelOverrides = options.modelOverrides ?? {};
+
+  // Extract model-level options from OpenCode's provider.*.models.*.options
+  const modelLevelOverrides: Record<string, ModelOverride> = {};
+  if (options.models) {
+    for (const [modelId, modelConfig] of Object.entries(options.models)) {
+      if (modelConfig.options) {
+        modelLevelOverrides[modelId] = modelConfig.options;
+      }
+    }
+  }
+
+  // Merge all model overrides: config file < options.modelOverrides < options.models.*.options
+  const mergedModelOverrides: Record<string, ModelOverride> = {
+    ...baseModelOverrides,
+    ...optionModelOverrides,
+  };
+
+  // Apply model-level overrides (these take highest priority for specific models)
+  for (const [modelId, override] of Object.entries(modelLevelOverrides)) {
+    mergedModelOverrides[modelId] = {
+      ...mergedModelOverrides[modelId],
+      ...override,
+    };
+  }
+
+  // Resolve API key: options takes precedence over config
+  let apiKey = options.apiKey;
+  if (!apiKey && config) {
+    apiKey = resolveApiKey(config);
   }
 
   return {
     // Options take precedence over config
-    baseURL: options.baseURL || config.baseURL || "",
-    apiKey: options.apiKey || resolveApiKey(config),
-    name: options.name || config.name,
+    baseURL: options.baseURL || config?.baseURL || "",
+    apiKey,
+    name: options.name || config?.name,
     headers: {
-      ...config.headers,
+      ...config?.headers,
       ...options.headers,
     },
-    modelFilter: options.modelFilter || config.modelFilter,
-    modelOverrides: {
-      ...config.modelOverrides,
-      ...options.modelOverrides,
-    },
+    modelFilter: options.modelFilter || config?.modelFilter,
+    modelOverrides: mergedModelOverrides,
     useConfigFile: options.useConfigFile,
+    models: options.models,
   };
 }
 
