@@ -576,12 +576,21 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
               toolNames,
             );
 
-            // Emit cleaned text as a single delta (V2 requires id)
+            // Emit cleaned text with proper V2 text lifecycle (start -> delta -> end)
             if (cleanedText.trim()) {
+              const textId = generateId();
+              controller.enqueue({
+                type: "text-start",
+                id: textId,
+              });
               controller.enqueue({
                 type: "text-delta",
-                id: generateId(),
+                id: textId,
                 delta: cleanedText,
+              });
+              controller.enqueue({
+                type: "text-end",
+                id: textId,
               });
             }
 

@@ -5,6 +5,14 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-01-22
+
+### Fixed
+
+- **Stream text lifecycle**: Fixed `text part id_xxx not found` error
+  - V2 requires complete text lifecycle: `text-start` → `text-delta` → `text-end` with same id
+  - Added proper `text-start` and `text-end` events when emitting cleaned text in XML tool call processing
+
 ## [0.3.5] - 2026-01-22
 
 ### Fixed
