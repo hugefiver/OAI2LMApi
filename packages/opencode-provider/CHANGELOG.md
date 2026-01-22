@@ -5,6 +5,22 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-01-22
+
+### Changed
+
+- **Upgrade to AI SDK V3**: Migrated from `LanguageModelV2` to `LanguageModelV3` interface for OpenCode compatibility
+  - Updated `@ai-sdk/openai-compatible` to `^2.0.0`
+  - Updated `@ai-sdk/provider` to `^3.0.0`
+  - Updated peer dependency `ai` to `>=5.0.0`
+- Updated `specificationVersion` from `"v2"` to `"v3"`
+- `finishReason` now uses V3 object format: `{ unified: string, raw: string }`
+- `usage` now uses V3 nested structure with `inputTokens` and `outputTokens` objects
+
+### Added
+
+- Local deployment script `scripts/deploy-local.ps1` for debugging with OpenCode
+
 ## [0.3.2] - 2026-01-22
 
 ### Added
