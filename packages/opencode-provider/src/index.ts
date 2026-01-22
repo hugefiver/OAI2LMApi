@@ -134,7 +134,7 @@ export interface Oai2lmProviderSettings {
    * This is populated by OpenCode when calling the provider.
    * @internal
    */
-  models?: Record<string, { options?: ModelOverride; [key: string]: unknown }>;
+  models?: Record<string, { options?: ModelOverride;[key: string]: unknown }>;
 }
 
 /**
@@ -258,147 +258,153 @@ function mergeWithConfig(
  * const model = provider.languageModel("gpt-4");
  * ```
  */
-export function createOai2lm(options: Oai2lmProviderSettings): Oai2lmProvider {
-  // Load config file if enabled (default: true)
-  const config = options.useConfigFile !== false ? loadConfig() : undefined;
-  const mergedOptions = mergeWithConfig(options, config);
+export function createOai2lm(options: Oai2lmProviderSettings = {}): Oai2lmProvider {
+  try {
+    // Load config file if enabled (default: true)
+    const config = options.useConfigFile !== false ? loadConfig() : undefined;
+    const mergedOptions = mergeWithConfig(options, config);
 
-  // Validate required settings
-  if (!mergedOptions.baseURL) {
-    throw new Error(
-      "baseURL is required. Provide it in options or in oai2lm.json config file.",
-    );
-  }
-
-  // Store validated baseURL for use in closures (TypeScript narrowing)
-  const baseURL = mergedOptions.baseURL;
-
-  // Create the underlying OpenAI-compatible provider
-  const baseProvider = createOpenAICompatible({
-    baseURL: baseURL.replace(/\/+$/, ""),
-    name: mergedOptions.name || "oai2lm",
-    apiKey: mergedOptions.apiKey,
-    headers: mergedOptions.headers,
-  });
-
-  // Cache key for this provider instance
-  const cacheKey = {};
-
-  /**
-   * Discover models from API and build metadata
-   */
-  async function discoverAndCache(): Promise<void> {
-    const apiKey = mergedOptions.apiKey || "";
-    const models = await discoverModels(
-      baseURL,
-      apiKey,
-      mergedOptions.headers,
-    );
-
-    // Apply filter if configured
-    let filteredModels = models;
-    if (mergedOptions.modelFilter) {
-      const filterRegex = new RegExp(mergedOptions.modelFilter);
-      filteredModels = models.filter((m) => filterRegex.test(m.id));
+    // Validate required settings
+    if (!mergedOptions.baseURL) {
+      throw new Error(
+        "baseURL is required. Provide it in options or in oai2lm.json config file.",
+      );
     }
 
-    // Build metadata map
-    const metadataMap = new Map<string, ModelMetadata>();
-    for (const model of filteredModels) {
-      // Get metadata from pattern matching
-      const patternMetadata = getModelMetadataFromPatterns(model.id);
-      // Merge with API-returned metadata
-      const metadata = mergeMetadata(model.metadata, patternMetadata);
-      // Apply any model overrides
-      const override = findModelOverride(
-        model.id,
-        mergedOptions.modelOverrides,
+    // Store validated baseURL for use in closures (TypeScript narrowing)
+    const baseURL = mergedOptions.baseURL;
+
+    // Create the underlying OpenAI-compatible provider
+    const baseProvider = createOpenAICompatible({
+      baseURL: baseURL.replace(/\/+$/, ""),
+      name: mergedOptions.name || "oai2lm",
+      apiKey: mergedOptions.apiKey,
+      headers: mergedOptions.headers,
+    });
+
+    // Cache key for this provider instance
+    const cacheKey = {};
+
+    /**
+     * Discover models from API and build metadata
+     */
+    async function discoverAndCache(): Promise<void> {
+      const apiKey = mergedOptions.apiKey || "";
+      const models = await discoverModels(
+        baseURL,
+        apiKey,
+        mergedOptions.headers,
       );
 
-      if (override) {
-        if (override.maxInputTokens !== undefined) {
-          metadata.maxInputTokens = override.maxInputTokens;
-        }
-        if (override.maxOutputTokens !== undefined) {
-          metadata.maxOutputTokens = override.maxOutputTokens;
-        }
-        if (override.supportsToolCalling !== undefined) {
-          metadata.supportsToolCalling = override.supportsToolCalling;
-        }
-        if (override.supportsImageInput !== undefined) {
-          metadata.supportsImageInput = override.supportsImageInput;
-        }
+      // Apply filter if configured
+      let filteredModels = models;
+      if (mergedOptions.modelFilter) {
+        const filterRegex = new RegExp(mergedOptions.modelFilter);
+        filteredModels = models.filter((m) => filterRegex.test(m.id));
       }
 
-      metadataMap.set(model.id, metadata);
+      // Build metadata map
+      const metadataMap = new Map<string, ModelMetadata>();
+      for (const model of filteredModels) {
+        // Get metadata from pattern matching
+        const patternMetadata = getModelMetadataFromPatterns(model.id);
+        // Merge with API-returned metadata
+        const metadata = mergeMetadata(model.metadata, patternMetadata);
+        // Apply any model overrides
+        const override = findModelOverride(
+          model.id,
+          mergedOptions.modelOverrides,
+        );
+
+        if (override) {
+          if (override.maxInputTokens !== undefined) {
+            metadata.maxInputTokens = override.maxInputTokens;
+          }
+          if (override.maxOutputTokens !== undefined) {
+            metadata.maxOutputTokens = override.maxOutputTokens;
+          }
+          if (override.supportsToolCalling !== undefined) {
+            metadata.supportsToolCalling = override.supportsToolCalling;
+          }
+          if (override.supportsImageInput !== undefined) {
+            metadata.supportsImageInput = override.supportsImageInput;
+          }
+        }
+
+        metadataMap.set(model.id, metadata);
+      }
+
+      modelCache.set(cacheKey, {
+        models: filteredModels,
+        metadata: metadataMap,
+        lastRefresh: Date.now(),
+      });
     }
 
-    modelCache.set(cacheKey, {
-      models: filteredModels,
-      metadata: metadataMap,
-      lastRefresh: Date.now(),
-    });
-  }
+    /**
+     * Get cached data, discovering if necessary
+     */
+    async function getCache() {
+      let cache = modelCache.get(cacheKey);
+      if (!cache) {
+        await discoverAndCache();
+        cache = modelCache.get(cacheKey)!;
+      }
+      return cache;
+    }
 
-  /**
-   * Get cached data, discovering if necessary
-   */
-  async function getCache() {
-    let cache = modelCache.get(cacheKey);
-    if (!cache) {
+    /**
+     * Get model override for a specific model ID
+     */
+    function getOverride(modelId: string): ModelOverride | undefined {
+      return findModelOverride(modelId, mergedOptions.modelOverrides);
+    }
+
+    // Create the extended provider
+    const provider = function (modelId: string) {
+      const baseModel = baseProvider(modelId);
+      const override = getOverride(modelId);
+      return createEnhancedModel(baseModel, modelId, override);
+    } as Oai2lmProvider;
+
+    // Copy all methods from base provider (V2 interface) with enhancement
+    provider.languageModel = (modelId: string) => {
+      const baseModel = baseProvider.languageModel(modelId);
+      const override = getOverride(modelId);
+      return createEnhancedModel(baseModel, modelId, override);
+    };
+    provider.chatModel = (modelId: string) => {
+      const baseModel = baseProvider.chatModel(modelId);
+      const override = getOverride(modelId);
+      return createEnhancedModel(baseModel, modelId, override);
+    };
+    provider.completionModel = (modelId: string) =>
+      baseProvider.completionModel(modelId);
+    provider.textEmbeddingModel = (modelId: string) =>
+      baseProvider.textEmbeddingModel(modelId);
+    provider.imageModel = (modelId: string) => baseProvider.imageModel(modelId);
+
+    // Add discovery methods
+    provider.listModels = async () => {
+      const cache = await getCache();
+      return cache.models;
+    };
+
+    provider.getModelMetadata = async (modelId: string) => {
+      const cache = await getCache();
+      return cache.metadata.get(modelId);
+    };
+
+    provider.refreshModels = async () => {
       await discoverAndCache();
-      cache = modelCache.get(cacheKey)!;
-    }
-    return cache;
+    };
+
+    return provider;
+  } catch (error) {
+    // Re-throw with more context for debugging
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`[oai2lm] Provider initialization failed: ${message}`);
   }
-
-  /**
-   * Get model override for a specific model ID
-   */
-  function getOverride(modelId: string): ModelOverride | undefined {
-    return findModelOverride(modelId, mergedOptions.modelOverrides);
-  }
-
-  // Create the extended provider
-  const provider = function (modelId: string) {
-    const baseModel = baseProvider(modelId);
-    const override = getOverride(modelId);
-    return createEnhancedModel(baseModel, modelId, override);
-  } as Oai2lmProvider;
-
-  // Copy all methods from base provider (V2 interface) with enhancement
-  provider.languageModel = (modelId: string) => {
-    const baseModel = baseProvider.languageModel(modelId);
-    const override = getOverride(modelId);
-    return createEnhancedModel(baseModel, modelId, override);
-  };
-  provider.chatModel = (modelId: string) => {
-    const baseModel = baseProvider.chatModel(modelId);
-    const override = getOverride(modelId);
-    return createEnhancedModel(baseModel, modelId, override);
-  };
-  provider.completionModel = (modelId: string) =>
-    baseProvider.completionModel(modelId);
-  provider.textEmbeddingModel = (modelId: string) =>
-    baseProvider.textEmbeddingModel(modelId);
-  provider.imageModel = (modelId: string) => baseProvider.imageModel(modelId);
-
-  // Add discovery methods
-  provider.listModels = async () => {
-    const cache = await getCache();
-    return cache.models;
-  };
-
-  provider.getModelMetadata = async (modelId: string) => {
-    const cache = await getCache();
-    return cache.metadata.get(modelId);
-  };
-
-  provider.refreshModels = async () => {
-    await discoverAndCache();
-  };
-
-  return provider;
 }
 
 // Default export for convenience
