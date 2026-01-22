@@ -72,10 +72,11 @@ export { oai2lmPlugin, generateModelsConfig } from "./plugin.js";
  */
 export interface Oai2lmProviderSettings {
   /**
-   * Base URL for API calls (required).
+   * Base URL for API calls.
+   * If not provided, will try to load from oai2lm.json config file.
    * Example: "https://api.example.com/v1"
    */
-  baseURL: string;
+  baseURL?: string;
 
   /**
    * API key for authentication.
@@ -250,9 +251,12 @@ export function createOai2lm(options: Oai2lmProviderSettings): Oai2lmProvider {
     );
   }
 
+  // Store validated baseURL for use in closures (TypeScript narrowing)
+  const baseURL = mergedOptions.baseURL;
+
   // Create the underlying OpenAI-compatible provider
   const baseProvider = createOpenAICompatible({
-    baseURL: mergedOptions.baseURL.replace(/\/+$/, ""),
+    baseURL: baseURL.replace(/\/+$/, ""),
     name: mergedOptions.name || "oai2lm",
     apiKey: mergedOptions.apiKey,
     headers: mergedOptions.headers,
@@ -267,7 +271,7 @@ export function createOai2lm(options: Oai2lmProviderSettings): Oai2lmProvider {
   async function discoverAndCache(): Promise<void> {
     const apiKey = mergedOptions.apiKey || "";
     const models = await discoverModels(
-      mergedOptions.baseURL,
+      baseURL,
       apiKey,
       mergedOptions.headers,
     );

@@ -106,25 +106,33 @@ export interface OAI2LMConfig {
 
 /**
  * Get the OpenCode data directory path
- * Follows XDG Base Directory Specification
+ *
+ * Uses $XDG_DATA_HOME/opencode or ~/.local/share/opencode on all platforms
  */
 export function getDataDir(): string {
+  // Check XDG_DATA_HOME first (works on all platforms if set)
   const xdgDataHome = process.env["XDG_DATA_HOME"];
   if (xdgDataHome && isAbsolute(xdgDataHome)) {
     return join(xdgDataHome, "opencode");
   }
+
+  // Use ~/.local/share/opencode on all platforms
   return join(homedir(), ".local", "share", "opencode");
 }
 
 /**
  * Get the OpenCode config directory path
- * Follows XDG Base Directory Specification
+ *
+ * Uses $XDG_CONFIG_HOME/opencode or ~/.config/opencode on all platforms
  */
 export function getConfigDir(): string {
+  // Check XDG_CONFIG_HOME first (works on all platforms if set)
   const xdgConfigHome = process.env["XDG_CONFIG_HOME"];
   if (xdgConfigHome && isAbsolute(xdgConfigHome)) {
     return join(xdgConfigHome, "opencode");
   }
+
+  // Use ~/.config/opencode on all platforms
   return join(homedir(), ".config", "opencode");
 }
 
