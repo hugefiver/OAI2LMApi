@@ -284,6 +284,8 @@ import {
   formatToolCallAsXml,
   formatToolResultAsText,
   findModelOverride,
+  createEnhancedModel,
+  EnhancedLanguageModel,
 } from "@oai2lmapi/opencode-provider";
 
 // Generate XML tool prompt from tool definitions
@@ -314,6 +316,12 @@ const result = formatToolResultAsText("search", "Found 10 results...");
 // Find model override by pattern matching
 const override = findModelOverride("qwq-32b", {
   "qwq-*": { usePromptBasedToolCalling: true },
+});
+
+// Wrap a base model with enhanced features (prompt-based tool calling)
+const enhancedModel = createEnhancedModel(baseModel, "model-id", {
+  usePromptBasedToolCalling: true,
+  trimXmlToolParameterWhitespace: true,
 });
 ```
 
