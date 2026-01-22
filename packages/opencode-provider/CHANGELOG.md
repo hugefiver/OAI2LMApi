@@ -5,6 +5,18 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-01-22
+
+### Fixed
+
+- **OpenCode V2/V3 compatibility**: Fixed Zod validation error `reason: expected string, received object`
+  - OpenCode internally uses `LanguageModelV2` interface, not V3
+  - Reverted to V2 dependencies: `@ai-sdk/openai-compatible@^1.0.31`, `@ai-sdk/provider@^2.0.1`
+  - Updated `specificationVersion` back to `"v2"`
+  - `finishReason` now returns V2 string format (`"stop"`, `"tool-calls"`, etc.) instead of V3 object
+  - `usage` now uses V2 flat format: `{ inputTokens, outputTokens, totalTokens }`
+  - Fixed tool-call content format to use `input` field correctly
+
 ## [0.3.4] - 2026-01-22
 
 ### Fixed

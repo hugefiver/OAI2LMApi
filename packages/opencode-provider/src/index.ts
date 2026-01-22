@@ -6,7 +6,7 @@
  * This provider:
  * 1. Reads configuration from oai2lm.json (baseURL, apiKey, etc.)
  * 2. Auto-discovers models from the /models endpoint
- * 3. Provides LanguageModelV3 instances for each discovered model
+ * 3. Provides LanguageModelV2 instances for each discovered model
  *
  * Usage in opencode.json:
  *   {
