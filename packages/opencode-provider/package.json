@@ -1,6 +1,6 @@
 {
   "name": "@oai2lmapi/opencode-provider",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "AI SDK Provider and OpenCode Plugin for OpenAI-compatible APIs with automatic model discovery",
   "type": "module",
   "main": "./dist/index.js",

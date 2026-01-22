@@ -587,6 +587,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
   /**
    * Apply prompt-based tool calling by converting tools to system prompt
+   * and converting tool-call/tool-result in message history to text format
    */
   private applyPromptBasedToolCalling(
     options: LanguageModelV2CallOptions,
@@ -618,7 +619,10 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     // Generate XML tool prompt
     const toolPrompt = generateXmlToolPrompt(toolDefinitions);
 
-    // Add to system prompt
+    // Convert message history: transform tool-call and tool-result to text format
+    // This is necessary because when using prompt-based tool calling, we remove
+    // native tools from the request, but the API still requires proper formatting
+    // of any tool-call/tool-result content in the message history
     const modifiedPrompt = options.prompt.map((msg: LanguageModelV2Message) => {
       if (msg.role === "system") {
         const content = msg.content;
@@ -627,11 +631,86 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
           content: content + "\n\n" + toolPrompt,
         };
       }
+
+      // Convert assistant messages with tool-call content to text
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        const newContent: LanguageModelV2Content[] = [];
+        let hasToolCalls = false;
+
+        for (const part of msg.content) {
+          if (part.type === "tool-call") {
+            hasToolCalls = true;
+            // Convert tool-call to XML text format
+            const toolCall = part as { toolName: string; input: unknown };
+            const inputStr = typeof toolCall.input === "string"
+              ? toolCall.input
+              : JSON.stringify(toolCall.input, null, 2);
+
+            // Format as XML tool call
+            const xmlToolCall = `<${toolCall.toolName}>\n${inputStr}\n</${toolCall.toolName}>`;
+            newContent.push({
+              type: "text" as const,
+              text: xmlToolCall,
+            });
+          } else if (part.type === "text") {
+            newContent.push(part as { type: "text"; text: string });
+          } else if (part.type === "reasoning") {
+            newContent.push(part as { type: "reasoning"; text: string });
+          }
+          // Skip other types like file parts, tool-result in assistant messages
+        }
+
+        if (hasToolCalls) {
+          return {
+            ...msg,
+            content: newContent,
+          } as LanguageModelV2Message;
+        }
+      }
+
+      // Convert tool role messages to user messages with text content
+      if (msg.role === "tool" && Array.isArray(msg.content)) {
+        const textParts: Array<{ type: "text"; text: string }> = [];
+
+        for (const part of msg.content) {
+          if (part.type === "tool-result") {
+            const toolResult = part as { toolName: string; toolCallId: string; output: unknown };
+            // Format tool result as text
+            let outputStr: string;
+            if (typeof toolResult.output === "string") {
+              outputStr = toolResult.output;
+            } else if (toolResult.output && typeof toolResult.output === "object") {
+              const output = toolResult.output as { type?: string; value?: string };
+              if (output.type === "text" && typeof output.value === "string") {
+                outputStr = output.value;
+              } else {
+                outputStr = JSON.stringify(toolResult.output, null, 2);
+              }
+            } else {
+              outputStr = String(toolResult.output);
+            }
+
+            textParts.push({
+              type: "text",
+              text: `[Tool Result for ${toolResult.toolName}]:\n${outputStr}`,
+            });
+          }
+        }
+
+        if (textParts.length > 0) {
+          // Convert tool message to user message with text content
+          return {
+            role: "user" as const,
+            content: textParts,
+          } as LanguageModelV2Message;
+        }
+      }
+
       return msg;
-    });
+    }) as LanguageModelV2Message[];
 
     // If no system message exists, prepend one
-    const hasSystemMessage = modifiedPrompt.some((m: LanguageModelV2Message) => m.role === "system");
+    const hasSystemMessage = modifiedPrompt.some((m) => m.role === "system");
     if (!hasSystemMessage) {
       modifiedPrompt.unshift({
         role: "system" as const,
@@ -643,7 +722,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     return {
       options: {
         ...options,
-        prompt: modifiedPrompt,
+        prompt: modifiedPrompt as LanguageModelV2Message[],
         tools: undefined,
         toolChoice: undefined,
       },
