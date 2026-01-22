@@ -5,6 +5,21 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-01-22
+
+### Added
+
+- **Prompt-based tool calling implementation**: Added `EnhancedLanguageModel` wrapper that actually implements `usePromptBasedToolCalling` feature
+  - Converts native tool calls to XML format in system prompt
+  - Parses XML tool calls from model responses
+  - Works with both streaming and non-streaming modes
+- New `createEnhancedModel()` function for wrapping base models with advanced features
+
+### Fixed
+
+- Fix `usePromptBasedToolCalling` not being applied - now properly wraps models with `EnhancedLanguageModel`
+- Provider's `languageModel()` and `chatModel()` methods now apply model overrides correctly
+
 ## [0.3.1] - 2025-01-21
 
 ### Fixed
