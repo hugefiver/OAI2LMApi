@@ -2,15 +2,16 @@
  * Enhanced Language Model wrapper that adds advanced features:
  * - Prompt-based tool calling (XML format)
  *
- * This wraps an AI SDK LanguageModelV2 to intercept and transform requests/responses.
+ * This wraps an AI SDK LanguageModelV3 to intercept and transform requests/responses.
  */
 
 import type {
-  LanguageModelV2,
-  LanguageModelV2CallOptions,
-  LanguageModelV2FunctionTool,
-  LanguageModelV2Message,
-  LanguageModelV2StreamPart,
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3FunctionTool,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3Message,
+  LanguageModelV3StreamPart,
 } from "@ai-sdk/provider";
 
 import type { ModelOverride, ThinkingLevel } from "./config.js";
@@ -31,15 +32,15 @@ function generateId(): string {
 /**
  * Enhanced Language Model that wraps a base model and adds advanced features.
  *
- * This class implements LanguageModelV2 and also proxies any additional
+ * This class implements LanguageModelV3 and also proxies any additional
  * properties from the base model (like supportsStructuredOutputs) to ensure
  * compatibility with frameworks that may check for these properties.
  */
-export class EnhancedLanguageModel implements LanguageModelV2 {
-  readonly specificationVersion = "v2" as const;
+export class EnhancedLanguageModel implements LanguageModelV3 {
+  readonly specificationVersion = "v3" as const;
   readonly modelId: string;
 
-  private readonly baseModel: LanguageModelV2;
+  private readonly baseModel: LanguageModelV3;
   private readonly override?: ModelOverride;
 
   /**
@@ -54,7 +55,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   }
 
   constructor(
-    baseModel: LanguageModelV2,
+    baseModel: LanguageModelV3,
     modelId: string,
     override?: ModelOverride,
   ) {
@@ -64,13 +65,13 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
     // Proxy any additional properties from the base model
     // This ensures compatibility with frameworks that may access
-    // provider-specific properties not defined in LanguageModelV2
+    // provider-specific properties not defined in LanguageModelV3
     this.proxyAdditionalProperties();
   }
 
   /**
    * Proxy additional properties from the base model that are not part of
-   * the LanguageModelV2 interface but may be used by consuming frameworks.
+   * the LanguageModelV3 interface but may be used by consuming frameworks.
    */
   private proxyAdditionalProperties(): void {
     // Get all property names from the base model's prototype chain
@@ -136,7 +137,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   /**
    * Generate text (non-streaming)
    */
-  async doGenerate(options: LanguageModelV2CallOptions) {
+  async doGenerate(options: LanguageModelV3CallOptions) {
     let modifiedOptions = { ...options };
 
     // Apply model-level overrides
@@ -175,7 +176,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   /**
    * Stream text
    */
-  async doStream(options: LanguageModelV2CallOptions) {
+  async doStream(options: LanguageModelV3CallOptions) {
     let modifiedOptions = { ...options };
 
     // Apply model-level overrides
@@ -217,8 +218,8 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
    * Handles temperature and thinkingLevel configuration.
    */
   private applyModelOverrides(
-    options: LanguageModelV2CallOptions,
-  ): LanguageModelV2CallOptions {
+    options: LanguageModelV3CallOptions,
+  ): LanguageModelV3CallOptions {
     let modifiedOptions = { ...options };
 
     // Apply default temperature if configured and not already set
@@ -245,9 +246,9 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
    * Supports various providers that use different parameter names.
    */
   private applyThinkingLevel(
-    options: LanguageModelV2CallOptions,
+    options: LanguageModelV3CallOptions,
     thinkingLevel: ThinkingLevel,
-  ): LanguageModelV2CallOptions {
+  ): LanguageModelV3CallOptions {
     // Convert thinking level to token budget
     const budget = this.thinkingLevelToBudget(thinkingLevel);
 
@@ -326,15 +327,15 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   /**
    * Suppress reasoning content from non-streaming result.
    */
-  private suppressReasoningContent<
-    T extends { content: unknown[]; finishReason: string },
-  >(result: T): T {
+  private suppressReasoningContent(
+    result: LanguageModelV3GenerateResult,
+  ): LanguageModelV3GenerateResult {
     const content = result.content as Array<{ type: string }>;
     const filteredContent = content.filter((c) => c.type !== "reasoning");
 
     return {
       ...result,
-      content: filteredContent,
+      content: filteredContent as LanguageModelV3GenerateResult["content"],
     };
   }
 
@@ -342,11 +343,11 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
    * Suppress reasoning content from streaming result.
    */
   private suppressReasoningInStream<
-    T extends { stream: ReadableStream<LanguageModelV2StreamPart> },
+    T extends { stream: ReadableStream<LanguageModelV3StreamPart> },
   >(result: T): T {
     const originalStream = result.stream;
 
-    const transformedStream = new ReadableStream<LanguageModelV2StreamPart>({
+    const transformedStream = new ReadableStream<LanguageModelV3StreamPart>({
       async start(controller) {
         const reader = originalStream.getReader();
 
@@ -387,15 +388,15 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
    * Apply prompt-based tool calling by converting tools to system prompt
    */
   private applyPromptBasedToolCalling(
-    options: LanguageModelV2CallOptions,
-  ): { options: LanguageModelV2CallOptions; toolNames: string[] } {
+    options: LanguageModelV3CallOptions,
+  ): { options: LanguageModelV3CallOptions; toolNames: string[] } {
     if (!options.tools || options.tools.length === 0) {
       return { options, toolNames: [] };
     }
 
     // Filter to function tools only (not provider-defined tools)
     const functionTools = options.tools.filter(
-      (tool: LanguageModelV2FunctionTool | { type: string }): tool is LanguageModelV2FunctionTool => tool.type === "function",
+      (tool: LanguageModelV3FunctionTool | { type: string }): tool is LanguageModelV3FunctionTool => tool.type === "function",
     );
 
     if (functionTools.length === 0) {
@@ -403,11 +404,11 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     }
 
     // Convert AI SDK tools to our ToolDefinition format
-    const toolDefinitions: ToolDefinition[] = functionTools.map((tool: LanguageModelV2FunctionTool) => ({
+    const toolDefinitions: ToolDefinition[] = functionTools.map((tool: LanguageModelV3FunctionTool) => ({
       type: "function",
       name: tool.name,
       description: tool.description,
-      // V2 uses inputSchema instead of parameters
+      // V3 uses inputSchema instead of parameters
       parameters: tool.inputSchema as Record<string, unknown>,
     }));
 
@@ -417,7 +418,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     const toolPrompt = generateXmlToolPrompt(toolDefinitions);
 
     // Add to system prompt
-    const modifiedPrompt = options.prompt.map((msg: LanguageModelV2Message) => {
+    const modifiedPrompt = options.prompt.map((msg: LanguageModelV3Message) => {
       if (msg.role === "system") {
         const content = msg.content;
         return {
@@ -429,7 +430,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     });
 
     // If no system message exists, prepend one
-    const hasSystemMessage = modifiedPrompt.some((m: LanguageModelV2Message) => m.role === "system");
+    const hasSystemMessage = modifiedPrompt.some((m: LanguageModelV3Message) => m.role === "system");
     if (!hasSystemMessage) {
       modifiedPrompt.unshift({
         role: "system" as const,
@@ -452,10 +453,10 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   /**
    * Process non-streaming result for XML tool calls
    */
-  private processResultForToolCalls<T extends { content: unknown[]; finishReason: string }>(
-    result: T,
+  private processResultForToolCalls(
+    result: LanguageModelV3GenerateResult,
     toolNames: string[],
-  ): T {
+  ): LanguageModelV3GenerateResult {
     // Find text content in the response
     const content = result.content as Array<{ type: string; text?: string }>;
     const textContentIndex = content.findIndex((c) => c.type === "text");
@@ -485,15 +486,15 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     // Add cleaned text if any remains
     if (cleanedText.trim()) {
       newContent.push({
-        type: "text",
+        type: "text" as const,
         text: cleanedText,
       });
     }
 
-    // Add tool calls (V2 uses 'input' instead of 'args')
+    // Add tool calls (V3 uses 'input' instead of 'args')
     for (const tc of xmlToolCalls) {
       newContent.push({
-        type: "tool-call",
+        type: "tool-call" as const,
         toolCallId: tc.id,
         toolName: tc.name,
         input: JSON.stringify(tc.arguments),
@@ -509,8 +510,8 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
     return {
       ...result,
-      content: newContent,
-      finishReason: "tool-calls",
+      content: newContent as LanguageModelV3GenerateResult["content"],
+      finishReason: { unified: "tool-calls" as const, raw: "tool_calls" },
     };
   }
 
@@ -519,7 +520,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
    *
    * This wraps the stream to accumulate text and parse tool calls at the end.
    */
-  private processStreamForToolCalls<T extends { stream: ReadableStream<LanguageModelV2StreamPart> }>(
+  private processStreamForToolCalls<T extends { stream: ReadableStream<LanguageModelV3StreamPart> }>(
     result: T,
     toolNames: string[],
   ): T {
@@ -527,10 +528,10 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     const override = this.override;
     const self = this;
 
-    const transformedStream = new ReadableStream<LanguageModelV2StreamPart>({
+    const transformedStream = new ReadableStream<LanguageModelV3StreamPart>({
       async start(controller) {
         let accumulatedText = "";
-        const bufferedParts: LanguageModelV2StreamPart[] = [];
+        const bufferedParts: LanguageModelV3StreamPart[] = [];
 
         try {
           const reader = originalStream.getReader();
@@ -574,22 +575,34 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
               });
             }
 
-            // Emit tool calls (V2 uses 'input' instead of 'args')
+            // Emit tool calls (V3 uses 'input' instead of 'args')
             for (const tc of xmlToolCalls) {
               controller.enqueue({
                 type: "tool-call",
                 toolCallId: tc.id,
                 toolName: tc.name,
                 input: JSON.stringify(tc.arguments),
-              } as LanguageModelV2StreamPart);
+              } as LanguageModelV3StreamPart);
             }
 
-            // Emit finish with tool-calls reason (V2 uses inputTokens/outputTokens)
+            // Emit finish with tool-calls reason (V3 usage format)
             controller.enqueue({
               type: "finish",
-              finishReason: "tool-calls",
-              usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            });
+              finishReason: { unified: "tool-calls" as const, raw: "tool_calls" },
+              usage: {
+                inputTokens: {
+                  total: undefined,
+                  noCache: undefined,
+                  cacheRead: undefined,
+                  cacheWrite: undefined,
+                },
+                outputTokens: {
+                  total: undefined,
+                  text: undefined,
+                  reasoning: undefined,
+                },
+              },
+            } as LanguageModelV3StreamPart);
           } else {
             // No tool calls found, emit all buffered parts as-is
             for (const part of bufferedParts) {
@@ -642,10 +655,10 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
  * @returns Enhanced language model with additional features
  */
 export function createEnhancedModel(
-  baseModel: LanguageModelV2,
+  baseModel: LanguageModelV3,
   modelId: string,
   override?: ModelOverride,
-): LanguageModelV2 {
+): LanguageModelV3 {
   // DEBUG: Temporarily bypass EnhancedLanguageModel to diagnose ProviderInitError
   // Uncomment the following line to test if the issue is with EnhancedLanguageModel
   // return baseModel;

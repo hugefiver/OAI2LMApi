@@ -50,10 +50,10 @@
     "directory": "packages/opencode-provider"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^1.0.0"
+    "@ai-sdk/openai-compatible": "^2.0.0"
   },
   "peerDependencies": {
-    "ai": ">=4.0.0"
+    "ai": ">=5.0.0"
   },
   "peerDependenciesMeta": {
     "ai": {
@@ -61,7 +61,7 @@
     }
   },
   "devDependencies": {
-    "@ai-sdk/provider": "^2.0.0",
+    "@ai-sdk/provider": "^3.0.0",
     "@oai2lmapi/model-metadata": "workspace:*",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
