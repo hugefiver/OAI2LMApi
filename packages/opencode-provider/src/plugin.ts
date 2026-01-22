@@ -110,6 +110,9 @@ export function generateModelsConfig(
       if (override.temperature !== undefined) {
         options.temperature = override.temperature;
       }
+      if (override.suppressChainOfThought !== undefined) {
+        options.suppressChainOfThought = override.suppressChainOfThought;
+      }
       if (Object.keys(options).length > 0) {
         modelConfig.options = options;
       }

@@ -13,7 +13,7 @@ import type {
   LanguageModelV2StreamPart,
 } from "@ai-sdk/provider";
 
-import type { ModelOverride } from "./config.js";
+import type { ModelOverride, ThinkingLevel } from "./config.js";
 import {
   generateXmlToolPrompt,
   parseXmlToolCalls,
@@ -62,6 +62,9 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   async doGenerate(options: LanguageModelV2CallOptions) {
     let modifiedOptions = { ...options };
 
+    // Apply model-level overrides
+    modifiedOptions = this.applyModelOverrides(modifiedOptions);
+
     // Collect tool names for later XML parsing
     const toolNames: string[] = [];
 
@@ -77,7 +80,12 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     }
 
     // Call base model
-    const result = await this.baseModel.doGenerate(modifiedOptions);
+    let result = await this.baseModel.doGenerate(modifiedOptions);
+
+    // Suppress chain-of-thought content if configured
+    if (this.override?.suppressChainOfThought) {
+      result = this.suppressReasoningContent(result);
+    }
 
     // Process result for tool calls if using prompt-based tool calling
     if (this.override?.usePromptBasedToolCalling && toolNames.length > 0) {
@@ -93,6 +101,9 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   async doStream(options: LanguageModelV2CallOptions) {
     let modifiedOptions = { ...options };
 
+    // Apply model-level overrides
+    modifiedOptions = this.applyModelOverrides(modifiedOptions);
+
     // Collect tool names for later XML parsing
     const toolNames: string[] = [];
 
@@ -108,7 +119,12 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     }
 
     // Call base model
-    const result = await this.baseModel.doStream(modifiedOptions);
+    let result = await this.baseModel.doStream(modifiedOptions);
+
+    // Suppress chain-of-thought content in stream if configured
+    if (this.override?.suppressChainOfThought) {
+      result = this.suppressReasoningInStream(result);
+    }
 
     // If using prompt-based tool calling, we need to process the stream
     // to parse XML tool calls from the accumulated text
@@ -117,6 +133,177 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     }
 
     return result;
+  }
+
+  /**
+   * Apply model-level overrides to call options.
+   * Handles temperature and thinkingLevel configuration.
+   */
+  private applyModelOverrides(
+    options: LanguageModelV2CallOptions,
+  ): LanguageModelV2CallOptions {
+    let modifiedOptions = { ...options };
+
+    // Apply default temperature if configured and not already set
+    if (
+      this.override?.temperature !== undefined &&
+      modifiedOptions.temperature === undefined
+    ) {
+      modifiedOptions.temperature = this.override.temperature;
+    }
+
+    // Apply thinking level via provider options
+    if (this.override?.thinkingLevel !== undefined) {
+      modifiedOptions = this.applyThinkingLevel(
+        modifiedOptions,
+        this.override.thinkingLevel,
+      );
+    }
+
+    return modifiedOptions;
+  }
+
+  /**
+   * Apply thinking level configuration via provider options.
+   * Supports various providers that use different parameter names.
+   */
+  private applyThinkingLevel(
+    options: LanguageModelV2CallOptions,
+    thinkingLevel: ThinkingLevel,
+  ): LanguageModelV2CallOptions {
+    // Convert thinking level to token budget
+    const budget = this.thinkingLevelToBudget(thinkingLevel);
+
+    // If 'none', we don't add any thinking configuration
+    if (budget === 0) {
+      return options;
+    }
+
+    // Apply via providerOptions for various providers
+    // Different providers use different parameter names
+    const providerOptions = {
+      ...options.providerOptions,
+      // OpenAI-compatible (o1, o3 models)
+      openai: {
+        ...(options.providerOptions?.openai as Record<string, unknown>),
+        reasoning_effort:
+          thinkingLevel === "auto"
+            ? "medium"
+            : thinkingLevel === "high"
+              ? "high"
+              : thinkingLevel === "low"
+                ? "low"
+                : "medium",
+      },
+      // Anthropic (Claude 3.5+ with extended thinking)
+      anthropic: {
+        ...(options.providerOptions?.anthropic as Record<string, unknown>),
+        thinking: {
+          type: "enabled",
+          budget_tokens: budget,
+        },
+      },
+      // DeepSeek (reasoning models)
+      deepseek: {
+        ...(options.providerOptions?.deepseek as Record<string, unknown>),
+        reasoning_effort:
+          thinkingLevel === "auto"
+            ? "medium"
+            : thinkingLevel === "high"
+              ? "high"
+              : thinkingLevel === "low"
+                ? "low"
+                : "medium",
+      },
+    };
+
+    return {
+      ...options,
+      providerOptions,
+    };
+  }
+
+  /**
+   * Convert thinking level to token budget.
+   */
+  private thinkingLevelToBudget(level: ThinkingLevel): number {
+    if (typeof level === "number") {
+      return level;
+    }
+    switch (level) {
+      case "none":
+        return 0;
+      case "low":
+        return 4096;
+      case "medium":
+        return 16384;
+      case "high":
+        return 65536;
+      case "auto":
+        return 16384; // Default to medium
+      default:
+        return 0;
+    }
+  }
+
+  /**
+   * Suppress reasoning content from non-streaming result.
+   */
+  private suppressReasoningContent<
+    T extends { content: unknown[]; finishReason: string },
+  >(result: T): T {
+    const content = result.content as Array<{ type: string }>;
+    const filteredContent = content.filter((c) => c.type !== "reasoning");
+
+    return {
+      ...result,
+      content: filteredContent,
+    };
+  }
+
+  /**
+   * Suppress reasoning content from streaming result.
+   */
+  private suppressReasoningInStream<
+    T extends { stream: ReadableStream<LanguageModelV2StreamPart> },
+  >(result: T): T {
+    const originalStream = result.stream;
+
+    const transformedStream = new ReadableStream<LanguageModelV2StreamPart>({
+      async start(controller) {
+        const reader = originalStream.getReader();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+
+            // Filter out reasoning-related stream parts
+            const partType = value.type;
+            if (
+              partType === "reasoning-start" ||
+              partType === "reasoning-delta" ||
+              partType === "reasoning-end"
+            ) {
+              // Skip reasoning parts
+              continue;
+            }
+
+            controller.enqueue(value);
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
+
+    return {
+      ...result,
+      stream: transformedStream,
+    };
   }
 
   /**
@@ -383,7 +570,12 @@ export function createEnhancedModel(
   override?: ModelOverride,
 ): LanguageModelV2 {
   // Only wrap if there are features to enable
-  if (override?.usePromptBasedToolCalling) {
+  if (
+    override?.usePromptBasedToolCalling ||
+    override?.temperature !== undefined ||
+    override?.thinkingLevel !== undefined ||
+    override?.suppressChainOfThought !== undefined
+  ) {
     return new EnhancedLanguageModel(baseModel, modelId, override);
   }
 
