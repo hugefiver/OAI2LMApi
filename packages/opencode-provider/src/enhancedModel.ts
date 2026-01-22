@@ -9,6 +9,7 @@ import type {
   LanguageModelV2,
   LanguageModelV2CallOptions,
   LanguageModelV2FunctionTool,
+  LanguageModelV2Message,
   LanguageModelV2StreamPart,
 } from "@ai-sdk/provider";
 
@@ -130,7 +131,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
     // Filter to function tools only (not provider-defined tools)
     const functionTools = options.tools.filter(
-      (tool): tool is LanguageModelV2FunctionTool => tool.type === "function",
+      (tool: LanguageModelV2FunctionTool | { type: string }): tool is LanguageModelV2FunctionTool => tool.type === "function",
     );
 
     if (functionTools.length === 0) {
@@ -138,7 +139,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     }
 
     // Convert AI SDK tools to our ToolDefinition format
-    const toolDefinitions: ToolDefinition[] = functionTools.map((tool) => ({
+    const toolDefinitions: ToolDefinition[] = functionTools.map((tool: LanguageModelV2FunctionTool) => ({
       type: "function",
       name: tool.name,
       description: tool.description,
@@ -152,7 +153,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     const toolPrompt = generateXmlToolPrompt(toolDefinitions);
 
     // Add to system prompt
-    const modifiedPrompt = options.prompt.map((msg) => {
+    const modifiedPrompt = options.prompt.map((msg: LanguageModelV2Message) => {
       if (msg.role === "system") {
         const content = msg.content;
         return {
@@ -164,7 +165,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     });
 
     // If no system message exists, prepend one
-    const hasSystemMessage = modifiedPrompt.some((m) => m.role === "system");
+    const hasSystemMessage = modifiedPrompt.some((m: LanguageModelV2Message) => m.role === "system");
     if (!hasSystemMessage) {
       modifiedPrompt.unshift({
         role: "system" as const,

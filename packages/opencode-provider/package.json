@@ -61,6 +61,7 @@
     }
   },
   "devDependencies": {
+    "@ai-sdk/provider": "^2.0.0",
     "@oai2lmapi/model-metadata": "workspace:*",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
