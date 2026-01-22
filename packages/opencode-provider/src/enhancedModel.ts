@@ -30,6 +30,48 @@ function generateId(): string {
 }
 
 /**
+ * Result of parsing thinking tags from text
+ */
+interface ThinkingParseResult {
+  /** Text content with thinking tags removed */
+  textContent: string;
+  /** Extracted reasoning/thinking content */
+  reasoningContent: string;
+  /** Whether thinking content was found */
+  hasThinking: boolean;
+}
+
+/**
+ * Parse <think> (at start) and <thinking> (anywhere) tags from text.
+ * Converts these to reasoning content for V2 stream.
+ */
+function parseThinkingTags(text: string): ThinkingParseResult {
+  let reasoningContent = "";
+  let textContent = text;
+
+  // Parse <think>...</think> at the start of text (DeepSeek style)
+  const thinkMatch = textContent.match(/^<think>([\s\S]*?)<\/think>/);
+  if (thinkMatch) {
+    reasoningContent += thinkMatch[1];
+    textContent = textContent.slice(thinkMatch[0].length);
+  }
+
+  // Parse all <thinking>...</thinking> tags anywhere in text (Claude/general style)
+  const thinkingRegex = /<thinking>([\s\S]*?)<\/thinking>/g;
+  let match;
+  while ((match = thinkingRegex.exec(textContent)) !== null) {
+    reasoningContent += (reasoningContent ? "\n\n" : "") + match[1];
+  }
+  textContent = textContent.replace(thinkingRegex, "");
+
+  return {
+    textContent: textContent.trim(),
+    reasoningContent: reasoningContent.trim(),
+    hasThinking: reasoningContent.length > 0,
+  };
+}
+
+/**
  * Enhanced Language Model that wraps a base model and adds advanced features.
  *
  * This class implements LanguageModelV2 and also proxies any additional
@@ -175,6 +217,11 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
       result = this.suppressReasoningContent(result);
     }
 
+    // Parse thinking tags if enabled
+    if (this.override?.parseThinkingTags) {
+      result = this.processThinkingTagsInResult(result);
+    }
+
     // Process result for tool calls if using prompt-based tool calling
     if (this.override?.usePromptBasedToolCalling && toolNames.length > 0) {
       return this.processResultForToolCalls(result, toolNames);
@@ -218,6 +265,11 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     // to parse XML tool calls from the accumulated text
     if (this.override?.usePromptBasedToolCalling && toolNames.length > 0) {
       return this.processStreamForToolCalls(result, toolNames);
+    }
+
+    // Parse thinking tags in stream if enabled (when not using tool calling)
+    if (this.override?.parseThinkingTags) {
+      return this.processThinkingTagsInStream(result);
     }
 
     return result;
@@ -346,6 +398,145 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     return {
       ...result,
       content: filteredContent as T["content"],
+    };
+  }
+
+  /**
+   * Process thinking tags (<think>, <thinking>) in non-streaming result.
+   * Converts to reasoning content.
+   */
+  private processThinkingTagsInResult<
+    T extends Awaited<ReturnType<LanguageModelV2["doGenerate"]>>,
+  >(result: T): T {
+    const newContent: LanguageModelV2Content[] = [];
+
+    for (const item of result.content) {
+      if (item.type === "text") {
+        const textItem = item as { type: "text"; text: string };
+        const parsed = parseThinkingTags(textItem.text);
+
+        // Add reasoning content if found
+        if (parsed.hasThinking) {
+          newContent.push({
+            type: "reasoning",
+            text: parsed.reasoningContent,
+          });
+        }
+
+        // Add remaining text content if any
+        if (parsed.textContent) {
+          newContent.push({
+            type: "text",
+            text: parsed.textContent,
+          });
+        }
+      } else {
+        newContent.push(item);
+      }
+    }
+
+    return {
+      ...result,
+      content: newContent as T["content"],
+    };
+  }
+
+  /**
+   * Process thinking tags (<think>, <thinking>) in streaming result.
+   * Buffers content and parses at the end.
+   */
+  private processThinkingTagsInStream<
+    T extends { stream: ReadableStream<LanguageModelV2StreamPart> },
+  >(result: T): T {
+    const originalStream = result.stream;
+
+    const transformedStream = new ReadableStream<LanguageModelV2StreamPart>({
+      async start(controller) {
+        let accumulatedText = "";
+        const bufferedParts: LanguageModelV2StreamPart[] = [];
+        let currentTextId: string | undefined;
+
+        try {
+          const reader = originalStream.getReader();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+
+            const part = value;
+
+            // Track text content
+            if (part.type === "text-start") {
+              currentTextId = part.id;
+            } else if (part.type === "text-delta") {
+              accumulatedText += part.delta;
+            }
+
+            bufferedParts.push(part);
+          }
+
+          // Parse thinking tags from accumulated text
+          const parsed = parseThinkingTags(accumulatedText);
+
+          // Emit reasoning content if found
+          if (parsed.hasThinking) {
+            const reasoningId = generateId();
+            controller.enqueue({
+              type: "reasoning-start",
+              id: reasoningId,
+            });
+            controller.enqueue({
+              type: "reasoning-delta",
+              id: reasoningId,
+              delta: parsed.reasoningContent,
+            });
+            controller.enqueue({
+              type: "reasoning-end",
+              id: reasoningId,
+            });
+          }
+
+          // Emit cleaned text content
+          if (parsed.textContent) {
+            const textId = generateId();
+            controller.enqueue({
+              type: "text-start",
+              id: textId,
+            });
+            controller.enqueue({
+              type: "text-delta",
+              id: textId,
+              delta: parsed.textContent,
+            });
+            controller.enqueue({
+              type: "text-end",
+              id: textId,
+            });
+          }
+
+          // Forward non-text parts (finish, response-metadata, etc.)
+          for (const part of bufferedParts) {
+            if (
+              part.type !== "text-start" &&
+              part.type !== "text-delta" &&
+              part.type !== "text-end"
+            ) {
+              controller.enqueue(part);
+            }
+          }
+
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
+
+    return {
+      ...result,
+      stream: transformedStream,
     };
   }
 
@@ -488,10 +679,23 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
     }
 
     // Remove XML tool calls from text
-    const cleanedText = this.removeXmlToolCallsFromText(text, toolNames);
+    let cleanedText = this.removeXmlToolCallsFromText(text, toolNames);
 
     // Build new content array
     const newContent: LanguageModelV2Content[] = [];
+
+    // Parse and add reasoning content if parseThinkingTags is enabled
+    if (this.override?.parseThinkingTags) {
+      const parsed = parseThinkingTags(cleanedText);
+      cleanedText = parsed.textContent;
+
+      if (parsed.hasThinking) {
+        newContent.push({
+          type: "reasoning" as const,
+          text: parsed.reasoningContent,
+        });
+      }
+    }
 
     // Add cleaned text if any remains
     if (cleanedText.trim()) {
@@ -571,10 +775,34 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
           if (xmlToolCalls.length > 0) {
             // Found tool calls - emit cleaned text and tool calls
-            const cleanedText = self.removeXmlToolCallsFromText(
+            let cleanedText = self.removeXmlToolCallsFromText(
               accumulatedText,
               toolNames,
             );
+
+            // Parse thinking tags and emit as reasoning content (if enabled)
+            if (override?.parseThinkingTags) {
+              const thinkingResult = parseThinkingTags(cleanedText);
+              cleanedText = thinkingResult.textContent;
+
+              // Emit reasoning content if found
+              if (thinkingResult.hasThinking) {
+                const reasoningId = generateId();
+                controller.enqueue({
+                  type: "reasoning-start",
+                  id: reasoningId,
+                });
+                controller.enqueue({
+                  type: "reasoning-delta",
+                  id: reasoningId,
+                  delta: thinkingResult.reasoningContent,
+                });
+                controller.enqueue({
+                  type: "reasoning-end",
+                  id: reasoningId,
+                });
+              }
+            }
 
             // Emit cleaned text with proper V2 text lifecycle (start -> delta -> end)
             if (cleanedText.trim()) {
@@ -679,7 +907,8 @@ export function wrapWithEnhancements(
     override?.usePromptBasedToolCalling ||
     override?.temperature !== undefined ||
     override?.thinkingLevel !== undefined ||
-    override?.suppressChainOfThought !== undefined
+    override?.suppressChainOfThought !== undefined ||
+    override?.parseThinkingTags
   ) {
     return new EnhancedLanguageModel(baseModel, modelId, override);
   }

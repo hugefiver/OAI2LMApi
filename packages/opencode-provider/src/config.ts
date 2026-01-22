@@ -80,6 +80,15 @@ export interface ModelOverride {
    * Only applies when usePromptBasedToolCalling is true.
    */
   trimXmlToolParameterWhitespace?: boolean;
+
+  /**
+   * Parse <think> and <thinking> tags from model output and convert to reasoning content.
+   * - <think>...</think> at the start of response (DeepSeek style)
+   * - <thinking>...</thinking> anywhere in response (Claude/general style)
+   *
+   * Useful for models that output thinking in XML tags but don't use native reasoning_content.
+   */
+  parseThinkingTags?: boolean;
 }
 
 /**
