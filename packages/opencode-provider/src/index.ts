@@ -41,6 +41,7 @@ import {
   type OAI2LMConfig,
   type ModelOverride,
   type ThinkingLevel,
+  type ApiType,
 } from "./config.js";
 import { discoverModels, type DiscoveredModel } from "./discover.js";
 import {
@@ -58,6 +59,7 @@ export {
   type OAI2LMConfig,
   type ModelOverride,
   type ThinkingLevel,
+  type ApiType,
   type DiscoveredModel,
   type ModelMetadata,
 };
@@ -80,10 +82,21 @@ export { oai2lmPlugin, generateModelsConfig } from "./plugin.js";
 // Import enhanced model for prompt-based tool calling
 import { wrapWithEnhancements } from "./enhancedModel.js";
 
+// Import API adapters for different protocols
+import { createApiAdapter, type ApiAdapterConfig } from "./apiAdapters.js";
+
 // Re-export enhanced model utilities
 // Re-export enhanced model utilities (use wrapWithEnhancements internally)
 // Note: createEnhancedModel alias removed to avoid conflict with OpenCode's create* pattern matching
 export { wrapWithEnhancements, EnhancedLanguageModel } from "./enhancedModel.js";
+
+// Re-export API adapters
+export {
+  createApiAdapter,
+  GeminiLanguageModel,
+  ClaudeLanguageModel,
+  type ApiAdapterConfig,
+} from "./apiAdapters.js";
 
 /**
  * Provider settings that extend OpenAI-compatible settings
@@ -362,23 +375,49 @@ export function createOai2lm(options: Oai2lmProviderSettings = {}): Oai2lmProvid
       return findModelOverride(modelId, mergedOptions.modelOverrides);
     }
 
+    /**
+     * Get API adapter config
+     */
+    const apiConfig: ApiAdapterConfig = {
+      baseURL: baseURL,
+      apiKey: mergedOptions.apiKey || "",
+      headers: mergedOptions.headers,
+    };
+
+    /**
+     * Create a language model for the given model ID.
+     * Uses API adapters for non-OpenAI protocols, or wraps base model with enhancements.
+     */
+    function createModel(modelId: string) {
+      const override = getOverride(modelId);
+
+      // Check if we need to use a different API type
+      const apiType = override?.apiType;
+      if (apiType && apiType !== "openai") {
+        // Use API adapter for Gemini/Claude
+        const adapter = createApiAdapter(apiType, modelId, apiConfig, override);
+        if (adapter) {
+          // Still wrap with enhancements for features like prompt-based tool calling
+          return wrapWithEnhancements(adapter, modelId, override);
+        }
+      }
+
+      // Default: use OpenAI-compatible base model with enhancements
+      const baseModel = baseProvider.languageModel(modelId);
+      return wrapWithEnhancements(baseModel, modelId, override);
+    }
+
     // Create the extended provider
     const provider = function (modelId: string) {
-      const baseModel = baseProvider(modelId);
-      const override = getOverride(modelId);
-      return wrapWithEnhancements(baseModel, modelId, override);
+      return createModel(modelId);
     } as Oai2lmProvider;
 
     // Copy all methods from base provider (V2 interface) with enhancement
     provider.languageModel = (modelId: string) => {
-      const baseModel = baseProvider.languageModel(modelId);
-      const override = getOverride(modelId);
-      return wrapWithEnhancements(baseModel, modelId, override);
+      return createModel(modelId);
     };
     provider.chatModel = (modelId: string) => {
-      const baseModel = baseProvider.chatModel(modelId);
-      const override = getOverride(modelId);
-      return wrapWithEnhancements(baseModel, modelId, override);
+      return createModel(modelId);
     };
     provider.completionModel = (modelId: string) =>
       baseProvider.completionModel(modelId);

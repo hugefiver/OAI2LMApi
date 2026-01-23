@@ -27,6 +27,14 @@ export type ThinkingLevel =
   | number;
 
 /**
+ * API type/protocol to use for requests.
+ * - 'openai': OpenAI-compatible API (default)
+ * - 'gemini': Google Gemini API protocol
+ * - 'claude': Anthropic Claude API protocol
+ */
+export type ApiType = "openai" | "gemini" | "claude";
+
+/**
  * Model override configuration.
  *
  * Supports advanced features like prompt-based tool calling and thinking tags.
@@ -40,6 +48,19 @@ export interface ModelOverride {
   supportsToolCalling?: boolean;
   /** Supports image inputs */
   supportsImageInput?: boolean;
+
+  // API type configuration
+
+  /**
+   * API type/protocol to use for this model.
+   * - 'openai': OpenAI-compatible API (default)
+   * - 'gemini': Google Gemini API protocol
+   * - 'claude': Anthropic Claude API protocol
+   *
+   * Can be set in modelOverrides (oai2lm.json) or per-model options
+   * in opencode.json (provider.*.models.*.options). The latter takes priority.
+   */
+  apiType?: ApiType;
 
   // Advanced features
 

@@ -51,6 +51,11 @@
     }
   },
   "$defs": {
+    "apiType": {
+      "type": "string",
+      "enum": ["openai", "gemini", "claude"],
+      "description": "API type/protocol to use. 'openai' for OpenAI-compatible (default), 'gemini' for Google Gemini API, 'claude' for Anthropic Claude API."
+    },
     "thinkingLevel": {
       "oneOf": [
         {
@@ -86,6 +91,10 @@
         "supportsImageInput": {
           "type": "boolean",
           "description": "Override whether the model supports image inputs."
+        },
+        "apiType": {
+          "$ref": "#/$defs/apiType",
+          "description": "API type/protocol to use for this model. 'openai' (default), 'gemini', or 'claude'."
         },
         "temperature": {
           "type": "number",

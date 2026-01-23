@@ -5,6 +5,27 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.12] - 2026-01-23
+
+### Added
+
+- **Gemini and Claude API protocol support**: Added `apiType` configuration option to use different API protocols
+  - `apiType: "gemini"` - Use Google Gemini API protocol (uses `X-Goog-Api-Key` header, `/v1beta` path)
+  - `apiType: "claude"` - Use Anthropic Claude API protocol (uses `x-api-key` header, `anthropic-version` header)
+  - `apiType: "openai"` - Default OpenAI-compatible protocol
+  - Configurable via `modelOverrides` in `oai2lm.json` or per-model `options` in `opencode.json` (higher priority)
+  - Automatically handles `/v1` suffix removal from baseURL for non-OpenAI protocols
+
+- **New API client modules**: Added `clients/geminiClient.ts` and `clients/claudeClient.ts` implementing AI SDK LanguageModelV2 interface
+  - Full streaming and non-streaming support
+  - Tool calling support
+  - Image/file input support
+  - Reasoning/thinking content support
+
+- **API adapters**: Added `apiAdapters.ts` with `GeminiLanguageModel` and `ClaudeLanguageModel` classes
+  - `createApiAdapter()` factory function for easy integration
+  - Re-exported from main entry point
+
 ## [0.3.11] - 2026-01-23
 
 ### Changed
