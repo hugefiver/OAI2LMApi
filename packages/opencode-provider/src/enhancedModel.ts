@@ -443,7 +443,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
   /**
    * Process thinking tags (<think>, <thinking>) in streaming result.
-   * Buffers content and parses at the end.
+   * Uses incremental streaming: outputs content in real-time while tracking tags.
    */
   private processThinkingTagsInStream<
     T extends { stream: ReadableStream<LanguageModelV2StreamPart> },
@@ -452,9 +452,191 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
     const transformedStream = new ReadableStream<LanguageModelV2StreamPart>({
       async start(controller) {
-        let accumulatedText = "";
-        const bufferedParts: LanguageModelV2StreamPart[] = [];
-        let currentTextId: string | undefined;
+        // State machine for incremental tag parsing
+        type ParseState = "normal" | "in-think" | "in-thinking" | "after-think";
+        const parseState = { current: "normal" as ParseState };
+        let textBuffer = "";
+        
+        // Track if we've emitted text/reasoning start
+        let textId: string | undefined;
+        let reasoningId: string | undefined;
+        let hasEmittedTextStart = false;
+        let hasEmittedReasoningStart = false;
+
+        // Helper to emit text delta
+        function emitTextDelta(text: string) {
+          if (!text) {
+            return;
+          }
+          if (!hasEmittedTextStart) {
+            textId = generateId();
+            controller.enqueue({ type: "text-start", id: textId });
+            hasEmittedTextStart = true;
+          }
+          controller.enqueue({ type: "text-delta", id: textId!, delta: text });
+        }
+
+        // Helper to emit reasoning delta
+        function emitReasoningDelta(text: string) {
+          if (!text) {
+            return;
+          }
+          if (!hasEmittedReasoningStart) {
+            reasoningId = generateId();
+            controller.enqueue({ type: "reasoning-start", id: reasoningId });
+            hasEmittedReasoningStart = true;
+          }
+          controller.enqueue({ type: "reasoning-delta", id: reasoningId!, delta: text });
+        }
+
+        // Helper to end text stream
+        function endTextStream() {
+          if (hasEmittedTextStart && textId) {
+            controller.enqueue({ type: "text-end", id: textId });
+            hasEmittedTextStart = false;
+            textId = undefined;
+          }
+        }
+
+        // Helper to end reasoning stream
+        function endReasoningStream() {
+          if (hasEmittedReasoningStart && reasoningId) {
+            controller.enqueue({ type: "reasoning-end", id: reasoningId });
+            hasEmittedReasoningStart = false;
+            reasoningId = undefined;
+          }
+        }
+
+        // Process text incrementally, parsing <think> and <thinking> tags
+        function processChunk(chunk: string) {
+          textBuffer += chunk;
+          
+          while (textBuffer.length > 0) {
+            if (parseState.current === "normal") {
+              // Check for <think> at start of content (DeepSeek style)
+              if (textBuffer.startsWith("<think>")) {
+                textBuffer = textBuffer.slice(7);
+                parseState.current = "in-think";
+                continue;
+              }
+              
+              // Check for <thinking> anywhere
+              const thinkingIdx = textBuffer.indexOf("<thinking>");
+              if (thinkingIdx === 0) {
+                textBuffer = textBuffer.slice(10);
+                parseState.current = "in-thinking";
+                continue;
+              } else if (thinkingIdx > 0) {
+                // Emit text before <thinking>
+                emitTextDelta(textBuffer.slice(0, thinkingIdx));
+                textBuffer = textBuffer.slice(thinkingIdx + 10);
+                parseState.current = "in-thinking";
+                continue;
+              }
+              
+              // Check if buffer might contain a partial tag
+              const potentialTagIdx = textBuffer.indexOf("<");
+              if (potentialTagIdx >= 0) {
+                const remaining = textBuffer.slice(potentialTagIdx);
+                // Check if it's a partial <think> or <thinking>
+                if ("<thinking>".startsWith(remaining) || "<think>".startsWith(remaining)) {
+                  // Emit text before the potential tag
+                  if (potentialTagIdx > 0) {
+                    emitTextDelta(textBuffer.slice(0, potentialTagIdx));
+                  }
+                  textBuffer = remaining;
+                  return; // Wait for more data
+                }
+              }
+              
+              // No tags found, emit all text
+              emitTextDelta(textBuffer);
+              textBuffer = "";
+            } else if (parseState.current === "in-think") {
+              // Look for </think>
+              const endIdx = textBuffer.indexOf("</think>");
+              if (endIdx >= 0) {
+                // Emit reasoning content
+                emitReasoningDelta(textBuffer.slice(0, endIdx));
+                textBuffer = textBuffer.slice(endIdx + 8);
+                endReasoningStream();
+                parseState.current = "after-think"; // After <think>, switch to normal text
+                continue;
+              }
+              
+              // Check for partial </think>
+              const partialEnd = textBuffer.lastIndexOf("<");
+              if (partialEnd >= 0 && "</think>".startsWith(textBuffer.slice(partialEnd))) {
+                // Emit reasoning up to potential end tag
+                if (partialEnd > 0) {
+                  emitReasoningDelta(textBuffer.slice(0, partialEnd));
+                }
+                textBuffer = textBuffer.slice(partialEnd);
+                return; // Wait for more data
+              }
+              
+              // No end tag, emit as reasoning
+              emitReasoningDelta(textBuffer);
+              textBuffer = "";
+            } else if (parseState.current === "in-thinking") {
+              // Look for </thinking>
+              const endIdx = textBuffer.indexOf("</thinking>");
+              if (endIdx >= 0) {
+                // Emit reasoning content
+                emitReasoningDelta(textBuffer.slice(0, endIdx));
+                textBuffer = textBuffer.slice(endIdx + 11);
+                endReasoningStream();
+                parseState.current = "normal"; // <thinking> can appear multiple times
+                continue;
+              }
+              
+              // Check for partial </thinking>
+              const partialEnd = textBuffer.lastIndexOf("<");
+              if (partialEnd >= 0 && "</thinking>".startsWith(textBuffer.slice(partialEnd))) {
+                // Emit reasoning up to potential end tag
+                if (partialEnd > 0) {
+                  emitReasoningDelta(textBuffer.slice(0, partialEnd));
+                }
+                textBuffer = textBuffer.slice(partialEnd);
+                return; // Wait for more data
+              }
+              
+              // No end tag, emit as reasoning
+              emitReasoningDelta(textBuffer);
+              textBuffer = "";
+            } else if (parseState.current === "after-think") {
+              // After </think>, treat remaining as normal text but check for <thinking>
+              const thinkingIdx = textBuffer.indexOf("<thinking>");
+              if (thinkingIdx === 0) {
+                textBuffer = textBuffer.slice(10);
+                parseState.current = "in-thinking";
+                continue;
+              } else if (thinkingIdx > 0) {
+                emitTextDelta(textBuffer.slice(0, thinkingIdx));
+                textBuffer = textBuffer.slice(thinkingIdx + 10);
+                parseState.current = "in-thinking";
+                continue;
+              }
+              
+              // Check for partial <thinking>
+              const potentialTagIdx = textBuffer.indexOf("<");
+              if (potentialTagIdx >= 0) {
+                const remaining = textBuffer.slice(potentialTagIdx);
+                if ("<thinking>".startsWith(remaining)) {
+                  if (potentialTagIdx > 0) {
+                    emitTextDelta(textBuffer.slice(0, potentialTagIdx));
+                  }
+                  textBuffer = remaining;
+                  return; // Wait for more data
+                }
+              }
+              
+              // No tags found, emit all text
+              emitTextDelta(textBuffer);
+              textBuffer = "";
+            }
+          }
+        }
 
         try {
           const reader = originalStream.getReader();
@@ -467,65 +649,30 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
             const part = value;
 
-            // Track text content
-            if (part.type === "text-start") {
-              currentTextId = part.id;
-            } else if (part.type === "text-delta") {
-              accumulatedText += part.delta;
-            }
-
-            bufferedParts.push(part);
-          }
-
-          // Parse thinking tags from accumulated text
-          const parsed = parseThinkingTags(accumulatedText);
-
-          // Emit reasoning content if found
-          if (parsed.hasThinking) {
-            const reasoningId = generateId();
-            controller.enqueue({
-              type: "reasoning-start",
-              id: reasoningId,
-            });
-            controller.enqueue({
-              type: "reasoning-delta",
-              id: reasoningId,
-              delta: parsed.reasoningContent,
-            });
-            controller.enqueue({
-              type: "reasoning-end",
-              id: reasoningId,
-            });
-          }
-
-          // Emit cleaned text content
-          if (parsed.textContent) {
-            const textId = generateId();
-            controller.enqueue({
-              type: "text-start",
-              id: textId,
-            });
-            controller.enqueue({
-              type: "text-delta",
-              id: textId,
-              delta: parsed.textContent,
-            });
-            controller.enqueue({
-              type: "text-end",
-              id: textId,
-            });
-          }
-
-          // Forward non-text parts (finish, response-metadata, etc.)
-          for (const part of bufferedParts) {
-            if (
-              part.type !== "text-start" &&
-              part.type !== "text-delta" &&
-              part.type !== "text-end"
-            ) {
+            // Process text deltas incrementally
+            if (part.type === "text-delta") {
+              processChunk(part.delta);
+            } else if (part.type === "text-start" || part.type === "text-end") {
+              // Skip original text lifecycle events, we manage our own
+              continue;
+            } else {
+              // Forward non-text parts (finish, response-metadata, etc.)
               controller.enqueue(part);
             }
           }
+
+          // Flush any remaining buffer
+          if (textBuffer) {
+            if (parseState.current === "in-think" || parseState.current === "in-thinking") {
+              emitReasoningDelta(textBuffer);
+            } else {
+              emitTextDelta(textBuffer);
+            }
+          }
+
+          // Close any open streams
+          endReasoningStream();
+          endTextStream();
 
           controller.close();
         } catch (error) {
@@ -811,7 +958,10 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
   /**
    * Process streaming result for XML tool calls
    *
-   * This wraps the stream to accumulate text and parse tool calls at the end.
+   * Uses incremental streaming: outputs text in real-time until we detect
+   * a potential tool call tag, then buffers to parse the complete tool call.
+   * This provides immediate feedback for regular text while still correctly
+   * handling XML tool calls.
    */
   private processStreamForToolCalls<T extends { stream: ReadableStream<LanguageModelV2StreamPart> }>(
     result: T,
@@ -823,11 +973,277 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
     const transformedStream = new ReadableStream<LanguageModelV2StreamPart>({
       async start(controller) {
-        let accumulatedText = "";
-        const bufferedParts: LanguageModelV2StreamPart[] = [];
+        // Build regex to detect tool call tags
+        const toolTagPattern = toolNames.map(n => self.escapeRegex(n)).join("|");
+        const toolStartRegex = new RegExp(`<(${toolTagPattern})(?:\\s|>)`, "g");
+        
+        // State for incremental streaming
+        let textBuffer = "";
+        let accumulatedForToolParsing = "";
+        let textId: string | undefined;
+        let hasEmittedTextStart = false;
+        let inPotentialToolCall = false;
+        let potentialToolCallBuffer = "";
+        
+        // State for thinking tags (if enabled)
+        type ThinkState = "normal" | "in-think" | "in-thinking" | "after-think";
+        const thinkingState = { current: "normal" as ThinkState };
+        let reasoningId: string | undefined;
+        let hasEmittedReasoningStart = false;
+        
+        // Helper to emit text delta
+        function emitTextDelta(text: string) {
+          if (!text) {
+            return;
+          }
+          if (!hasEmittedTextStart) {
+            textId = generateId();
+            controller.enqueue({ type: "text-start", id: textId });
+            hasEmittedTextStart = true;
+          }
+          controller.enqueue({ type: "text-delta", id: textId!, delta: text });
+        }
+
+        // Helper to emit reasoning delta (for thinking tags)
+        function emitReasoningDelta(text: string) {
+          if (!text) {
+            return;
+          }
+          if (!hasEmittedReasoningStart) {
+            reasoningId = generateId();
+            controller.enqueue({ type: "reasoning-start", id: reasoningId });
+            hasEmittedReasoningStart = true;
+          }
+          controller.enqueue({ type: "reasoning-delta", id: reasoningId!, delta: text });
+        }
+
+        // Helper to end text stream
+        function endTextStream() {
+          if (hasEmittedTextStart && textId) {
+            controller.enqueue({ type: "text-end", id: textId });
+            hasEmittedTextStart = false;
+            textId = undefined;
+          }
+        }
+
+        // Helper to end reasoning stream
+        function endReasoningStream() {
+          if (hasEmittedReasoningStart && reasoningId) {
+            controller.enqueue({ type: "reasoning-end", id: reasoningId });
+            hasEmittedReasoningStart = false;
+            reasoningId = undefined;
+          }
+        }
+
+        // Check if text might contain a partial tool tag at the end
+        function mightHavePartialToolTag(text: string): { hasPartial: boolean; safeLength: number } {
+          // Look for '<' that might be the start of a tool tag
+          for (let i = text.length - 1; i >= Math.max(0, text.length - 50); i--) {
+            if (text[i] === "<") {
+              const remaining = text.slice(i);
+              // Check if any tool name could start with this
+              for (const toolName of toolNames) {
+                const fullTag = `<${toolName}`;
+                if (fullTag.startsWith(remaining) && remaining !== fullTag) {
+                  // This could be a partial tool tag
+                  return { hasPartial: true, safeLength: i };
+                }
+              }
+            }
+          }
+          return { hasPartial: false, safeLength: text.length };
+        }
+
+        // Process a chunk of text with thinking tag handling
+        function processChunkWithThinking(chunk: string) {
+          if (!override?.parseThinkingTags) {
+            // No thinking tag processing, just handle tool calls
+            processChunkForToolCalls(chunk);
+            return;
+          }
+
+          // Process thinking tags incrementally
+          textBuffer += chunk;
+          
+          while (textBuffer.length > 0) {
+            if (thinkingState.current === "normal") {
+              // Check for <think> at start
+              if (textBuffer.startsWith("<think>")) {
+                textBuffer = textBuffer.slice(7);
+                thinkingState.current = "in-think";
+                continue;
+              }
+              
+              // Check for <thinking>
+              const thinkingIdx = textBuffer.indexOf("<thinking>");
+              if (thinkingIdx === 0) {
+                textBuffer = textBuffer.slice(10);
+                thinkingState.current = "in-thinking";
+                continue;
+              } else if (thinkingIdx > 0) {
+                processChunkForToolCalls(textBuffer.slice(0, thinkingIdx));
+                textBuffer = textBuffer.slice(thinkingIdx + 10);
+                thinkingState.current = "in-thinking";
+                continue;
+              }
+              
+              // Check for partial thinking tags
+              const potentialIdx = textBuffer.indexOf("<");
+              if (potentialIdx >= 0) {
+                const remaining = textBuffer.slice(potentialIdx);
+                if ("<thinking>".startsWith(remaining) || "<think>".startsWith(remaining)) {
+                  if (potentialIdx > 0) {
+                    processChunkForToolCalls(textBuffer.slice(0, potentialIdx));
+                  }
+                  textBuffer = remaining;
+                  return;
+                }
+              }
+              
+              processChunkForToolCalls(textBuffer);
+              textBuffer = "";
+            } else if (thinkingState.current === "in-think") {
+              const endIdx = textBuffer.indexOf("</think>");
+              if (endIdx >= 0) {
+                emitReasoningDelta(textBuffer.slice(0, endIdx));
+                textBuffer = textBuffer.slice(endIdx + 8);
+                endReasoningStream();
+                thinkingState.current = "after-think";
+                continue;
+              }
+              
+              const partialEnd = textBuffer.lastIndexOf("<");
+              if (partialEnd >= 0 && "</think>".startsWith(textBuffer.slice(partialEnd))) {
+                if (partialEnd > 0) {
+                  emitReasoningDelta(textBuffer.slice(0, partialEnd));
+                }
+                textBuffer = textBuffer.slice(partialEnd);
+                return;
+              }
+              
+              emitReasoningDelta(textBuffer);
+              textBuffer = "";
+            } else if (thinkingState.current === "in-thinking") {
+              const endIdx = textBuffer.indexOf("</thinking>");
+              if (endIdx >= 0) {
+                emitReasoningDelta(textBuffer.slice(0, endIdx));
+                textBuffer = textBuffer.slice(endIdx + 11);
+                endReasoningStream();
+                thinkingState.current = "normal";
+                continue;
+              }
+              
+              const partialEnd = textBuffer.lastIndexOf("<");
+              if (partialEnd >= 0 && "</thinking>".startsWith(textBuffer.slice(partialEnd))) {
+                if (partialEnd > 0) {
+                  emitReasoningDelta(textBuffer.slice(0, partialEnd));
+                }
+                textBuffer = textBuffer.slice(partialEnd);
+                return;
+              }
+              
+              emitReasoningDelta(textBuffer);
+              textBuffer = "";
+            } else if (thinkingState.current === "after-think") {
+              // After </think>, switch to normal processing
+              const thinkingIdx = textBuffer.indexOf("<thinking>");
+              if (thinkingIdx === 0) {
+                textBuffer = textBuffer.slice(10);
+                thinkingState.current = "in-thinking";
+                continue;
+              } else if (thinkingIdx > 0) {
+                processChunkForToolCalls(textBuffer.slice(0, thinkingIdx));
+                textBuffer = textBuffer.slice(thinkingIdx + 10);
+                thinkingState.current = "in-thinking";
+                continue;
+              }
+              
+              const potentialIdx = textBuffer.indexOf("<");
+              if (potentialIdx >= 0) {
+                const remaining = textBuffer.slice(potentialIdx);
+                if ("<thinking>".startsWith(remaining)) {
+                  if (potentialIdx > 0) {
+                    processChunkForToolCalls(textBuffer.slice(0, potentialIdx));
+                  }
+                  textBuffer = remaining;
+                  return;
+                }
+              }
+              
+              processChunkForToolCalls(textBuffer);
+              textBuffer = "";
+            }
+          }
+        }
+
+        // Process chunk for tool calls with incremental output
+        function processChunkForToolCalls(chunk: string) {
+          accumulatedForToolParsing += chunk;
+          
+          if (inPotentialToolCall) {
+            potentialToolCallBuffer += chunk;
+            
+            // Check if we have a complete tool call now
+            for (const toolName of toolNames) {
+              const endTag = `</${toolName}>`;
+              const endIdx = potentialToolCallBuffer.indexOf(endTag);
+              if (endIdx >= 0) {
+                // We have a complete tool call, continue buffering
+                // The tool call will be emitted at the end
+                return;
+              }
+            }
+            
+            // Check if this is definitely not a tool call (malformed)
+            // If we have a lot of content without finding end tag, check if it's really a tool call
+            if (potentialToolCallBuffer.length > 10000) {
+              // Too long without end tag, probably not a tool call
+              // Emit as text and reset
+              emitTextDelta(potentialToolCallBuffer);
+              potentialToolCallBuffer = "";
+              inPotentialToolCall = false;
+            }
+            return;
+          }
+          
+          // Check for tool call start
+          toolStartRegex.lastIndex = 0;
+          const match = toolStartRegex.exec(chunk);
+          
+          if (match) {
+            // Found a potential tool call
+            const beforeMatch = chunk.slice(0, match.index);
+            const fromMatch = chunk.slice(match.index);
+            
+            // Emit text before the tool call
+            if (beforeMatch) {
+              emitTextDelta(beforeMatch);
+            }
+            
+            // Start buffering for tool call
+            inPotentialToolCall = true;
+            potentialToolCallBuffer = fromMatch;
+            return;
+          }
+          
+          // No tool call detected, but check for partial tag at end
+          const { hasPartial, safeLength } = mightHavePartialToolTag(chunk);
+          if (hasPartial) {
+            if (safeLength > 0) {
+              emitTextDelta(chunk.slice(0, safeLength));
+            }
+            // Keep the potential partial tag in buffer
+            inPotentialToolCall = true;
+            potentialToolCallBuffer = chunk.slice(safeLength);
+          } else {
+            // Safe to emit all
+            emitTextDelta(chunk);
+          }
+        }
 
         try {
           const reader = originalStream.getReader();
+          const nonTextParts: LanguageModelV2StreamPart[] = [];
 
           while (true) {
             const { done, value } = await reader.read();
@@ -837,98 +1253,63 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
 
             const part = value;
 
-            // Accumulate text for tool call parsing (V2 uses 'delta')
+            // Process text deltas incrementally
             if (part.type === "text-delta") {
-              accumulatedText += part.delta;
+              processChunkWithThinking(part.delta);
+            } else if (part.type === "text-start" || part.type === "text-end") {
+              // Skip original text lifecycle events, we manage our own
+              continue;
+            } else {
+              // Collect non-text parts for later
+              nonTextParts.push(part);
             }
-
-            // Buffer all parts
-            bufferedParts.push(part);
           }
 
-          // Now we have all parts, check for tool calls
-          const xmlToolCalls = parseXmlToolCalls(accumulatedText, toolNames, {
-            trimParameterWhitespace:
-              override?.trimXmlToolParameterWhitespace ?? false,
+          // Flush remaining buffers
+          if (textBuffer) {
+            if (thinkingState.current === "in-think" || thinkingState.current === "in-thinking") {
+              emitReasoningDelta(textBuffer);
+            } else {
+              processChunkForToolCalls(textBuffer);
+            }
+          }
+          
+          // Handle any remaining potential tool call buffer
+          if (potentialToolCallBuffer) {
+            accumulatedForToolParsing = accumulatedForToolParsing; // Already accumulated
+          }
+
+          // Now parse tool calls from accumulated text
+          const xmlToolCalls = parseXmlToolCalls(accumulatedForToolParsing, toolNames, {
+            trimParameterWhitespace: override?.trimXmlToolParameterWhitespace ?? false,
           });
 
           if (xmlToolCalls.length > 0) {
-            // Found tool calls - emit cleaned text and tool calls
-            let cleanedText = self.removeXmlToolCallsFromText(
-              accumulatedText,
-              toolNames,
-            );
+            // End any open text stream (we already emitted text before tool calls)
+            endReasoningStream();
+            endTextStream();
 
-            // Parse thinking tags and emit as reasoning content (if enabled)
-            if (override?.parseThinkingTags) {
-              const thinkingResult = parseThinkingTags(cleanedText);
-              cleanedText = thinkingResult.textContent;
-
-              // Emit reasoning content if found
-              if (thinkingResult.hasThinking) {
-                const reasoningId = generateId();
-                controller.enqueue({
-                  type: "reasoning-start",
-                  id: reasoningId,
-                });
-                controller.enqueue({
-                  type: "reasoning-delta",
-                  id: reasoningId,
-                  delta: thinkingResult.reasoningContent,
-                });
-                controller.enqueue({
-                  type: "reasoning-end",
-                  id: reasoningId,
-                });
-              }
-            }
-
-            // Emit cleaned text with proper V2 text lifecycle (start -> delta -> end)
-            if (cleanedText.trim()) {
-              const textId = generateId();
-              controller.enqueue({
-                type: "text-start",
-                id: textId,
-              });
-              controller.enqueue({
-                type: "text-delta",
-                id: textId,
-                delta: cleanedText,
-              });
-              controller.enqueue({
-                type: "text-end",
-                id: textId,
-              });
-            }
-
-            // Emit tool calls with proper V2 lifecycle:
-            // tool-input-start -> tool-input-delta -> tool-input-end -> tool-call
-            // OpenCode's processor.ts requires tool-input-start to register the tool
-            // in toolcalls map before tool-call can update it to "running" status
+            // Emit tool calls with proper V2 lifecycle
             for (const tc of xmlToolCalls) {
               const inputJson = JSON.stringify(tc.arguments);
 
-              // 1. tool-input-start: Creates pending tool part in OpenCode
               controller.enqueue({
                 type: "tool-input-start",
                 id: tc.id,
                 toolName: tc.name,
               });
 
-              // 2. tool-input-delta: Stream the input (optional but matches native behavior)
               controller.enqueue({
                 type: "tool-input-delta",
                 id: tc.id,
                 delta: inputJson,
               });
 
-              // 3. tool-input-end: Mark input streaming complete
               controller.enqueue({
                 type: "tool-input-end",
                 id: tc.id,
               });
 
-              // 4. tool-call: Trigger execution with full input
               controller.enqueue({
                 type: "tool-call",
                 toolCallId: tc.id,
@@ -937,7 +1318,7 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
               });
             }
 
-            // Emit finish with tool-calls reason (V2 format)
+            // Emit finish with tool-calls reason
             controller.enqueue({
               type: "finish",
               finishReason: "tool-calls",
@@ -948,8 +1329,18 @@ export class EnhancedLanguageModel implements LanguageModelV2 {
               },
             });
           } else {
-            // No tool calls found, emit all buffered parts as-is
-            for (const part of bufferedParts) {
+            // No tool calls found
+            // If we had a potential tool call buffer that wasn't a tool call, emit it as text
+            if (potentialToolCallBuffer) {
+              emitTextDelta(potentialToolCallBuffer);
+            }
+            
+            // Close streams
+            endReasoningStream();
+            endTextStream();
+            
+            // Forward non-text parts
+            for (const part of nonTextParts) {
               controller.enqueue(part);
             }
           }

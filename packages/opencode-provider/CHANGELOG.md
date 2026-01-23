@@ -5,6 +5,20 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.11] - 2026-01-23
+
+### Changed
+
+- **Incremental streaming for thinking tags**: `processThinkingTagsInStream` now uses a state machine for real-time incremental parsing
+  - Previously buffered entire stream content before parsing
+  - Now outputs text/reasoning content immediately as it arrives
+  - Provides better user experience with instant feedback
+
+- **Incremental streaming for XML tool calls**: `processStreamForToolCalls` now outputs text in real-time
+  - Text before tool call tags is emitted immediately
+  - Only buffers when a potential tool call tag is detected
+  - Maintains correct XML tool call parsing while improving responsiveness
+
 ## [0.3.10] - 2026-01-22
 
 ### Documentation
