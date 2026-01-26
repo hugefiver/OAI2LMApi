@@ -167,7 +167,7 @@ export class ClaudeLanguageModel implements LanguageModelV2 {
  * @param override - Optional model override configuration
  * @returns A LanguageModelV2 implementation for the specified API type, or undefined if openai
  */
-export function createApiAdapter(
+export function getApiAdapter(
   apiType: ApiType | undefined,
   modelId: string,
   config: ApiAdapterConfig,

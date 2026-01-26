@@ -83,15 +83,15 @@ export { oai2lmPlugin, generateModelsConfig } from "./plugin.js";
 import { wrapWithEnhancements } from "./enhancedModel.js";
 
 // Import API adapters for different protocols
-import { createApiAdapter, type ApiAdapterConfig } from "./apiAdapters.js";
+import { getApiAdapter, type ApiAdapterConfig } from "./apiAdapters.js";
 
 // Re-export enhanced model utilities
 // Re-export enhanced model utilities (use wrapWithEnhancements internally)
 // Note: createEnhancedModel alias removed to avoid conflict with OpenCode's create* pattern matching
 export { wrapWithEnhancements, EnhancedLanguageModel } from "./enhancedModel.js";
 
-// Re-export API adapters (excluding createApiAdapter to avoid OpenCode's create* pattern matching)
-// Note: createApiAdapter is intentionally NOT exported because OpenCode looks for create* functions
+// Re-export API adapters (excluding getApiAdapter to avoid OpenCode's create* pattern matching)
+// Note: getApiAdapter is intentionally NOT exported because OpenCode looks for create* functions
 // and may incorrectly call it instead of createOai2lm/createOpenAICompatible
 export {
   GeminiLanguageModel,
@@ -396,7 +396,7 @@ export function createOai2lm(options: Oai2lmProviderSettings = {}): Oai2lmProvid
       const apiType = override?.apiType;
       if (apiType && apiType !== "openai") {
         // Use API adapter for Gemini/Claude
-        const adapter = createApiAdapter(apiType, modelId, apiConfig, override);
+        const adapter = getApiAdapter(apiType, modelId, apiConfig, override);
         if (adapter) {
           // Still wrap with enhancements for features like prompt-based tool calling
           return wrapWithEnhancements(adapter, modelId, override);

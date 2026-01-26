@@ -5,6 +5,13 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.14] - 2026-01-26
+
+### Fixed
+
+- **OpenCode compatibility**: Renamed internal `createApiAdapter` to `getApiAdapter` to avoid `create*` export scanning pitfalls
+  - Prevents OpenCode from accidentally selecting the wrong factory when resolving the provider
+
 ## [0.3.13] - 2026-01-26
 
 ### Fixed
