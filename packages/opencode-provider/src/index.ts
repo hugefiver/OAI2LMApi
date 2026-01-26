@@ -90,9 +90,10 @@ import { createApiAdapter, type ApiAdapterConfig } from "./apiAdapters.js";
 // Note: createEnhancedModel alias removed to avoid conflict with OpenCode's create* pattern matching
 export { wrapWithEnhancements, EnhancedLanguageModel } from "./enhancedModel.js";
 
-// Re-export API adapters
+// Re-export API adapters (excluding createApiAdapter to avoid OpenCode's create* pattern matching)
+// Note: createApiAdapter is intentionally NOT exported because OpenCode looks for create* functions
+// and may incorrectly call it instead of createOai2lm/createOpenAICompatible
 export {
-  createApiAdapter,
   GeminiLanguageModel,
   ClaudeLanguageModel,
   type ApiAdapterConfig,

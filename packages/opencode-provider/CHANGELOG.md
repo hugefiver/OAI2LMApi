@@ -5,6 +5,15 @@ All notable changes to the opencode-provider package will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.13] - 2026-01-26
+
+### Fixed
+
+- **OpenCode compatibility**: Fixed `TypeError: undefined is not an object (evaluating 'sdk.languageModel')` when used with OpenCode
+  - Removed `createApiAdapter` from public exports to avoid conflict with OpenCode's `create*` pattern matching
+  - OpenCode scans for `create*` exports and may incorrectly call `createApiAdapter` instead of `createOai2lm`/`createOpenAICompatible`
+  - `createApiAdapter` is now only used internally; `GeminiLanguageModel` and `ClaudeLanguageModel` classes remain exported for advanced use cases
+
 ## [0.3.12] - 2026-01-23
 
 ### Added
