@@ -7,22 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-03
+
 ### Added
-- Converted project to pnpm workspace monorepo structure
-- New package: `@oai2lmapi/opencode-provider` - OpenCode provider plugin
-  - Auto-discovery of models from API `/models` endpoint
-  - Smart capability detection for tool calling, vision, and context limits
-  - Chain-of-thought support via `<think>` tags
-  - Prompt-based tool calling for models without native function calling
-  - Per-model configuration overrides with wildcard pattern matching
-  - Based on Vercel AI SDK's `@ai-sdk/openai-compatible`
-- New package: `@oai2lmapi/model-metadata` - shared model metadata registry for all packages
+- Claude channel support in the VSCode extension with API key management and model discovery
+- Channel-specific model override configuration (`channelModelOverrides`) merged after global overrides
+- Enhanced wildcard support for model override patterns (`?` matches single characters)
 
 ### Changed
-- Restructured VSCode extension into `packages/vscode-extension`
-- Updated build scripts to support workspace structure
-- Renamed VSCode extension package to `@oai2lmapi/vscode-extension`
-- Centralized model metadata lookups in the shared metadata package
+- OpenAI provider now applies model overrides to model metadata and capability flags
 
 ## [0.2.6] - 2025-01-17
 

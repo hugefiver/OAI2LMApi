@@ -209,23 +209,45 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const { metadata, fromApi } = this.getModelInfo(apiModel);
         const family = this.extractModelFamily(apiModel.id);
 
+        let maxInputTokens = metadata.maxInputTokens;
+        let maxOutputTokens = metadata.maxOutputTokens;
+        let supportsToolCalling = metadata.supportsToolCalling;
+        let supportsImageInput = metadata.supportsImageInput;
+
+        const override = getModelOverride(apiModel.id, 'openai');
+        if (override) {
+            if (typeof override.maxInputTokens === 'number' && Number.isFinite(override.maxInputTokens)) {
+                maxInputTokens = override.maxInputTokens;
+            }
+            if (typeof override.maxOutputTokens === 'number' && Number.isFinite(override.maxOutputTokens)) {
+                maxOutputTokens = override.maxOutputTokens;
+            }
+            if (typeof override.supportsToolCalling === 'boolean') {
+                supportsToolCalling = override.supportsToolCalling;
+            }
+            if (typeof override.supportsImageInput === 'boolean') {
+                supportsImageInput = override.supportsImageInput;
+            }
+        }
+
         const modelInfo: ModelInformation = {
             modelId: apiModel.id,
             id: `oai2lmapi-${apiModel.id}`,
             family: family,
             name: apiModel.id,
             version: '1.0',
-            maxInputTokens: metadata.maxInputTokens,
-            maxOutputTokens: metadata.maxOutputTokens,
+            maxInputTokens,
+            maxOutputTokens,
             capabilities: {
-                toolCalling: metadata.supportsToolCalling,
-                imageInput: metadata.supportsImageInput
+                toolCalling: supportsToolCalling,
+                imageInput: supportsImageInput
             }
         };
 
         this.modelList.push(modelInfo);
         const source = fromApi ? 'API' : 'registry';
-        logger.debug(`Added model: ${modelInfo.id} (family: ${family}, source: ${source})`, undefined, 'OpenAI');
+        const hasOverride = override ? ' (with overrides)' : '';
+        logger.debug(`Added model: ${modelInfo.id} (family: ${family}, source: ${source})${hasOverride}`, undefined, 'OpenAI');
     }
 
     async provideLanguageModelChatInformation(

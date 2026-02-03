@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-03
+
+### Added
+
+- Claude channel support in the VSCode extension with API key management and model discovery
+- Channel-specific model override configuration (`channelModelOverrides`) merged after global overrides
+- Enhanced wildcard support for model override patterns (`?` matches single characters)
+
 ### Changed
-- Use shared model metadata from `@oai2lmapi/model-metadata` to keep capability data aligned.
+
+- Apply model overrides to OpenAI model metadata and capability flags
+- Use shared model metadata from `@oai2lmapi/model-metadata` to keep capability data aligned
 
 ## [0.2.6] - 2025-12-30
 
