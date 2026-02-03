@@ -12,8 +12,8 @@
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
     "clean": "pnpm -r run clean",
-    "vscode:compile": "pnpm --filter @oai2lmapi/vscode-extension run compile",
-    "vscode:package": "pnpm --filter @oai2lmapi/vscode-extension run package",
+    "vscode:compile": "pnpm --filter oai2lmapi run compile",
+    "vscode:package": "pnpm --filter oai2lmapi run package",
     "opencode:build": "pnpm --filter @oai2lmapi/opencode-provider run build"
   },
   "devDependencies": {

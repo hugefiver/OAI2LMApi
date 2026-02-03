@@ -207,7 +207,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             : apiVision;
 
         // Apply user-configured model overrides
-        const override = getModelOverride(modelId);
+        const override = getModelOverride(modelId, 'gemini');
         if (override) {
             const validInputTokens = this.getValidNumber(override.maxInputTokens);
             if (validInputTokens !== undefined) {
@@ -290,7 +290,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         }
 
         // Check if prompt-based tool calling is enabled for this model
-        const modelOverride = getModelOverride(model.modelId);
+        const modelOverride = getModelOverride(model.modelId, 'gemini');
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
         // XML tool parameter whitespace handling: per-model override takes precedence over global.

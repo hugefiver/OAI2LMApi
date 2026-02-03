@@ -36,6 +36,10 @@ export interface ModelOverrideConfig {
     trimXmlToolParameterWhitespace?: boolean;
 }
 
+export type ModelOverrideMap = Record<string, ModelOverrideConfig>;
+
+export type ChannelModelOverrides = Record<string, ModelOverrideMap>;
+
 /**
  * Escapes special regex characters in a string.
  */
@@ -48,8 +52,35 @@ export function escapeRegex(str: string): string {
  * Wildcard '*' matches any sequence of characters. Matching is case-insensitive.
  */
 export function wildcardPatternToRegex(pattern: string): RegExp {
-    const regexPattern = escapeRegex(pattern).replace(/\\\*/g, '.*');
+    const regexPattern = escapeRegex(pattern)
+        .replace(/\\\*/g, '.*')
+        .replace(/\\\?/g, '.');
     return new RegExp(`^${regexPattern}$`, 'i');
+}
+
+function isWildcardPattern(pattern: string): boolean {
+    return pattern.includes('*') || pattern.includes('?');
+}
+
+function matchesModelPattern(modelId: string, pattern: string): boolean {
+    if (pattern === modelId) {
+        return true;
+    }
+    if (!isWildcardPattern(pattern)) {
+        return false;
+    }
+    const regex = wildcardPatternToRegex(pattern);
+    return regex.test(modelId);
+}
+
+function collectMatchingOverrides(modelId: string, overrides: ModelOverrideMap): ModelOverrideConfig[] {
+    const matches: ModelOverrideConfig[] = [];
+    for (const [pattern, override] of Object.entries(overrides)) {
+        if (matchesModelPattern(modelId, pattern)) {
+            matches.push(override);
+        }
+    }
+    return matches;
 }
 
 /**
@@ -59,24 +90,23 @@ export function wildcardPatternToRegex(pattern: string): RegExp {
  * @param modelId - The model ID to look up
  * @returns The model override configuration if found, undefined otherwise
  */
-export function getModelOverride(modelId: string): ModelOverrideConfig | undefined {
+export function getModelOverride(modelId: string, channel?: string): ModelOverrideConfig | undefined {
     const config = vscode.workspace.getConfiguration('oai2lmapi');
-    const overrides = config.get<Record<string, ModelOverrideConfig>>('modelOverrides', {});
-    
-    // Check for exact match first
-    if (overrides[modelId]) {
-        return overrides[modelId];
+    const globalOverrides = config.get<ModelOverrideMap>('modelOverrides', {});
+    const channelOverrides = config.get<ChannelModelOverrides>('channelModelOverrides', {});
+
+    const mergedOverrides: ModelOverrideConfig[] = [];
+    mergedOverrides.push(...collectMatchingOverrides(modelId, globalOverrides));
+    if (channel && channelOverrides[channel]) {
+        mergedOverrides.push(...collectMatchingOverrides(modelId, channelOverrides[channel]));
     }
-    
-    // Check for wildcard patterns (case-insensitive)
-    for (const pattern of Object.keys(overrides)) {
-        if (pattern.includes('*')) {
-            const regex = wildcardPatternToRegex(pattern);
-            if (regex.test(modelId)) {
-                return overrides[pattern];
-            }
-        }
+
+    if (mergedOverrides.length === 0) {
+        return undefined;
     }
-    
-    return undefined;
+
+    return mergedOverrides.reduce<ModelOverrideConfig>((acc, override) => ({
+        ...acc,
+        ...override
+    }), {});
 }

@@ -84,16 +84,14 @@ jobs:
 
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
-        working-directory: packages/vscode-extension
-        run: pnpm exec vsce package --no-dependencies --pre-release
+        run: pnpm --filter ./packages/vscode-extension exec vsce package --no-dependencies --pre-release
 
       - name: Get VSIX filename
         id: vsix
         shell: bash
-        working-directory: packages/vscode-extension
         run: |
-          VSIX_FILE=$(ls *.vsix | head -n 1)
-          echo "filename=packages/vscode-extension/$VSIX_FILE" >> $GITHUB_OUTPUT
+          VSIX_FILE=$(ls packages/vscode-extension/*.vsix | head -n 1)
+          echo "filename=$VSIX_FILE" >> $GITHUB_OUTPUT
 
       - name: Publish to VS Code Marketplace (Preview)
         uses: HaaLeo/publish-vscode-extension@v2

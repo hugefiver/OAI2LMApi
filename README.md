@@ -71,6 +71,8 @@ Or install directly via [VS Code Marketplace](https://marketplace.visualstudio.c
 | `OAI2LMApi: Clear API Key` | Remove the stored OpenAI-compatible API key |
 | `OAI2LMApi: Set Gemini API Key` | Securely store your Google Gemini API key |
 | `OAI2LMApi: Clear Gemini API Key` | Remove the stored Gemini API key |
+| `OAI2LMApi: Set Claude API Key` | Securely store your Claude API key |
+| `OAI2LMApi: Clear Claude API Key` | Remove the stored Claude API key |
 | `OAI2LMApi: Refresh Models` | Manually reload available models from all providers |
 | `OAI2LMApi: Manage Provider Settings` | Open extension settings |
 
@@ -93,9 +95,18 @@ Configure the extension through VSCode settings (`Ctrl+,` or `Cmd+,`):
 | `oai2lmapi.enableGeminiChannel` | `false` | Enable the Gemini channel provider |
 | `oai2lmapi.geminiApiEndpoint` | `https://generativelanguage.googleapis.com` | Google Gemini API endpoint URL |
 
+### Claude Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `oai2lmapi.enableClaudeChannel` | `false` | Enable the Claude channel provider |
+| `oai2lmapi.claudeApiEndpoint` | `https://api.anthropic.com/v1` | Anthropic Claude API endpoint URL. If left at default and the OpenAI endpoint is set to a custom OpenAI-compatible API, that endpoint is used for Claude requests. |
+
 ### Model Overrides
 
-The `oai2lmapi.modelOverrides` setting allows per-model configuration. Keys are model name patterns (supports wildcards like `gemini-*`), values are configuration objects:
+The `oai2lmapi.modelOverrides` setting allows per-model configuration. Keys are model name patterns (supports wildcards like `gemini-*`), values are configuration objects.
+
+The `oai2lmapi.channelModelOverrides` setting allows per-channel configuration. Keys are channel names (e.g. `openai`, `gemini`, `claude`) and values are objects mapping model patterns to override objects. Matching overrides are merged in order: global `modelOverrides` then channel overrides.
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -116,6 +127,8 @@ The `oai2lmapi.modelOverrides` setting allows per-model configuration. Keys are 
   "oai2lmapi.showModelsWithoutToolCalling": false,
   "oai2lmapi.enableGeminiChannel": true,
   "oai2lmapi.geminiApiEndpoint": "https://generativelanguage.googleapis.com",
+  "oai2lmapi.enableClaudeChannel": true,
+  "oai2lmapi.claudeApiEndpoint": "https://api.anthropic.com/v1",
   "oai2lmapi.modelOverrides": {
     "gemini-2.0-flash-thinking-exp": {
       "thinkingLevel": "auto",
@@ -123,6 +136,18 @@ The `oai2lmapi.modelOverrides` setting allows per-model configuration. Keys are 
     },
     "claude-*": {
       "maxOutputTokens": 8192
+    }
+  },
+  "oai2lmapi.channelModelOverrides": {
+    "openai": {
+      "gpt-4o": {
+        "temperature": 0.7
+      }
+    },
+    "claude": {
+      "claude-3.7*": {
+        "thinkingLevel": "high"
+      }
     }
   }
 }
@@ -141,7 +166,7 @@ This extension works with any API that implements the OpenAI chat completions fo
 - OpenAI API
 - Azure OpenAI
 - Google Gemini API (native support via Gemini channel)
-- Anthropic Claude (via OpenAI-compatible proxy)
+- Anthropic Claude (native Claude channel via @anthropic-ai/sdk)
 - LocalAI
 - Ollama (with OpenAI compatibility layer)
 - LM Studio
@@ -161,6 +186,7 @@ This extension works with any API that implements the OpenAI chat completions fo
 
 - Run **OAI2LMApi: Set API Key** to ensure your API key is configured
 - For Gemini: Enable `oai2lmapi.enableGeminiChannel` and run **OAI2LMApi: Set Gemini API Key**
+- For Claude: Enable `oai2lmapi.enableClaudeChannel` and run **OAI2LMApi: Set Claude API Key**
 - Verify your API endpoint is correct and accessible
 - Check the **OAI2LMApi** Output Channel (`View > Output`, select "OAI2LMApi") for detailed logs
 - Try **OAI2LMApi: Refresh Models** to manually reload

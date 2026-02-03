@@ -50,7 +50,7 @@
     "directory": "packages/opencode-provider"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^1.0.31"
+    "@ai-sdk/openai-compatible": "^1.0.32"
   },
   "peerDependencies": {
     "ai": ">=4.0.0"
@@ -63,9 +63,9 @@
   "devDependencies": {
     "@ai-sdk/provider": "^2.0.1",
     "@oai2lmapi/model-metadata": "workspace:*",
-    "@types/node": "^22.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.50.0",
-    "@typescript-eslint/parser": "^8.50.0",
+    "@types/node": "^22.19.8",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
     "typescript": "^5.9.3"

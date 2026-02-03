@@ -248,7 +248,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         }
 
         // Check if prompt-based tool calling is enabled for this model
-        const modelOverride = getModelOverride(model.modelId);
+        const modelOverride = getModelOverride(model.modelId, 'openai');
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
         // Chain-of-thought suppression: per-model override takes precedence over global.

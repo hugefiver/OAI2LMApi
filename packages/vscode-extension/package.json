@@ -31,6 +31,11 @@
         "vendor": "gemini2lmapi",
         "displayName": "Gemini to Language Model API Bridge",
         "managementCommand": "oai2lmapi.manage"
+      },
+      {
+        "vendor": "claude2lmapi",
+        "displayName": "Claude to Language Model API Bridge",
+        "managementCommand": "oai2lmapi.manageClaude"
       }
     ],
     "commands": [
@@ -41,6 +46,10 @@
       {
         "command": "oai2lmapi.manage",
         "title": "OAI2LMApi: Manage Provider Settings"
+      },
+      {
+        "command": "oai2lmapi.manageClaude",
+        "title": "OAI2LMApi: Manage Claude Provider Settings"
       },
       {
         "command": "oai2lmapi.setApiKey",
@@ -57,6 +66,14 @@
       {
         "command": "oai2lmapi.clearGeminiApiKey",
         "title": "OAI2LMApi: Clear Gemini API Key"
+      },
+      {
+        "command": "oai2lmapi.setClaudeApiKey",
+        "title": "OAI2LMApi: Set Claude API Key"
+      },
+      {
+        "command": "oai2lmapi.clearClaudeApiKey",
+        "title": "OAI2LMApi: Clear Claude API Key"
       }
     ],
     "configuration": {
@@ -102,6 +119,16 @@
           "type": "string",
           "default": "https://generativelanguage.googleapis.com",
           "description": "Google Gemini API endpoint URL (without version suffix)"
+        },
+        "oai2lmapi.enableClaudeChannel": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the Claude channel provider. When disabled, only the OpenAI-compatible provider is active."
+        },
+        "oai2lmapi.claudeApiEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic Claude API endpoint URL. If left as default and the OpenAI endpoint is set to a custom OpenAI-compatible API, that same endpoint will be used for Claude requests."
         },
         "oai2lmapi.modelOverrides": {
           "type": "object",
@@ -151,6 +178,58 @@
               }
             }
           }
+        },
+        "oai2lmapi.channelModelOverrides": {
+          "type": "object",
+          "default": {},
+          "description": "Per-channel model overrides. Keys are channel names (e.g., 'openai', 'gemini', 'claude'). Each value is an object mapping model patterns to override objects. Matching overrides are merged in order: global modelOverrides then channel overrides.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "maxInputTokens": {
+                  "type": "number",
+                  "description": "Override max input tokens for matching models"
+                },
+                "maxOutputTokens": {
+                  "type": "number",
+                  "description": "Override max output tokens for matching models"
+                },
+                "supportsToolCalling": {
+                  "type": "boolean",
+                  "description": "Override tool calling support for matching models"
+                },
+                "supportsImageInput": {
+                  "type": "boolean",
+                  "description": "Override image input support for matching models"
+                },
+                "temperature": {
+                  "type": "number",
+                  "description": "Default temperature for matching models"
+                },
+                "thinkingLevel": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Thinking level: number for token budget, or 'low'/'medium'/'high'/'auto'/'none'"
+                },
+                "usePromptBasedToolCalling": {
+                  "type": "boolean",
+                  "description": "When enabled, tools are converted to XML-format instructions in the system prompt instead of using native function calling. Useful for models that don't support native tool calling."
+                },
+                "suppressChainOfThought": {
+                  "type": "boolean",
+                  "description": "Override oai2lmapi.suppressChainOfThought for matching models. When true, strips leading <think>...</think> blocks and does not forward reasoning_content/reasoning/thinking fields. <thinking>...</thinking> blocks are still forwarded as thinking."
+                },
+                "trimXmlToolParameterWhitespace": {
+                  "type": "boolean",
+                  "description": "When true, trims leading/trailing whitespace from XML tool call parameter values. Default is false (whitespace is preserved)."
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -174,10 +253,10 @@
   "devDependencies": {
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.3",
-    "@types/vscode": "^1.107.0",
-    "@typescript-eslint/eslint-plugin": "^8.50.0",
-    "@typescript-eslint/parser": "^8.50.0",
+    "@types/node": "^25.2.0",
+    "@types/vscode": "^1.108.1",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.2",
@@ -188,7 +267,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.33.1",
     "@oai2lmapi/model-metadata": "workspace:*",
-    "openai": "^6.15.0"
+    "openai": "^6.17.0"
   }
 }
