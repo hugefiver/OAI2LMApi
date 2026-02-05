@@ -2,17 +2,25 @@
 
 ## Overview
 
-This agent is designed to update the `src/modelMetadata.ts` file with the latest model information from external data sources. The goal is to keep the model registry up-to-date with accurate capabilities for various LLM providers.
+This agent is designed to update the `packages/model-metadata/src/index.ts` file with the latest model information from external data sources. The goal is to keep the model registry up-to-date with accurate capabilities for various LLM providers.
 
 ## Data Sources
 
-This agent uses a tiered data source strategy with the following priority:
+This agent uses a tiered data source strategy with the following priority, DO NOT request other source:
 
-| Priority | Source | URL | Description |
-| -------- | ------ | --- | ----------- |
-| 1 (Highest) | Official Provider in models.dev | `https://models.dev/api.json` | Official data from providers like `openai`, `anthropic`, `qwen`, etc. |
-| 2 | OpenRouter in models.dev | `https://models.dev/api.json` | OpenRouter aggregated data within models.dev |
-| 3 (Fallback) | OpenRouter API | `https://openrouter.ai/api/v1/models` | Direct OpenRouter API as final fallback |
+| Priority     | Source                          | URL                                   | Description                                                             |
+| ------------ | ------------------------------- | ------------------------------------- | ----------------------------------------------------------------------- |
+| 1 (Highest)  | Official Provider in models.dev | `https://models.dev/api.json`         | Official data from providers like `openai`, `anthropic`, `qwen`, _etc_. |
+| 2            | OpenRouter in models.dev        | `https://models.dev/api.json`         | OpenRouter aggregated data within models.dev                            |
+| 3 (Fallback) | OpenRouter API                  | `https://openrouter.ai/api/v1/models` | Direct OpenRouter API as final fallback                                 |
+
+**Note: `https://models.dev/api.json` is a very large file, please use `jq` to filter content you need:**
+
+- 1. Download it locally.
+- 2. Query all `providers · model` list, **DO NOT query by each provider, just query the list**.
+- 3. Use `jq` to query model infomations. You can use some filters to query, such as `select([...])` for providers.
+- 4. Finally, don't forget to delete the local file.
+- 5. **But if you are Gemini (3.0 and above) model, forget this, just read the json file directly.**
 
 ## Workflow
 
@@ -24,17 +32,33 @@ Fetch the JSON data from `https://models.dev/api.json`. This file contains model
 
 ```json
 {
-  "providers": {
-    "<provider_id>": {
-      "name": "<Provider Name>",
-      "models": {
-        "<model_id>": {
-          "name": "<Model Display Name>",
-          "context_length": <number>,
-          "max_output_tokens": <number>,
-          "supports_tools": <boolean>,
-          "supports_vision": <boolean>,
-          ...
+  "<provider_id>": {
+    "id": "<Provider ID>",
+    "name": "<Provider Name>",
+    "models": {
+      "<model_id>": {
+        "id": "<model_id>",
+        "name": "<Model Display Name>",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "string",
+        "release_date": "string",
+        "last_updated": "string",
+        "modalities": {
+          "input": ["text", "image", "audio", "video"],
+          "output": ["text"]
+        },
+        "open_weights": true,
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "limit": {
+          "context": 128000,
+          "output": 64000
         }
       }
     }
@@ -54,12 +78,14 @@ If a model is not found in models.dev, fetch from `https://openrouter.ai/api/v1/
       "name": "<Model Display Name>",
       "context_length": <number>,
       "top_provider": {
+        "context_length": <number>,
         "max_completion_tokens": <number>
       },
       "architecture": {
         "modality": "text->text" | "text+image->text" | ...,
         "input_modalities": ["text", "image", ...],
-        "output_modalities": ["text", ...]
+        "output_modalities": ["text", ...],
+        "tokenizer": "string"
       },
       "supported_parameters": ["tools", "temperature", ...]
     }
@@ -68,6 +94,7 @@ If a model is not found in models.dev, fetch from `https://openrouter.ai/api/v1/
 ```
 
 **Mapping OpenRouter fields to ModelMetadata:**
+
 - `context_length` → `maxInputTokens`
 - `top_provider.max_completion_tokens` → `maxOutputTokens`
 - `"tools" in supported_parameters` → `supportsToolCalling`
@@ -77,24 +104,24 @@ If a model is not found in models.dev, fetch from `https://openrouter.ai/api/v1/
 
 When the same model is available from multiple providers, **prioritize official provider data**:
 
-| Model Family | Preferred Provider ID | Fallback 1 (models.dev) | Fallback 2 (API) |
-| ------------- | ---------------------- | ----------------------- | ---------------- |
-| GPT / o1 / o3 / o4 / Codex | `openai` | `openrouter` in models.dev | openrouter.ai API |
-| Claude | `anthropic` | `openrouter` in models.dev | openrouter.ai API |
-| Gemini / Gemma | `google-vertex` or `google-ai-studio` | `openrouter` in models.dev | openrouter.ai API |
-| Qwen / Qwen3 | `qwen` or `alibaba` | `openrouter` in models.dev | openrouter.ai API |
-| Kimi | `moonshot` | `openrouter` in models.dev | openrouter.ai API |
-| DeepSeek | `deepseek` | `openrouter` in models.dev | openrouter.ai API |
-| Llama | `meta` or `together` | `openrouter` in models.dev | openrouter.ai API |
-| Mistral / Codestral / Pixtral | `mistral` | `openrouter` in models.dev | openrouter.ai API |
-| Grok | `xai` | `openrouter` in models.dev | openrouter.ai API |
-| Nova | `amazon-bedrock` | `openrouter` in models.dev | openrouter.ai API |
-| Command | `cohere` | `openrouter` in models.dev | openrouter.ai API |
-| GLM | `zhipu` or `z-ai` | `openrouter` in models.dev | openrouter.ai API |
-| Ernie | `baidu` | `openrouter` in models.dev | openrouter.ai API |
-| Hunyuan | `tencent` | `openrouter` in models.dev | openrouter.ai API |
-| Phi | `microsoft` or `azure` | `openrouter` in models.dev | openrouter.ai API |
-| Others | Provider-specific | `openrouter` in models.dev | openrouter.ai API |
+| Model Family                  | Preferred Provider ID                 | Fallback 1 (models.dev)    | Fallback 2 (API)  |
+| ----------------------------- | ------------------------------------- | -------------------------- | ----------------- |
+| GPT / o1 / o3 / o4 / Codex    | `openai`                              | `openrouter` in models.dev | openrouter.ai API |
+| Claude                        | `anthropic`                           | `openrouter` in models.dev | openrouter.ai API |
+| Gemini / Gemma                | `google-vertex` or `google-ai-studio` | `openrouter` in models.dev | openrouter.ai API |
+| Qwen / Qwen3                  | `qwen` or `alibaba`                   | `openrouter` in models.dev | openrouter.ai API |
+| Kimi                          | `moonshot`                            | `openrouter` in models.dev | openrouter.ai API |
+| DeepSeek                      | `deepseek`                            | `openrouter` in models.dev | openrouter.ai API |
+| Llama                         | `meta` or `together`                  | `openrouter` in models.dev | openrouter.ai API |
+| Mistral / Codestral / Pixtral | `mistral`                             | `openrouter` in models.dev | openrouter.ai API |
+| Grok                          | `xai`                                 | `openrouter` in models.dev | openrouter.ai API |
+| Nova                          | `amazon-bedrock`                      | `openrouter` in models.dev | openrouter.ai API |
+| Command                       | `cohere`                              | `openrouter` in models.dev | openrouter.ai API |
+| GLM                           | `zhipu` or `z-ai`                     | `openrouter` in models.dev | openrouter.ai API |
+| Ernie                         | `baidu`                               | `openrouter` in models.dev | openrouter.ai API |
+| Hunyuan                       | `tencent`                             | `openrouter` in models.dev | openrouter.ai API |
+| Phi                           | `microsoft` or `azure`                | `openrouter` in models.dev | openrouter.ai API |
+| Others                        | Provider-specific                     | `openrouter` in models.dev | openrouter.ai API |
 
 ### Step 3: Model Selection Criteria
 
@@ -135,7 +162,7 @@ Only select **high-capability models** based on these criteria:
    // BAD: Separate patterns for identical params
    { pattern: /gpt-4o-2024-05-13/i, metadata: md(128000, 16384, true, true) },
    { pattern: /gpt-4o-2024-08-06/i, metadata: md(128000, 16384, true, true) },
-   
+
    // GOOD: Single family pattern
    { pattern: /gpt-4o/i, metadata: md(128000, 16384, true, true) },
    ```
@@ -157,7 +184,7 @@ Only select **high-capability models** based on these criteria:
    ```typescript
    // GOOD: Combined pattern
    { pattern: /(doubao-)?seed/i, metadata: md(262144, 32768, true, true) }
-   
+
    // GOOD: Size variants
    { pattern: /qwen3-coder-(480b|plus)/i, metadata: md(262144, 262144, true, true) }
    ```
@@ -274,18 +301,18 @@ When reporting changes, provide:
 
 ## Common Provider Mappings in models.dev
 
-| Provider ID in API | Display Name |
-| ------------------- | -------------- |
-| `openai` | OpenAI |
-| `anthropic` | Anthropic |
-| `google-vertex` | Google Vertex AI |
-| `google-ai-studio` | Google AI Studio |
-| `qwen` | Qwen (Alibaba) |
-| `deepseek` | DeepSeek |
-| `moonshot` | Moonshot/Kimi |
-| `mistral` | Mistral AI |
-| `xai` | xAI |
-| `cohere` | Cohere |
-| `amazon-bedrock` | Amazon Bedrock |
-| `zhipu` | Zhipu AI (GLM) |
-| `openrouter` | OpenRouter (Aggregator) |
+| Provider ID in API | Display Name            |
+| ------------------ | ----------------------- |
+| `openai`           | OpenAI                  |
+| `anthropic`        | Anthropic               |
+| `google-vertex`    | Google Vertex AI        |
+| `google-ai-studio` | Google AI Studio        |
+| `qwen`             | Qwen (Alibaba)          |
+| `deepseek`         | DeepSeek                |
+| `moonshot`         | Moonshot/Kimi           |
+| `mistral`          | Mistral AI              |
+| `xai`              | xAI                     |
+| `cohere`           | Cohere                  |
+| `amazon-bedrock`   | Amazon Bedrock          |
+| `zhipu`            | Zhipu AI (GLM)          |
+| `openrouter`       | OpenRouter (Aggregator) |

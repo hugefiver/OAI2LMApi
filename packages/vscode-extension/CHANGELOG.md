@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Updated model metadata for GLM-4.7, Kimi k2.5, Gemini 3 Flash, GPT-5.2 Codex, and Mistral Devstral models.
+
 ## [0.3.0] - 2026-02-03
 
 ### Added
