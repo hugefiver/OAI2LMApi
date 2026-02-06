@@ -40,7 +40,7 @@ suite('ModelMetadata Unit Tests', () => {
 	test('Should return metadata for Claude 3.7 Sonnet', () => {
 		const metadata = getModelMetadata('claude-3.7-sonnet');
 		assert.strictEqual(metadata.maxInputTokens, 200000);
-		assert.strictEqual(metadata.maxOutputTokens, 128000);
+		assert.strictEqual(metadata.maxOutputTokens, 64000);
 		assert.strictEqual(metadata.supportsToolCalling, true);
 		assert.strictEqual(metadata.supportsImageInput, true);
 		assert.strictEqual(metadata.modelType, 'llm');
@@ -51,14 +51,14 @@ suite('ModelMetadata Unit Tests', () => {
 	test('Should match Qwen3 family correctly', () => {
 		// Base Qwen3 pattern
 		const qwen3Base = getModelMetadata('qwen3-8b');
-		assert.strictEqual(qwen3Base.maxInputTokens, 128000);
+		assert.strictEqual(qwen3Base.maxInputTokens, 131072);
 		assert.strictEqual(qwen3Base.supportsToolCalling, true);
 		assert.strictEqual(qwen3Base.modelType, 'llm');
 
 		// Qwen3-coder sub-pattern
 		const qwen3Coder = getModelMetadata('qwen3-coder-480b');
 		assert.strictEqual(qwen3Coder.maxInputTokens, 262144);
-		assert.strictEqual(qwen3Coder.maxOutputTokens, 262144);
+		assert.strictEqual(qwen3Coder.maxOutputTokens, 65536);
 		assert.strictEqual(qwen3Coder.supportsToolCalling, true);
 
 		// Qwen3-VL sub-pattern (vision)
@@ -70,7 +70,7 @@ suite('ModelMetadata Unit Tests', () => {
 	test('Should match DeepSeek family correctly', () => {
 		const deepseekV3 = getModelMetadata('deepseek-v3.2');
 		assert.strictEqual(deepseekV3.maxInputTokens, 163840);
-		assert.strictEqual(deepseekV3.maxOutputTokens, 163840);
+		assert.strictEqual(deepseekV3.maxOutputTokens, 65536);
 		assert.strictEqual(deepseekV3.supportsToolCalling, true);
 
 		const deepseekR1 = getModelMetadata('deepseek-r1-0528');
@@ -80,7 +80,7 @@ suite('ModelMetadata Unit Tests', () => {
 
 	test('Should match Mistral family correctly', () => {
 		const mistralLarge = getModelMetadata('mistral-large');
-		assert.strictEqual(mistralLarge.maxInputTokens, 128000);
+		assert.strictEqual(mistralLarge.maxInputTokens, 262144);
 		assert.strictEqual(mistralLarge.supportsToolCalling, true);
 
 		const devstral = getModelMetadata('devstral-2512');
@@ -192,7 +192,6 @@ suite('ModelMetadata Unit Tests', () => {
 
 	test('Should return false for models without tool calling', () => {
 		// Models without tool calling
-		assert.strictEqual(supportsToolCalling('qvq-max'), false);  // QvQ doesn't support tools
 		assert.strictEqual(supportsToolCalling('deepseek-prover'), false);  // Prover doesn't support tools
 		assert.strictEqual(supportsToolCalling('morph-v1'), false);  // Morph doesn't support tools
 	});

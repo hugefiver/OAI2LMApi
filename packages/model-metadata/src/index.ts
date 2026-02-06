@@ -412,7 +412,7 @@ const MODEL_FAMILY_PATTERNS: ModelFamilyPattern[] = [
         subPatterns: [
             { pattern: /grok-4\.1-fast/i, metadata: { maxInputTokens: 2000000, maxOutputTokens: 30000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
             { pattern: /grok-4-fast/i, metadata: { maxInputTokens: 2000000, maxOutputTokens: 30000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
-            { pattern: /grok-4/i, metadata: { maxInputTokens: 256000, maxOutputTokens: 64000, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
+            { pattern: /grok-4/i, metadata: { maxInputTokens: 256000, maxOutputTokens: 64000, supportsToolCalling: true, supportsImageInput: true, modelType: 'llm' } },
             { pattern: /grok-3-mini-fast/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
             { pattern: /grok-3-mini/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
             { pattern: /grok-3-fast/i, metadata: { maxInputTokens: 131072, maxOutputTokens: 8192, supportsToolCalling: true, supportsImageInput: false, modelType: 'llm' } },
