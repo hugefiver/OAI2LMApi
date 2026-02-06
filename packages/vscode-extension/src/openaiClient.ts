@@ -413,6 +413,10 @@ export interface StreamOptions {
     /** Optional max tokens for completion generation (mapped to OpenAI `max_tokens`). */
     maxTokens?: number;
     /**
+     * When true, use the OpenAI Responses API instead of Chat Completions.
+     */
+    useResponsesApi?: boolean;
+    /**
      * When enabled, suppress chain-of-thought transmission:
      * - strips leading `<think>...</think>` blocks from visible output (does not forward them)
      * - does NOT forward `reasoning_content`/`reasoning`/`thinking` fields
@@ -506,6 +510,10 @@ export class OpenAIClient {
         model: string,
         streamOptions: StreamOptions
     ): Promise<string> {
+        if (streamOptions.useResponsesApi) {
+            return this.streamResponsesCompletion(messages, model, streamOptions);
+        }
+
         let fullContent = '';
         let thinkingChars = 0;
         let sawAnyModelOutput = false;
@@ -790,6 +798,326 @@ export class OpenAIClient {
         }
     }
 
+    private async streamResponsesCompletion(
+        messages: ChatMessage[],
+        model: string,
+        streamOptions: StreamOptions
+    ): Promise<string> {
+        let fullContent = '';
+        let sawAnyModelOutput = false;
+
+        const thinkTagParser = new ThinkTagStreamParser(
+            {
+                onText: (chunk) => {
+                    fullContent += chunk;
+                    streamOptions.onChunk?.(chunk);
+                },
+                onThinking: streamOptions.onThinkingChunk
+                    ? (chunk) => {
+                        streamOptions.onThinkingChunk?.(chunk);
+                    }
+                    : undefined
+            },
+            {
+                thinkTagHandling: streamOptions.suppressChainOfThought ? 'drop' : 'thinking'
+            }
+        );
+
+        const responseInput = this.convertMessagesToResponsesInput(messages);
+        const responseTools = this.convertToolsToResponsesTools(streamOptions.tools);
+        const responseToolChoice = responseTools && responseTools.length > 0
+            ? this.convertToolChoiceToResponsesToolChoice(streamOptions.toolChoice)
+            : undefined;
+
+        const maxTokens = (typeof streamOptions.maxTokens === 'number' && streamOptions.maxTokens > 0)
+            ? streamOptions.maxTokens
+            : 2048;
+
+        const requestOptions: OpenAI.Responses.ResponseCreateParamsStreaming = {
+            model,
+            input: responseInput,
+            stream: true,
+            temperature: 1.0,
+            max_output_tokens: maxTokens
+        };
+
+        if (responseTools && responseTools.length > 0) {
+            requestOptions.tools = responseTools;
+            if (responseToolChoice) {
+                requestOptions.tool_choice = responseToolChoice;
+            }
+        }
+
+        const toolCallsById = new Map<string, { id: string; name: string; arguments: string }>();
+        const itemIdToCallId = new Map<string, string>();
+        const textDeltaItemIds = new Set<string>();
+        const refusalDeltaItemIds = new Set<string>();
+        const reasoningDeltaItemIds = new Set<string>();
+
+        const getOrCreateToolCall = (callId: string) => {
+            let toolCall = toolCallsById.get(callId);
+            if (!toolCall) {
+                toolCall = { id: callId, name: '', arguments: '' };
+                toolCallsById.set(callId, toolCall);
+            }
+            return toolCall;
+        };
+
+        const moveToolCall = (fromId: string, toId: string) => {
+            if (fromId === toId) {
+                return;
+            }
+            const existing = toolCallsById.get(fromId);
+            if (!existing) {
+                return;
+            }
+            toolCallsById.delete(fromId);
+            toolCallsById.set(toId, { ...existing, id: toId });
+        };
+
+        const updateToolCallFromItem = (item: OpenAI.Responses.ResponseFunctionToolCall) => {
+            const callId = item.call_id || item.id || '';
+            if (!callId) {
+                return;
+            }
+
+            if (item.id) {
+                const previous = itemIdToCallId.get(item.id);
+                itemIdToCallId.set(item.id, callId);
+                if (previous && previous !== callId) {
+                    moveToolCall(previous, callId);
+                } else if (item.id !== callId) {
+                    moveToolCall(item.id, callId);
+                }
+            }
+
+            const toolCall = getOrCreateToolCall(callId);
+            if (item.name) {
+                toolCall.name = item.name;
+            }
+            if (typeof item.arguments === 'string') {
+                toolCall.arguments = item.arguments;
+            }
+
+            if (streamOptions.onToolCall && toolCall.name) {
+                streamOptions.onToolCall({
+                    id: toolCall.id,
+                    name: toolCall.name,
+                    arguments: toolCall.arguments
+                });
+            }
+            sawAnyModelOutput = true;
+        };
+
+        let chunkCount = 0;
+
+        try {
+            const stream = await this.client.responses.create(requestOptions);
+
+            for await (const event of stream as AsyncIterable<OpenAI.Responses.ResponseStreamEvent>) {
+                chunkCount++;
+                if (streamOptions.signal?.aborted) {
+                    break;
+                }
+
+                switch (event.type) {
+                    case 'response.output_text.delta': {
+                        if (event.delta) {
+                            sawAnyModelOutput = true;
+                            textDeltaItemIds.add(event.item_id);
+                            thinkTagParser.ingest(event.delta);
+                        }
+                        break;
+                    }
+                    case 'response.output_text.done': {
+                        if (!textDeltaItemIds.has(event.item_id) && event.text) {
+                            sawAnyModelOutput = true;
+                            thinkTagParser.ingest(event.text);
+                        }
+                        break;
+                    }
+                    case 'response.refusal.delta': {
+                        if (event.delta) {
+                            sawAnyModelOutput = true;
+                            refusalDeltaItemIds.add(event.item_id);
+                            thinkTagParser.ingest(event.delta);
+                        }
+                        break;
+                    }
+                    case 'response.refusal.done': {
+                        if (!refusalDeltaItemIds.has(event.item_id) && event.refusal) {
+                            sawAnyModelOutput = true;
+                            thinkTagParser.ingest(event.refusal);
+                        }
+                        break;
+                    }
+                    case 'response.reasoning_text.delta': {
+                        sawAnyModelOutput = true;
+                        if (!streamOptions.suppressChainOfThought && event.delta) {
+                            reasoningDeltaItemIds.add(event.item_id);
+                            thinkTagParser.notifyThinkingReceived();
+                            streamOptions.onThinkingChunk?.(event.delta);
+                        }
+                        break;
+                    }
+                    case 'response.reasoning_text.done': {
+                        sawAnyModelOutput = true;
+                        if (!streamOptions.suppressChainOfThought && event.text && !reasoningDeltaItemIds.has(event.item_id)) {
+                            thinkTagParser.notifyThinkingReceived();
+                            streamOptions.onThinkingChunk?.(event.text);
+                        }
+                        break;
+                    }
+                    case 'response.output_item.added':
+                    case 'response.output_item.done': {
+                        const outputItem = event.item;
+                        if (outputItem?.type === 'function_call') {
+                            updateToolCallFromItem(outputItem as OpenAI.Responses.ResponseFunctionToolCall);
+                        }
+                        break;
+                    }
+                    case 'response.function_call_arguments.delta': {
+                        sawAnyModelOutput = true;
+                        const callId = itemIdToCallId.get(event.item_id) ?? event.item_id;
+                        if (callId !== event.item_id) {
+                            moveToolCall(event.item_id, callId);
+                        }
+                        const toolCall = getOrCreateToolCall(callId);
+                        toolCall.arguments += event.delta ?? '';
+                        if (streamOptions.onToolCall && toolCall.name) {
+                            streamOptions.onToolCall({
+                                id: toolCall.id,
+                                name: toolCall.name,
+                                arguments: toolCall.arguments
+                            });
+                        }
+                        break;
+                    }
+                    case 'response.function_call_arguments.done': {
+                        sawAnyModelOutput = true;
+                        const callId = itemIdToCallId.get(event.item_id) ?? event.item_id;
+                        if (callId !== event.item_id) {
+                            moveToolCall(event.item_id, callId);
+                        }
+                        const toolCall = getOrCreateToolCall(callId);
+                        if (event.name) {
+                            toolCall.name = event.name;
+                        }
+                        if (typeof event.arguments === 'string') {
+                            toolCall.arguments = event.arguments;
+                        }
+                        if (streamOptions.onToolCall && toolCall.name) {
+                            streamOptions.onToolCall({
+                                id: toolCall.id,
+                                name: toolCall.name,
+                                arguments: toolCall.arguments
+                            });
+                        }
+                        break;
+                    }
+                }
+            }
+
+            thinkTagParser.flush();
+
+            const completedToolCalls: CompletedToolCall[] = Array.from(toolCallsById.values())
+                .filter(tc => tc.id && tc.name)
+                .map(tc => ({
+                    id: tc.id,
+                    name: tc.name,
+                    arguments: tc.arguments
+                }));
+
+            if (streamOptions.onToolCallsComplete && completedToolCalls.length > 0) {
+                streamOptions.onToolCallsComplete(completedToolCalls);
+            }
+
+            if (!sawAnyModelOutput && completedToolCalls.length === 0 && !streamOptions.signal?.aborted) {
+                logger.warn('Empty responses stream detected; falling back to non-streaming', 'OpenAI');
+                logger.debug('Empty responses stream details', {
+                    model,
+                    chunkCount
+                }, 'OpenAI');
+
+                const fallbackRequest: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
+                    model,
+                    input: responseInput,
+                    stream: false,
+                    temperature: 0.7,
+                    max_output_tokens: maxTokens
+                };
+
+                if (responseTools && responseTools.length > 0) {
+                    fallbackRequest.tools = responseTools;
+                    if (responseToolChoice) {
+                        fallbackRequest.tool_choice = responseToolChoice;
+                    }
+                }
+
+                const response = await this.client.responses.create(fallbackRequest) as OpenAI.Responses.Response;
+
+                const nonStreamContent = response?.output_text;
+                if (typeof nonStreamContent === 'string' && nonStreamContent.length > 0) {
+                    sawAnyModelOutput = true;
+                    thinkTagParser.ingest(nonStreamContent);
+                }
+
+                const nonStreamToolCalls: CompletedToolCall[] = [];
+                const seenToolCallIds = new Set<string>();
+                if (Array.isArray(response?.output)) {
+                    for (const item of response.output) {
+                        if (item?.type === 'function_call') {
+                            const toolItem = item as OpenAI.Responses.ResponseFunctionToolCall;
+                            const callId = toolItem.call_id || toolItem.id || '';
+                            if (!callId || !toolItem.name || seenToolCallIds.has(callId)) {
+                                continue;
+                            }
+                            seenToolCallIds.add(callId);
+                            nonStreamToolCalls.push({
+                                id: callId,
+                                name: toolItem.name,
+                                arguments: typeof toolItem.arguments === 'string' ? toolItem.arguments : ''
+                            });
+                        }
+                    }
+                }
+
+                if (nonStreamToolCalls.length > 0) {
+                    sawAnyModelOutput = true;
+                    if (streamOptions.onToolCallsComplete) {
+                        streamOptions.onToolCallsComplete(nonStreamToolCalls);
+                    }
+                }
+
+                thinkTagParser.flush();
+            }
+
+            return fullContent;
+        } catch (error: unknown) {
+            const err = error as Record<string, unknown>;
+            if (err?.name === 'AbortError' || streamOptions.signal?.aborted) {
+                thinkTagParser.flush();
+                return fullContent;
+            }
+
+            logger.error('streamResponsesCompletion failed', error, 'OpenAI');
+            logger.debug('streamResponsesCompletion error details', {
+                model,
+                messageCount: responseInput.length,
+                toolsCount: responseTools?.length ?? 0,
+                toolChoice: responseToolChoice ?? undefined,
+                status: err?.status ?? (err?.response as Record<string, unknown>)?.status,
+                code: err?.code ?? (err?.error as Record<string, unknown>)?.code,
+                name: err?.name,
+                message: (err?.error as Record<string, unknown>)?.message ?? err?.message,
+                responseData: (err?.response as Record<string, unknown> | undefined)?.data,
+                errorDetails: err?.error as Record<string, unknown> | undefined
+            }, 'OpenAI');
+
+            throw new Error(`Failed to stream responses completion: ${error}`);
+        }
+    }
+
     updateConfig(config: OpenAIConfig) {
         this.config = config;
         const normalizedEndpoint = normalizeApiEndpoint(config.apiEndpoint);
@@ -868,5 +1196,118 @@ export class OpenAIClient {
                     };
             }
         });
+    }
+
+    private convertMessagesToResponsesInput(messages: ChatMessage[]): OpenAI.Responses.ResponseInputItem[] {
+        const inputItems: OpenAI.Responses.ResponseInputItem[] = [];
+        let fallbackIdCounter = 0;
+
+        const ensureCallId = (value: unknown, context: string): string => {
+            if (typeof value === 'string' && value.trim().length > 0) {
+                return value;
+            }
+            logger.warn(`${context} missing valid call_id, using fallback`, 'OpenAI');
+            return `call_fallback_${Date.now()}_${fallbackIdCounter++}_${Math.random().toString(36).slice(2, 9)}`;
+        };
+
+        for (const msg of messages) {
+            if (msg.role === 'tool') {
+                const callId = ensureCallId(msg.tool_call_id, 'Tool message');
+                inputItems.push({
+                    type: 'function_call_output',
+                    call_id: callId,
+                    output: msg.content ?? ''
+                });
+                continue;
+            }
+
+            if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+                if (typeof msg.content === 'string' && msg.content.length > 0) {
+                    inputItems.push({
+                        role: 'assistant',
+                        content: msg.content,
+                        type: 'message'
+                    });
+                }
+
+                for (const toolCall of msg.tool_calls) {
+                    const callId = ensureCallId(toolCall.id, `Tool call (${toolCall.function?.name ?? 'unknown'})`);
+                    const name = toolCall.function?.name;
+                    if (!name) {
+                        continue;
+                    }
+                    inputItems.push({
+                        type: 'function_call',
+                        call_id: callId,
+                        name,
+                        arguments: toolCall.function.arguments ?? ''
+                    });
+                }
+                continue;
+            }
+
+            const content = msg.content ?? '';
+            if (!content) {
+                continue;
+            }
+
+            const role = msg.role === 'system'
+                ? 'system'
+                : msg.role === 'assistant'
+                    ? 'assistant'
+                    : 'user';
+
+            inputItems.push({
+                role,
+                content,
+                type: 'message'
+            });
+        }
+
+        return inputItems;
+    }
+
+    private convertToolsToResponsesTools(tools: ToolDefinition[] | undefined): OpenAI.Responses.Tool[] | undefined {
+        if (!tools || tools.length === 0) {
+            return undefined;
+        }
+
+        const converted: OpenAI.Responses.Tool[] = [];
+        for (const tool of tools) {
+            if (tool.type !== 'function') {
+                continue;
+            }
+            const name = tool.function?.name?.trim();
+            if (!name) {
+                continue;
+            }
+            const parameters = tool.function.parameters ?? { type: 'object', properties: {} };
+            converted.push({
+                type: 'function',
+                name,
+                description: tool.function.description ?? undefined,
+                parameters,
+                strict: true
+            });
+        }
+
+        return converted.length > 0 ? converted : undefined;
+    }
+
+    private convertToolChoiceToResponsesToolChoice(toolChoice: ToolChoice | undefined): OpenAI.Responses.ToolChoiceOptions | OpenAI.Responses.ToolChoiceFunction | undefined {
+        if (!toolChoice) {
+            return undefined;
+        }
+        if (toolChoice === 'none' || toolChoice === 'auto' || toolChoice === 'required') {
+            return toolChoice;
+        }
+        const name = toolChoice.function?.name;
+        if (!name) {
+            return undefined;
+        }
+        return {
+            type: 'function',
+            name
+        };
     }
 }

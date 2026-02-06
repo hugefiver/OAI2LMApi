@@ -24,6 +24,12 @@ export interface ModelOverrideConfig {
     usePromptBasedToolCalling?: boolean;
 
     /**
+     * When true, use the OpenAI Responses API for matching models in the OpenAI channel.
+     * When false, force the legacy Chat Completions API for matching models.
+     */
+    useResponsesApi?: boolean;
+
+    /**
      * When true, suppress chain-of-thought transmission for matching models.
      * See `oai2lmapi.suppressChainOfThought` for exact behavior.
      */

@@ -273,8 +273,16 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         const modelOverride = getModelOverride(model.modelId, 'openai');
         const usePromptBasedToolCalling = modelOverride?.usePromptBasedToolCalling === true;
 
-        // Chain-of-thought suppression: per-model override takes precedence over global.
+        // Determine whether to use the OpenAI Responses API for this model
         const config = vscode.workspace.getConfiguration('oai2lmapi');
+        const openaiResponsesApiMode = config.get<string>('openaiResponsesApiMode', 'off');
+        const normalizedModelId = model.modelId.replace(/^[^/]+\//, '').toLowerCase();
+        const isGptModel = normalizedModelId.startsWith('gpt-');
+        const useResponsesApi = typeof modelOverride?.useResponsesApi === 'boolean'
+            ? modelOverride.useResponsesApi
+            : (openaiResponsesApiMode === 'all' || (openaiResponsesApiMode === 'gpt-only' && isGptModel));
+
+        // Chain-of-thought suppression: per-model override takes precedence over global.
         const globalSuppressChainOfThought = config.get<boolean>('suppressChainOfThought', false);
         const suppressChainOfThought = modelOverride?.suppressChainOfThought ?? globalSuppressChainOfThought;
 
@@ -377,6 +385,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                     progress.report(new vscode.LanguageModelThinkingPart(chunk));
                 },
                 suppressChainOfThought,
+                useResponsesApi,
                 onToolCallsComplete: (toolCalls: CompletedToolCall[]) => {
                     // Report all tool calls at once after streaming is complete
                     for (const toolCall of toolCalls) {

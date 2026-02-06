@@ -100,6 +100,21 @@
           "default": false,
           "description": "Show models that do not support tool/function calling. By default, only models with tool calling support are displayed."
         },
+        "oai2lmapi.openaiResponsesApiMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "gpt-only",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Disable the OpenAI Responses API (default).",
+            "Use the Responses API for gpt-* models in the OpenAI channel.",
+            "Use the Responses API for all models in the OpenAI channel."
+          ],
+          "default": "off",
+          "description": "Controls when the OpenAI channel uses the Responses API instead of Chat Completions."
+        },
         "oai2lmapi.suppressChainOfThought": {
           "type": "boolean",
           "default": false,
@@ -133,7 +148,7 @@
         "oai2lmapi.modelOverrides": {
           "type": "object",
           "default": {},
-          "description": "Per-model configuration overrides. Keys are model name patterns (supports wildcards like 'gemini-*'), values are objects with optional: maxInputTokens, maxOutputTokens, supportsToolCalling, supportsImageInput, temperature, thinkingLevel (number for budget, or 'low'/'medium'/'high'/'auto'), usePromptBasedToolCalling (boolean to use XML-based prompt engineering for tool calling), suppressChainOfThought (boolean to suppress chain-of-thought transmission for matching models).",
+          "description": "Per-model configuration overrides. Keys are model name patterns (supports wildcards like 'gemini-*'), values are objects with optional: maxInputTokens, maxOutputTokens, supportsToolCalling, supportsImageInput, temperature, thinkingLevel (number for budget, or 'low'/'medium'/'high'/'auto'), usePromptBasedToolCalling (boolean to use XML-based prompt engineering for tool calling), useResponsesApi (boolean to force/disable OpenAI Responses API for matching OpenAI models), suppressChainOfThought (boolean to suppress chain-of-thought transmission for matching models).",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -167,6 +182,10 @@
               "usePromptBasedToolCalling": {
                 "type": "boolean",
                 "description": "When enabled, tools are converted to XML-format instructions in the system prompt instead of using native function calling. Useful for models that don't support native tool calling."
+              },
+              "useResponsesApi": {
+                "type": "boolean",
+                "description": "When true, use the OpenAI Responses API for matching models in the OpenAI channel. When false, force the legacy Chat Completions API."
               },
               "suppressChainOfThought": {
                 "type": "boolean",
@@ -218,6 +237,10 @@
                 "usePromptBasedToolCalling": {
                   "type": "boolean",
                   "description": "When enabled, tools are converted to XML-format instructions in the system prompt instead of using native function calling. Useful for models that don't support native tool calling."
+                },
+                "useResponsesApi": {
+                  "type": "boolean",
+                  "description": "When true, use the OpenAI Responses API for matching models in the OpenAI channel. When false, force the legacy Chat Completions API."
                 },
                 "suppressChainOfThought": {
                   "type": "boolean",
