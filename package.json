@@ -1,6 +1,6 @@
 {
   "name": "@oai2lmapi/root",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "OpenAI-compatible API bridge for VSCode and OpenCode",
   "repository": {
