@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- OpenAI Responses API streaming support for the OpenAI channel, including text, reasoning parts, and tool calls.
+- Configurable OpenAI Responses API mode (`oai2lmapi.openaiResponsesApiMode`) with per-model/channel override (`useResponsesApi`).
+
 ### Changed
 
 - Updated model metadata for GLM-4.7, Kimi k2.5, Gemini 3 Flash, GPT-5.2 Codex, and Mistral Devstral models.
