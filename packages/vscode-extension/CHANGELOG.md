@@ -14,7 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Updated model metadata for GLM-4.7, Kimi k2.5, Gemini 3 Flash, GPT-5.2 Codex, and Mistral Devstral models.
+- Comprehensive model metadata update from official provider data (models.dev):
+  - **OpenAI**: Added GPT-5.3 Codex; corrected GPT-5-pro output (272K), GPT-5-chat (no tool calling, 400K context), GPT-4 output (8192); added codex-mini (200K/100K, no vision).
+  - **Anthropic**: Added Claude Opus 4.6 (1M context/128K output); corrected Opus 4.5 output to 64K, Sonnet 4.5 context to 200K, Claude 3.7 Sonnet output to 64K.
+  - **Google**: Added Gemini 3 Pro (1M/64K); corrected Gemini 2.5 Flash/Lite output to 65536.
+  - **Alibaba/Qwen**: Full Qwen3 rewrite with coder-plus (1M), coder-480b, coder-flash (1M), coder-30b, VL variants; added Qwen generic family (plus/turbo/flash/vl-max/vl-plus); expanded Qwen2.5 with size variants; corrected QvQ tool calling.
+  - **DeepSeek**: Added DeepSeek V3.2 variants (speciale, exp), V3.1 (terminus, nex-n1), R1-0528 variants; corrected context/output limits from OpenRouter data.
+  - **Mistral**: Expanded pattern to include magistral/ministral/devstral; added devstral-medium, devstral-2, mistral-medium, magistral-medium/small, ministral; corrected mistral-large to 262K/262K with vision.
+  - **xAI**: Added Grok 4.1 Fast (2M context), Grok 4 Fast, Grok Code Fast; corrected Grok 3/3-mini/3-fast output to 8K; corrected Grok 4 (256K/64K, no vision).
+  - **Moonshot/Kimi**: Added k2-thinking-turbo, k2-thinking, k2-turbo variants.
+  - **Amazon Nova**: Corrected Nova lite/micro/pro output to 8192; added Nova 2 Lite (128K/4K).
+  - **Cohere**: Added Command A (256K/8K), Command A Reasoning (256K/32K), Command R7B.
+  - **ZhipuAI/GLM**: Corrected GLM-4.6 output to 131K, GLM-4.6v context to 128K, GLM-4.5 output to 98K; added GLM-4.5 Air/Flash variants.
+  - **MiniMax**: Expanded to sub-patterns: M2.1 (204K/131K), M2 (196K/128K), M1 (1M/40K), 01 (1M/1M).
+  - **ByteDance Seed**: Added Seed 1.8 (256K/64K with vision); corrected Seed 1.6 to 256K/32K without vision.
+  - **Xiaomi MiMo**: Corrected to 256K/32K from official Xiaomi data.
+  - **Provider prefixes**: Added meta/, mistral/, xai/, zai/, zai-org/, moonshot/, stepfun/, bytedance-seed/, kuaishou/, volcengine/, inclusionai/, vercel/ to `normalizeModelId()`.
 
 ## [0.3.0] - 2026-02-03
 
