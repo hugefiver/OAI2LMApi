@@ -5,6 +5,7 @@ import { getModelMetadata, isLLMModel, ModelMetadata } from './modelMetadata';
 import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser, XmlToolParseOptions } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
 import { logger } from './logger';
+import { modelsDevRegistry } from './modelsDevClient';
 
 interface ClaudeModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -113,6 +114,9 @@ export class ClaudeLanguageModelProvider implements vscode.LanguageModelChatProv
             logger.info(`Loaded ${apiModels.length} models from API`, 'Claude');
             this.updateModelList(apiModels);
             await this.context.globalState.update(CLAUDE_CACHED_MODELS_KEY, apiModels);
+
+            // Notify models.dev registry of loaded model IDs for new-model detection
+            await modelsDevRegistry.onModelsLoaded(apiModels.map(m => m.id));
         } catch (error) {
             logger.error('Failed to load models from API', error, 'Claude');
             vscode.window.showErrorMessage('ClaudeProvider: Failed to load models.');
@@ -124,8 +128,8 @@ export class ClaudeLanguageModelProvider implements vscode.LanguageModelChatProv
         return getModelMetadata(modelId).supportsToolCalling;
     }
 
-    private getModelInfo(modelId: string): { metadata: ModelMetadata } {
-        const registryMetadata = getModelMetadata(modelId);
+    private getModelInfo(modelId: string, displayName?: string): { metadata: ModelMetadata } {
+        const registryMetadata = getModelMetadata(modelId, displayName);
         const metadata: ModelMetadata = { ...registryMetadata };
         return { metadata };
     }
@@ -146,7 +150,7 @@ export class ClaudeLanguageModelProvider implements vscode.LanguageModelChatProv
 
     private addModel(apiModel: ClaudeModelInfo) {
         const modelId = apiModel.id;
-        const { metadata } = this.getModelInfo(modelId);
+        const { metadata } = this.getModelInfo(modelId, apiModel.display_name);
         const family = this.extractModelFamily(modelId);
 
         let maxInputTokens = metadata.maxInputTokens;

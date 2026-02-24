@@ -16,6 +16,7 @@ import { stripSchemaField } from './schemaUtils';
 import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser, XmlToolParseOptions } from './xmlToolPrompt';
 import { getModelOverride } from './configUtils';
 import { logger } from './logger';
+import { modelsDevRegistry } from './modelsDevClient';
 
 interface GeminiModelInformation extends vscode.LanguageModelChatInformation {
     modelId: string;
@@ -148,6 +149,11 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
 
             // Cache the models
             await this.context.globalState.update(GEMINI_CACHED_MODELS_KEY, apiModels);
+
+            // Notify models.dev registry of loaded model IDs for new-model detection
+            await modelsDevRegistry.onModelsLoaded(
+                apiModels.map(m => getGeminiModelId(m)).filter((id): id is string => !!id)
+            );
         } catch (error) {
             logger.error('Failed to load models', error, 'Gemini');
             vscode.window.showErrorMessage(`GeminiProvider: Failed to load models.`);
@@ -185,7 +191,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
         const family = this.extractModelFamily(modelId);
         
         // Get metadata from the model metadata registry as fallback
-        const registryMetadata = getModelMetadata(modelId);
+        const registryMetadata = getModelMetadata(modelId, apiModel.displayName ?? undefined);
         
         // Build model info with different priority orders:
         // - Numeric limits: API response > registry metadata > hardcoded defaults

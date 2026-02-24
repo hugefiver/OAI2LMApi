@@ -4,6 +4,7 @@ import { GeminiLanguageModelProvider } from './geminiLanguageModelProvider';
 import { ClaudeLanguageModelProvider } from './claudeLanguageModelProvider';
 import { API_KEY_SECRET_KEY, GEMINI_API_KEY_SECRET_KEY, CLAUDE_API_KEY_SECRET_KEY } from './constants';
 import { logger } from './logger';
+import { modelsDevRegistry } from './modelsDevClient';
 
 let languageModelProvider: OpenAILanguageModelProvider | undefined;
 let geminiProvider: GeminiLanguageModelProvider | undefined;
@@ -179,7 +180,9 @@ async function initializeAsync(context: vscode.ExtensionContext): Promise<void> 
     try {
         // Migrate plaintext API key to SecretStorage if exists
         await migrateApiKeyToSecretStorage(context);
-
+        // Enable and initialize the models.dev registry for runtime model metadata
+        modelsDevRegistry.enable();
+        await modelsDevRegistry.initialize(context.globalState);
         // Create and register the OpenAI-compatible language model provider
         await initializeProvider(context);
 
