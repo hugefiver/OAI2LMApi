@@ -51,6 +51,16 @@ interface ModelsDevCacheEnvelope {
     fetchedAt: number;
 }
 
+/** Processing stats for raw models.dev payload. */
+interface ModelsDevProcessingStats {
+    rawProviderCount: number;
+    processedProviderCount: number;
+    skippedProviderCount: number;
+    rawModelCount: number;
+    processedModelCount: number;
+    skippedModelCount: number;
+}
+
 /** Abstract storage interface (matches vscode.Memento). */
 export interface ModelsDevStorage {
     get<T>(key: string): T | undefined;
@@ -81,6 +91,15 @@ function parseModelId(modelId: string): { provider: string | undefined; modelNam
         };
     }
     return { provider: undefined, modelName: modelId };
+}
+
+/** Safely stringify values for output-channel logs. */
+function toLogJson(value: unknown): string {
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
 }
 
 // --- Provider Priority ---
@@ -308,16 +327,22 @@ export class ModelsDevRegistry {
             searchProviders.push('openrouter');
         }
 
+        const attemptTrace: string[] = [];
+        const providerPath = searchProviders.join(' -> ');
+
         // Phase 1: ID → ID matching across providers in priority order
         for (const provId of searchProviders) {
             const result = this.matchIdInProvider(provId, modelName);
             if (result) {
-                logger.debug(
-                    `Resolved "${modelId}" via ID match in provider "${provId}"`,
-                    undefined, 'ModelsDev'
+                attemptTrace.push(`ID:${provId}:hit`);
+                const metadata = this.toMetadata(result);
+                logger.info(
+                    `Resolve trace model="${modelId}" displayName="${displayName ?? ''}" providerPath=[${providerPath}] attempts=[${attemptTrace.join(', ')}] final=${toLogJson({ matchedBy: 'id', provider: provId, model: result, metadata })}`,
+                    'ModelsDev'
                 );
-                return this.toMetadata(result);
+                return metadata;
             }
+            attemptTrace.push(`ID:${provId}:miss`);
         }
 
         // Phase 2: Name → Name matching across providers in priority order
@@ -325,14 +350,24 @@ export class ModelsDevRegistry {
             for (const provId of searchProviders) {
                 const result = this.matchNameInProvider(provId, displayName);
                 if (result) {
-                    logger.debug(
-                        `Resolved "${modelId}" via Name match ("${displayName}") in provider "${provId}"`,
-                        undefined, 'ModelsDev'
+                    attemptTrace.push(`NAME:${provId}:hit`);
+                    const metadata = this.toMetadata(result);
+                    logger.info(
+                        `Resolve trace model="${modelId}" displayName="${displayName}" providerPath=[${providerPath}] attempts=[${attemptTrace.join(', ')}] final=${toLogJson({ matchedBy: 'name', provider: provId, model: result, metadata })}`,
+                        'ModelsDev'
                     );
-                    return this.toMetadata(result);
+                    return metadata;
                 }
+                attemptTrace.push(`NAME:${provId}:miss`);
             }
+        } else {
+            attemptTrace.push('NAME:skip(no-display-name)');
         }
+
+        logger.info(
+            `Resolve trace model="${modelId}" displayName="${displayName ?? ''}" providerPath=[${providerPath}] attempts=[${attemptTrace.join(', ')}] final=undefined`,
+            'ModelsDev'
+        );
 
         return undefined;
     }
@@ -426,8 +461,31 @@ export class ModelsDevRegistry {
             logger.info('Fetching models.dev API data...', 'ModelsDev');
 
             const rawData = await fetchJson<Record<string, any>>(MODELS_DEV_API_URL);
-            const slimData = this.processRawData(rawData);
+            const rawProviderCount = Object.keys(rawData).length;
+            logger.info(
+                `Fetched models.dev payload with ${rawProviderCount} provider entries, processing...`,
+                'ModelsDev'
+            );
+
+            const { data: slimData, stats } = this.processRawData(rawData);
             this.data = slimData;
+
+            logger.info(
+                `Processed models.dev payload: providers ${stats.processedProviderCount}/${stats.rawProviderCount}, models ${stats.processedModelCount}/${stats.rawModelCount}`,
+                'ModelsDev'
+            );
+            if (stats.skippedProviderCount > 0 || stats.skippedModelCount > 0) {
+                logger.info(
+                    `Filtered invalid entries: ${stats.skippedProviderCount} provider(s), ${stats.skippedModelCount} model record(s)`,
+                    'ModelsDev'
+                );
+            }
+            if (stats.processedModelCount === 0) {
+                logger.warn(
+                    'Processed models.dev payload contains 0 models; runtime metadata resolution may be unavailable',
+                    'ModelsDev'
+                );
+            }
 
             const providerCount = Object.keys(slimData).length;
             let modelCount = 0;
@@ -454,17 +512,35 @@ export class ModelsDevRegistry {
      * Process raw API response into slim cached format.
      * Only retains fields needed for metadata resolution.
      */
-    private processRawData(raw: Record<string, any>): ModelsDevData {
+    private processRawData(raw: Record<string, any>): {
+        data: ModelsDevData;
+        stats: ModelsDevProcessingStats;
+    } {
         const result: ModelsDevData = {};
+        const stats: ModelsDevProcessingStats = {
+            rawProviderCount: Object.keys(raw).length,
+            processedProviderCount: 0,
+            skippedProviderCount: 0,
+            rawModelCount: 0,
+            processedModelCount: 0,
+            skippedModelCount: 0,
+        };
 
         for (const [providerId, providerRaw] of Object.entries(raw)) {
             if (!providerRaw || typeof providerRaw !== 'object' || !providerRaw.models) {
+                stats.skippedProviderCount++;
                 continue;
             }
 
+            const providerModels = providerRaw.models as Record<string, any>;
+            stats.rawModelCount += Object.keys(providerModels).length;
+
             const models: Record<string, ModelsDevModel> = {};
-            for (const [modelId, modelRaw] of Object.entries(providerRaw.models as Record<string, any>)) {
-                if (!modelRaw || typeof modelRaw !== 'object') { continue; }
+            for (const [modelId, modelRaw] of Object.entries(providerModels)) {
+                if (!modelRaw || typeof modelRaw !== 'object') {
+                    stats.skippedModelCount++;
+                    continue;
+                }
 
                 models[modelId] = {
                     id: modelRaw.id ?? modelId,
@@ -475,15 +551,17 @@ export class ModelsDevRegistry {
                     contextLimit: modelRaw.limit?.context,
                     outputLimit: modelRaw.limit?.output,
                 };
+                stats.processedModelCount++;
             }
 
             result[providerId] = {
                 id: providerRaw.id ?? providerId,
                 models
             };
+            stats.processedProviderCount++;
         }
 
-        return result;
+        return { data: result, stats };
     }
 }
 
