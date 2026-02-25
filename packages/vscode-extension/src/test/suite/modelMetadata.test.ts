@@ -8,8 +8,22 @@ import {
 	DEFAULT_MODEL_METADATA
 } from '../../modelMetadata';
 import { mergeMetadata as sharedMergeMetadata } from '@oai2lmapi/model-metadata';
+import { modelsDevRegistry } from '../../modelsDevClient';
 
 suite('ModelMetadata Unit Tests', () => {
+
+	// Disable modelsDevRegistry so tests use only static pattern matching
+	// (the extension activation in other test suites may have enabled it)
+	let wasEnabled: boolean;
+	suiteSetup(() => {
+		wasEnabled = (modelsDevRegistry as any)._enabled;
+		modelsDevRegistry.disable();
+	});
+	suiteTeardown(() => {
+		if (wasEnabled) {
+			modelsDevRegistry.enable();
+		}
+	});
 
 	// ============== Basic Model Matching Tests ==============
 
