@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-02-27
+
+### Fixed
+
+- models.dev registry now falls back to stale cached data when an online fetch fails (instead of losing the existing cache on error).
+
+### Changed
+
+- `onModelsLoaded()` calls from all provider channels (OpenAI, Gemini, Claude) are now batched with a 200 ms debounce window, so only a single models.dev re-fetch is triggered per load cycle instead of one per channel.
+
 ## [0.3.2] - 2026-02-27
 
 ### Fixed
