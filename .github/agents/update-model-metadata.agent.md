@@ -104,24 +104,26 @@ If a model is not found in models.dev, fetch from `https://openrouter.ai/api/v1/
 
 When the same model is available from multiple providers, **prioritize official provider data**:
 
-| Model Family                  | Preferred Provider ID                 | Fallback 1 (models.dev)    | Fallback 2 (API)  |
-| ----------------------------- | ------------------------------------- | -------------------------- | ----------------- |
-| GPT / o1 / o3 / o4 / Codex    | `openai`                              | `openrouter` in models.dev | openrouter.ai API |
-| Claude                        | `anthropic`                           | `openrouter` in models.dev | openrouter.ai API |
-| Gemini / Gemma                | `google-vertex` or `google-ai-studio` | `openrouter` in models.dev | openrouter.ai API |
-| Qwen / Qwen3                  | `qwen` or `alibaba`                   | `openrouter` in models.dev | openrouter.ai API |
-| Kimi                          | `moonshot`                            | `openrouter` in models.dev | openrouter.ai API |
-| DeepSeek                      | `deepseek`                            | `openrouter` in models.dev | openrouter.ai API |
-| Llama                         | `meta` or `together`                  | `openrouter` in models.dev | openrouter.ai API |
-| Mistral / Codestral / Pixtral | `mistral`                             | `openrouter` in models.dev | openrouter.ai API |
-| Grok                          | `xai`                                 | `openrouter` in models.dev | openrouter.ai API |
-| Nova                          | `amazon-bedrock`                      | `openrouter` in models.dev | openrouter.ai API |
-| Command                       | `cohere`                              | `openrouter` in models.dev | openrouter.ai API |
-| GLM                           | `zhipu` or `z-ai`                     | `openrouter` in models.dev | openrouter.ai API |
-| Ernie                         | `baidu`                               | `openrouter` in models.dev | openrouter.ai API |
-| Hunyuan                       | `tencent`                             | `openrouter` in models.dev | openrouter.ai API |
-| Phi                           | `microsoft` or `azure`                | `openrouter` in models.dev | openrouter.ai API |
-| Others                        | Provider-specific                     | `openrouter` in models.dev | openrouter.ai API |
+| Model Family                  | Preferred Provider ID          | Fallback 1 (models.dev)    | Fallback 2 (API)  |
+| ----------------------------- | ------------------------------ | -------------------------- | ----------------- |
+| GPT / o1 / o3 / o4 / Codex    | `openai`                       | `openrouter` in models.dev | openrouter.ai API |
+| Claude                        | `anthropic`                    | `openrouter` in models.dev | openrouter.ai API |
+| Gemini / Gemma                | `google` or `google-vertex`    | `openrouter` in models.dev | openrouter.ai API |
+| Qwen / Qwen3 / QwQ / QvQ      | `alibaba`                      | `openrouter` in models.dev | openrouter.ai API |
+| Kimi                          | `moonshotai`                   | `openrouter` in models.dev | openrouter.ai API |
+| DeepSeek                      | `deepseek`                     | `openrouter` in models.dev | openrouter.ai API |
+| Llama                         | `llama` or `togetherai`        | `openrouter` in models.dev | openrouter.ai API |
+| Mistral / Codestral / Pixtral | `mistral`                      | `openrouter` in models.dev | openrouter.ai API |
+| Grok                          | `xai`                          | `openrouter` in models.dev | openrouter.ai API |
+| Seed                          | `openrouter` (bytedance-seed/) | —                          | —                 |
+| Nova                          | `amazon-bedrock` or `nova`     | `openrouter` in models.dev | openrouter.ai API |
+| Command                       | `cohere`                       | `openrouter` in models.dev | openrouter.ai API |
+| GLM                           | `zhipuai` or `zai`             | `openrouter` in models.dev | openrouter.ai API |
+| MiniMax                       | `minimax`                      | `openrouter` in models.dev | openrouter.ai API |
+| Nemotron / Phi                | `nvidia`                       | `openrouter` in models.dev | openrouter.ai API |
+| Step                          | `stepfun`                      | `openrouter` in models.dev | openrouter.ai API |
+| MiMo                          | `xiaomi`                       | `openrouter` in models.dev | openrouter.ai API |
+| Others                        | Provider-specific              | `openrouter` in models.dev | openrouter.ai API |
 
 ### Step 3: Model Selection Criteria
 

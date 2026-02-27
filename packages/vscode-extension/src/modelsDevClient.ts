@@ -120,17 +120,17 @@ const FAMILY_PROVIDER_ENTRIES: [string, string[]][] = Object.entries<string[]>({
 
     'claude': ['anthropic'],
 
-    'gemini': ['google-vertex', 'google-ai-studio'],
-    'gemma': ['google-vertex', 'google-ai-studio'],
+    'gemini': ['google', 'google-vertex'],
+    'gemma': ['google', 'google-vertex'],
 
-    'qwen': ['qwen', 'alibaba'],
-    'qwq': ['qwen', 'alibaba'],
-    'qvq': ['qwen', 'alibaba'],
+    'qwen': ['alibaba'],
+    'qwq': ['alibaba'],
+    'qvq': ['alibaba'],
 
-    'kimi': ['moonshot'],
+    'kimi': ['moonshotai'],
     'deepseek': ['deepseek'],
 
-    'llama': ['meta', 'together'],
+    'llama': ['llama', 'togetherai'],
 
     'mistral': ['mistral'],
     'mixtral': ['mistral'],
@@ -144,14 +144,17 @@ const FAMILY_PROVIDER_ENTRIES: [string, string[]][] = Object.entries<string[]>({
     'nova': ['amazon-bedrock'],
     'command': ['cohere'],
 
-    'glm': ['zhipu', 'z-ai'],
-    'ernie': ['baidu'],
-    'hunyuan': ['tencent'],
+    'glm': ['zhipuai', 'zai'],
 
-    'phi': ['microsoft', 'azure'],
+    'phi': ['nvidia'],
+    'nemotron': ['nvidia'],
 
-    'seed': ['bytedance', 'bytedance-seed'],
-    'doubao': ['bytedance', 'bytedance-seed'],
+    'seed': ['openrouter'],
+    'doubao': ['openrouter'],
+
+    'minimax': ['minimax'],
+    'step': ['stepfun'],
+    'mimo': ['xiaomi'],
 }).sort((a, b) => b[0].length - a[0].length);
 
 /**
@@ -327,22 +330,19 @@ export class ModelsDevRegistry {
             searchProviders.push('openrouter');
         }
 
-        const attemptTrace: string[] = [];
         const providerPath = searchProviders.join(' -> ');
 
         // Phase 1: ID → ID matching across providers in priority order
         for (const provId of searchProviders) {
             const result = this.matchIdInProvider(provId, modelName);
             if (result) {
-                attemptTrace.push(`ID:${provId}:hit`);
                 const metadata = this.toMetadata(result);
                 logger.info(
-                    `Resolve trace model="${modelId}" displayName="${displayName ?? ''}" providerPath=[${providerPath}] attempts=[${attemptTrace.join(', ')}] final=${toLogJson({ matchedBy: 'id', provider: provId, model: result, metadata })}`,
+                    `Resolved "${modelId}" via ID@${provId} [${providerPath}] => ${toLogJson(metadata)}`,
                     'ModelsDev'
                 );
                 return metadata;
             }
-            attemptTrace.push(`ID:${provId}:miss`);
         }
 
         // Phase 2: Name → Name matching across providers in priority order
@@ -350,22 +350,18 @@ export class ModelsDevRegistry {
             for (const provId of searchProviders) {
                 const result = this.matchNameInProvider(provId, displayName);
                 if (result) {
-                    attemptTrace.push(`NAME:${provId}:hit`);
                     const metadata = this.toMetadata(result);
                     logger.info(
-                        `Resolve trace model="${modelId}" displayName="${displayName}" providerPath=[${providerPath}] attempts=[${attemptTrace.join(', ')}] final=${toLogJson({ matchedBy: 'name', provider: provId, model: result, metadata })}`,
+                        `Resolved "${modelId}" via Name@${provId} [${providerPath}] => ${toLogJson(metadata)}`,
                         'ModelsDev'
                     );
                     return metadata;
                 }
-                attemptTrace.push(`NAME:${provId}:miss`);
             }
-        } else {
-            attemptTrace.push('NAME:skip(no-display-name)');
         }
 
         logger.info(
-            `Resolve trace model="${modelId}" displayName="${displayName ?? ''}" providerPath=[${providerPath}] attempts=[${attemptTrace.join(', ')}] final=undefined`,
+            `No match for "${modelId}" in [${providerPath}]`,
             'ModelsDev'
         );
 

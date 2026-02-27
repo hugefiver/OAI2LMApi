@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Corrected models.dev provider names in `FAMILY_PROVIDER_ENTRIES` to match actual API provider IDs:
+  - Gemini/Gemma: `google-ai-studio` → `google`
+  - Qwen/QwQ/QvQ: removed non-existent `qwen` provider, using `alibaba` only
+  - Kimi: `moonshot` → `moonshotai`
+  - Llama: `meta`/`together` → `llama`/`togetherai`
+  - GLM: `zhipu`/`z-ai` → `zhipuai`/`zai`
+  - Phi: `microsoft`/`azure` → `nvidia`
+  - Seed: `bytedance`/`bytedance-seed` → `openrouter`
+  - Removed non-existent `baidu` (Ernie) and `tencent` (Hunyuan) providers
+  - Added `minimax`, `stepfun` (Step), `xiaomi` (MiMo), `nemotron` (NVIDIA) entries
+
+### Changed
+
+- Simplified models.dev resolve logging: each model match now prints only the match path and final metadata instead of verbose attempt traces.
+
 ## [0.3.1] - 2026-02-06
 
 ### Added
