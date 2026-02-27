@@ -23,6 +23,9 @@ const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const CACHE_KEY = 'oai2lmapi.modelsDevCache';
 const KNOWN_MODELS_KEY = 'oai2lmapi.modelsDevKnownModels';
 
+/** Cache TTL: 7 days in milliseconds. */
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 // --- Types ---
 
 /** Slim model info extracted from models.dev API response. */
@@ -236,9 +239,8 @@ export class ModelsDevRegistry {
     }
 
     /**
-     * Initialize the registry: load cached data or fetch from API.
-     * If no cache exists and registry is enabled, awaits the first fetch
-     * so data is available for subsequent model loading.
+     * Initialize the registry: load cached data (7-day TTL).
+     * Only fetches from API if cache is missing or expired.
      */
     async initialize(storage: ModelsDevStorage): Promise<void> {
         this.storage = storage;
@@ -252,15 +254,28 @@ export class ModelsDevRegistry {
             this.knownModelIds = new Set(knownIds);
         }
 
-        // Load cached data
+        // Load cached data and check TTL
         const cached = storage.get<ModelsDevCacheEnvelope>(CACHE_KEY);
         if (cached?.data) {
+            const age = Date.now() - cached.fetchedAt;
             this.data = cached.data;
             const providerCount = Object.keys(cached.data).length;
+
+            if (age < CACHE_TTL_MS) {
+                const daysLeft = Math.ceil((CACHE_TTL_MS - age) / (24 * 60 * 60 * 1000));
+                logger.info(
+                    `Loaded models.dev cache (${providerCount} providers, fetched ${new Date(cached.fetchedAt).toISOString()}, expires in ~${daysLeft}d)`,
+                    'ModelsDev'
+                );
+                return; // Cache is still valid
+            }
+
+            // Cache expired — use stale data but refresh in background
             logger.info(
-                `Loaded models.dev cache (${providerCount} providers, fetched ${new Date(cached.fetchedAt).toISOString()})`,
+                `models.dev cache expired (${providerCount} providers, fetched ${new Date(cached.fetchedAt).toISOString()}), refreshing in background...`,
                 'ModelsDev'
             );
+            this.fetchInBackground();
         } else {
             // No cache — fetch synchronously so data is ready for first model load
             logger.info('No models.dev cache found, fetching...', 'ModelsDev');
@@ -270,7 +285,7 @@ export class ModelsDevRegistry {
 
     /**
      * Notify the registry that providers have loaded model IDs.
-     * If new (unseen) model IDs are detected, triggers a background re-fetch.
+     * Only triggers a re-fetch if new (previously unseen) model IDs are detected.
      */
     async onModelsLoaded(modelIds: string[]): Promise<void> {
         if (!this._enabled || !this.storage) {
@@ -287,12 +302,32 @@ export class ModelsDevRegistry {
 
         if (newModels.length > 0) {
             logger.info(
-                `Detected ${newModels.length} new model(s), scheduling models.dev re-fetch`,
+                `Detected ${newModels.length} new model(s): [${newModels.slice(0, 5).join(', ')}${newModels.length > 5 ? ', ...' : ''}], scheduling models.dev re-fetch`,
                 'ModelsDev'
             );
             await this.storage.update(KNOWN_MODELS_KEY, [...this.knownModelIds]);
             this.fetchInBackground();
         }
+    }
+
+    /**
+     * Force refresh: fetches latest data from models.dev API,
+     * updates the cache, and resets known model tracking.
+     * Intended for user-triggered manual refresh.
+     */
+    async refresh(): Promise<void> {
+        if (!this._enabled || !this.storage) {
+            logger.warn('Cannot refresh: registry not enabled or storage not set', 'ModelsDev');
+            return;
+        }
+
+        logger.info('Manual refresh triggered, fetching latest models.dev data...', 'ModelsDev');
+
+        // Clear known models so new data is fully ingested
+        this.knownModelIds.clear();
+        await this.storage.update(KNOWN_MODELS_KEY, []);
+
+        await this.fetchAndCache();
     }
 
     /**

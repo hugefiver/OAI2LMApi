@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Simplified models.dev resolve logging: each model match now prints only the match path and final metadata instead of verbose attempt traces.
+- Redesigned models.dev cache lifecycle with 7-day TTL: on initialization, the registry loads cached data and only fetches from the API when cache is missing or expired. New model IDs detected via `onModelsLoaded()` still trigger a background re-fetch. The "Refresh Models" command now also force-refreshes the models.dev cache.
 
 ## [0.3.1] - 2026-02-06
 

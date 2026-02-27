@@ -19,6 +19,12 @@ export function activate(context: vscode.ExtensionContext) {
     // This prevents "command not found" errors even if initialization fails
     const refreshCommand = vscode.commands.registerCommand('oai2lmapi.refreshModels', async () => {
         let refreshed = false;
+
+        // Refresh models.dev cache first (force re-fetch)
+        if (modelsDevRegistry.enabled) {
+            await modelsDevRegistry.refresh();
+        }
+
         if (languageModelProvider) {
             await languageModelProvider.loadModels();
             refreshed = true;
