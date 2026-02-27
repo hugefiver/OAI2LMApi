@@ -223,6 +223,13 @@ export class ModelsDevRegistry {
     private storage: ModelsDevStorage | null = null;
     private fetching: Promise<void> | null = null;
 
+    /** Debounce timer for batching onModelsLoaded calls across channels. */
+    private batchTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Buffer collecting model IDs from multiple channels before processing. */
+    private pendingModelIds: string[] = [];
+    /** Debounce window (ms) for batching onModelsLoaded calls. */
+    private static readonly batchDebounceMs = 200;
+
     /** Whether the registry is enabled. */
     get enabled(): boolean {
         return this._enabled;
@@ -285,15 +292,45 @@ export class ModelsDevRegistry {
 
     /**
      * Notify the registry that providers have loaded model IDs.
-     * Only triggers a re-fetch if new (previously unseen) model IDs are detected.
+     *
+     * Model IDs are buffered and processed after a short debounce window
+     * so that multiple channels (OpenAI, Gemini, Claude) share a single
+     * models.dev fetch instead of each triggering independent requests.
      */
-    async onModelsLoaded(modelIds: string[]): Promise<void> {
+    onModelsLoaded(modelIds: string[]): void {
         if (!this._enabled || !this.storage) {
             return;
         }
 
+        // Buffer incoming IDs
+        this.pendingModelIds.push(...modelIds);
+
+        // Reset debounce timer
+        if (this.batchTimer !== null) {
+            clearTimeout(this.batchTimer);
+        }
+
+        this.batchTimer = setTimeout(() => {
+            this.batchTimer = null;
+            void this.processPendingModels();
+        }, ModelsDevRegistry.batchDebounceMs);
+    }
+
+    /**
+     * Process the buffered model IDs after the debounce window closes.
+     * Triggers a single re-fetch if any previously unseen models are detected.
+     */
+    private async processPendingModels(): Promise<void> {
+        if (!this.storage) {
+            return;
+        }
+
+        // Drain the buffer
+        const buffered = this.pendingModelIds;
+        this.pendingModelIds = [];
+
         const newModels: string[] = [];
-        for (const id of modelIds) {
+        for (const id of buffered) {
             if (!this.knownModelIds.has(id)) {
                 newModels.push(id);
                 this.knownModelIds.add(id);
@@ -535,7 +572,15 @@ export class ModelsDevRegistry {
                 'ModelsDev'
             );
         } catch (error) {
-            logger.error('Failed to fetch models.dev data', error, 'ModelsDev');
+            if (this.data) {
+                logger.warn(
+                    'Failed to fetch models.dev data; continuing with stale cached data',
+                    'ModelsDev'
+                );
+                logger.error('Fetch error details', error, 'ModelsDev');
+            } else {
+                logger.error('Failed to fetch models.dev data (no cached fallback available)', error, 'ModelsDev');
+            }
         }
     }
 

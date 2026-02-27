@@ -119,7 +119,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
             await this.context.globalState.update(CACHED_MODELS_KEY, apiModels);
 
             // Notify models.dev registry of loaded model IDs for new-model detection
-            await modelsDevRegistry.onModelsLoaded(apiModels.map(m => m.id));
+            modelsDevRegistry.onModelsLoaded(apiModels.map(m => m.id));
         } catch (error) {
             logger.error('Failed to load models from API', error, 'OpenAI');
             vscode.window.showErrorMessage(`OAI2LMApi: Failed to load models from API. Please check your endpoint and API key.`);

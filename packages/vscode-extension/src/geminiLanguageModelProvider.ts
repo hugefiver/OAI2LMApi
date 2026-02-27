@@ -151,7 +151,7 @@ export class GeminiLanguageModelProvider implements vscode.LanguageModelChatProv
             await this.context.globalState.update(GEMINI_CACHED_MODELS_KEY, apiModels);
 
             // Notify models.dev registry of loaded model IDs for new-model detection
-            await modelsDevRegistry.onModelsLoaded(
+            modelsDevRegistry.onModelsLoaded(
                 apiModels.map(m => getGeminiModelId(m)).filter((id): id is string => !!id)
             );
         } catch (error) {

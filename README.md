@@ -1,8 +1,7 @@
 # OAI2LMApi - OpenAI to Language Model API Bridge
 
 [![Build Status](https://github.com/hugefiver/OAI2LMApi/actions/workflows/build-test-package.yml/badge.svg)](https://github.com/hugefiver/OAI2LMApi/actions/workflows/build-test-package.yml)
-[![Version](https://img.shields.io/github/v/release/hugefiver/OAI2LMApi?filter=v*.*.*
-)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
+[![Version](https://img.shields.io/github/v/release/hugefiver/OAI2LMApi?filter=v*.*.*)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/oai2lmapi.oai2lmapi)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/oai2lmapi.oai2lmapi)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-Install-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=oai2lmapi.oai2lmapi)
@@ -19,6 +18,7 @@ A VSCode extension that connects OpenAI-compatible APIs to VSCode's Language Mod
 - ✅ **Thinking/Reasoning Support**: Stream reasoning content from models that support it (e.g., o1, Claude with thinking)
 - ✅ **Automatic Model Loading**: Fetches available models from the API endpoint on startup
 - ✅ **Model Caching**: Loaded models are cached locally for faster startup times
+- ✅ **Dynamic Model Metadata**: Fetches up-to-date token limits and capabilities from [models.dev](https://models.dev) with a 7-day local cache for offline use
 - ✅ **Secure API Key Storage**: API keys are stored securely using VSCode's SecretStorage
 - ✅ **Tool Calling Support**: Full support for tool/function calling with improved reliability
 - ✅ **XML-based Tool Calling**: Fallback prompt-based tool calling for models without native support
@@ -66,16 +66,16 @@ Or install directly via [VS Code Marketplace](https://marketplace.visualstudio.c
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `OAI2LMApi: Set API Key` | Securely store your OpenAI-compatible API key |
-| `OAI2LMApi: Clear API Key` | Remove the stored OpenAI-compatible API key |
-| `OAI2LMApi: Set Gemini API Key` | Securely store your Google Gemini API key |
-| `OAI2LMApi: Clear Gemini API Key` | Remove the stored Gemini API key |
-| `OAI2LMApi: Set Claude API Key` | Securely store your Claude API key |
-| `OAI2LMApi: Clear Claude API Key` | Remove the stored Claude API key |
-| `OAI2LMApi: Refresh Models` | Manually reload available models from all providers |
-| `OAI2LMApi: Manage Provider Settings` | Open extension settings |
+| Command                               | Description                                                                                         |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `OAI2LMApi: Set API Key`              | Securely store your OpenAI-compatible API key                                                       |
+| `OAI2LMApi: Clear API Key`            | Remove the stored OpenAI-compatible API key                                                         |
+| `OAI2LMApi: Set Gemini API Key`       | Securely store your Google Gemini API key                                                           |
+| `OAI2LMApi: Clear Gemini API Key`     | Remove the stored Gemini API key                                                                    |
+| `OAI2LMApi: Set Claude API Key`       | Securely store your Claude API key                                                                  |
+| `OAI2LMApi: Clear Claude API Key`     | Remove the stored Claude API key                                                                    |
+| `OAI2LMApi: Refresh Models`           | Manually reload available models from all providers and force-refresh the models.dev metadata cache |
+| `OAI2LMApi: Manage Provider Settings` | Open extension settings                                                                             |
 
 ## Configuration
 
@@ -83,25 +83,28 @@ Configure the extension through VSCode settings (`Ctrl+,` or `Cmd+,`):
 
 ### Basic Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `oai2lmapi.apiEndpoint` | `https://api.openai.com/v1` | OpenAI-compatible API endpoint URL |
-| `oai2lmapi.autoLoadModels` | `true` | Automatically load models from API on startup |
-| `oai2lmapi.showModelsWithoutToolCalling` | `false` | Show models that do not support tool/function calling |
+| Setting                                    | Default                     | Description                                                                                         |
+| ------------------------------------------ | --------------------------- | --------------------------------------------------------------------------------------------------- |
+| `oai2lmapi.apiEndpoint`                    | `https://api.openai.com/v1` | OpenAI-compatible API endpoint URL                                                                  |
+| `oai2lmapi.autoLoadModels`                 | `true`                      | Automatically load models from API on startup                                                       |
+| `oai2lmapi.showModelsWithoutToolCalling`   | `false`                     | Show models that do not support tool/function calling                                               |
+| `oai2lmapi.openaiResponsesApiMode`         | `off`                       | When to use the OpenAI Responses API: `off`, `gpt-only` (GPT models only), or `all`                 |
+| `oai2lmapi.suppressChainOfThought`         | `false`                     | Strip `<think>...</think>` blocks and suppress `reasoning_content`/`thinking` fields from responses |
+| `oai2lmapi.trimXmlToolParameterWhitespace` | `false`                     | Trim leading/trailing whitespace from XML-based tool call parameter values                          |
 
 ### Gemini Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `oai2lmapi.enableGeminiChannel` | `false` | Enable the Gemini channel provider |
-| `oai2lmapi.geminiApiEndpoint` | `https://generativelanguage.googleapis.com` | Google Gemini API endpoint URL |
+| Setting                         | Default                                     | Description                        |
+| ------------------------------- | ------------------------------------------- | ---------------------------------- |
+| `oai2lmapi.enableGeminiChannel` | `false`                                     | Enable the Gemini channel provider |
+| `oai2lmapi.geminiApiEndpoint`   | `https://generativelanguage.googleapis.com` | Google Gemini API endpoint URL     |
 
 ### Claude Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `oai2lmapi.enableClaudeChannel` | `false` | Enable the Claude channel provider |
-| `oai2lmapi.claudeApiEndpoint` | `https://api.anthropic.com/v1` | Anthropic Claude API endpoint URL. If left at default and the OpenAI endpoint is set to a custom OpenAI-compatible API, that endpoint is used for Claude requests. |
+| Setting                         | Default                        | Description                                                                                                                                                        |
+| ------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `oai2lmapi.enableClaudeChannel` | `false`                        | Enable the Claude channel provider                                                                                                                                 |
+| `oai2lmapi.claudeApiEndpoint`   | `https://api.anthropic.com/v1` | Anthropic Claude API endpoint URL. If left at default and the OpenAI endpoint is set to a custom OpenAI-compatible API, that endpoint is used for Claude requests. |
 
 ### Model Overrides
 
@@ -109,15 +112,17 @@ The `oai2lmapi.modelOverrides` setting allows per-model configuration. Keys are 
 
 The `oai2lmapi.channelModelOverrides` setting allows per-channel configuration. Keys are channel names (e.g. `openai`, `gemini`, `claude`) and values are objects mapping model patterns to override objects. Matching overrides are merged in order: global `modelOverrides` then channel overrides.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `maxInputTokens` | number | Override max input tokens |
-| `maxOutputTokens` | number | Override max output tokens |
-| `supportsToolCalling` | boolean | Override tool calling support |
-| `supportsImageInput` | boolean | Override image input support |
-| `temperature` | number | Default temperature for the model |
-| `thinkingLevel` | string/number | Thinking level: token budget number, or `'low'`/`'medium'`/`'high'`/`'auto'`/`'none'` |
-| `usePromptBasedToolCalling` | boolean | Use XML-based prompt tool calling instead of native function calling |
+| Property                    | Type          | Description                                                                                           |
+| --------------------------- | ------------- | ----------------------------------------------------------------------------------------------------- |
+| `maxInputTokens`            | number        | Override max input tokens                                                                             |
+| `maxOutputTokens`           | number        | Override max output tokens                                                                            |
+| `supportsToolCalling`       | boolean       | Override tool calling support                                                                         |
+| `supportsImageInput`        | boolean       | Override image input support                                                                          |
+| `temperature`               | number        | Default temperature for the model                                                                     |
+| `thinkingLevel`             | string/number | Thinking level: token budget number, or `'low'`/`'medium'`/`'high'`/`'auto'`/`'none'`                 |
+| `usePromptBasedToolCalling` | boolean       | Use XML-based prompt tool calling instead of native function calling                                  |
+| `useResponsesApi`           | boolean       | Force-enable or disable OpenAI Responses API for matching models (overrides `openaiResponsesApiMode`) |
+| `suppressChainOfThought`    | boolean       | Override `oai2lmapi.suppressChainOfThought` for matching models                                       |
 
 ### Example Configuration
 
