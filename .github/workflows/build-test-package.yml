@@ -63,7 +63,7 @@ jobs:
         run: pnpm --filter ./packages/vscode-extension run package
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: vscode-extension
           path: packages/vscode-extension/*.vsix
