@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-03-13
+
+### Fixed
+
+- Fixed `.vscodeignore` so test files (`out/test/**`) and the Windows `nul` device artifact are excluded from the VSIX package, reducing package size by ~22KB.
+- Removed stale `.vscodeignore` entries for deleted files (`MIGRATION.md`, `README.workspace.md`).
+
+### Changed
+
+- **Claude token counting**: `provideTokenCount` now calls the Anthropic `messages.countTokens` API for accurate token counts, falling back to character-based estimation on failure.
+- **OpenAI token counting**: Streaming requests now include `stream_options: { include_usage: true }` to capture `usage.prompt_tokens` from the API response. The token-per-character ratio is dynamically calibrated after each request, replacing the fixed `length/4` approximation.
+
 ## [0.4.1] - 2026-03-13
 
 ### Changed
