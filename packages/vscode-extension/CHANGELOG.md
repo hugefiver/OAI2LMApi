@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-03-13
+
+### Changed
+
+- Migrated Gemini channel from hand-rolled `fetch`-based API client to `@ai-sdk/google` SDK for improved compatibility and maintainability.
+- Rewrote `geminiClient.ts` (840→340 lines) to use SDK for model instantiation while retaining raw API for `listModels()` and `countTokens()`.
+- Rewrote `geminiLanguageModelProvider.ts` to use `LanguageModelV2.doStream()` with proper stream error propagation, structured token counting, system message merging, and endpoint normalization.
+
 ## [0.3.3] - 2026-02-27
 
 ### Fixed
