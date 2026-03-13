@@ -27,6 +27,7 @@ const Anthropic = _Anthropic as unknown as {
         };
         messages: {
             create(params: Record<string, unknown>): AsyncIterable<MessageStreamEvent> | Promise<AsyncIterable<MessageStreamEvent>>;
+            countTokens(params: Record<string, unknown>): Promise<{ input_tokens: number }>;
         };
     };
 };
@@ -422,6 +423,30 @@ export class ClaudeClient {
             }, 'Claude');
             throw new Error(`Failed to stream chat completion: ${error}`);
         }
+    }
+
+    /**
+     * Count tokens for the given messages using Claude's countTokens API.
+     * @param messages - The messages to count tokens for
+     * @param model - The model ID to use for token counting
+     * @param system - Optional system prompt
+     * @returns The number of input tokens
+     */
+    async countTokens(
+        messages: ClaudeMessageParam[],
+        model: string,
+        system?: string
+    ): Promise<number> {
+        const params: Record<string, unknown> = {
+            model,
+            messages
+        };
+        if (system) {
+            params.system = system;
+        }
+
+        const result = await this.client.messages.countTokens(params);
+        return result.input_tokens;
     }
 }
 

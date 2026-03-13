@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ClaudeClient, ClaudeModelInfo, ClaudeToolDefinition, ClaudeCompletedToolCall, convertVscodeMessagesToClaude } from './claudeClient';
+import { ClaudeClient, ClaudeModelInfo, ClaudeToolDefinition, ClaudeCompletedToolCall, ClaudeMessageParam, convertVscodeMessagesToClaude } from './claudeClient';
 import { CLAUDE_API_KEY_SECRET_KEY, CLAUDE_CACHED_MODELS_KEY } from './constants';
 import { getModelMetadata, isLLMModel, ModelMetadata } from './modelMetadata';
 import { generateXmlToolPrompt, formatToolCallAsXml, formatToolResultAsText, XmlToolCallStreamParser, XmlToolParseOptions } from './xmlToolPrompt';
@@ -429,20 +429,58 @@ export class ClaudeLanguageModelProvider implements vscode.LanguageModelChatProv
         text: string | vscode.LanguageModelChatRequestMessage,
         token: vscode.CancellationToken
     ): Promise<number> {
-        let textContent: string;
-        if (typeof text === 'string') {
-            textContent = text;
-        } else {
-            if (typeof text.content === 'string') {
-                textContent = text.content;
-            } else if (Array.isArray(text.content)) {
-                textContent = text.content.map(part => this.extractTextFromPart(part)).join('');
-            } else if (text.content && typeof text.content === 'object') {
-                textContent = this.extractTextFromPart(text.content);
-            } else {
-                textContent = '';
+        if (this.client) {
+            try {
+                const { messages, system } = this.buildCountTokensParams(text);
+                if (messages.length > 0) {
+                    return await this.client.countTokens(messages, model.modelId, system);
+                }
+            } catch {
+                // API failed, fall through to estimation
             }
         }
+
+        return this.estimateTokens(text);
+    }
+
+    private buildCountTokensParams(text: string | vscode.LanguageModelChatRequestMessage): { messages: ClaudeMessageParam[]; system?: string } {
+        if (typeof text === 'string') {
+            return { messages: [{ role: 'user', content: text }] };
+        }
+
+        const role = this.mapRole(text.role);
+        const textContent = this.extractAllText(text);
+
+        if (role === 'system') {
+            // System messages become the system param; need at least one user message
+            return {
+                messages: [{ role: 'user', content: '.' }],
+                system: textContent || undefined
+            };
+        }
+
+        if (!textContent) {
+            return { messages: [] };
+        }
+
+        return { messages: [{ role, content: textContent }] };
+    }
+
+    private extractAllText(msg: vscode.LanguageModelChatRequestMessage): string {
+        if (typeof msg.content === 'string') {
+            return msg.content;
+        }
+        if (Array.isArray(msg.content)) {
+            return msg.content.map(part => this.extractTextFromPart(part)).join('');
+        }
+        if (msg.content && typeof msg.content === 'object') {
+            return this.extractTextFromPart(msg.content);
+        }
+        return '';
+    }
+
+    private estimateTokens(text: string | vscode.LanguageModelChatRequestMessage): number {
+        const textContent = typeof text === 'string' ? text : this.extractAllText(text);
         return Math.ceil(textContent.length / 4);
     }
 
