@@ -55,6 +55,7 @@ Or install directly via [VS Code Marketplace](https://marketplace.visualstudio.c
 2. Run `pnpm install` to install dependencies
 3. Run `pnpm run compile` to build the extension
 4. Press `F5` in VSCode to run the extension in debug mode
+5. To create a VSIX, run `pnpm run package` — the file will be generated in the root directory (e.g., `oai2lmapi-0.3.4.vsix`).
 
 ## Quick Start
 
@@ -76,6 +77,7 @@ Or install directly via [VS Code Marketplace](https://marketplace.visualstudio.c
 | `OAI2LMApi: Clear Claude API Key`     | Remove the stored Claude API key                                                                    |
 | `OAI2LMApi: Refresh Models`           | Manually reload available models from all providers and force-refresh the models.dev metadata cache |
 | `OAI2LMApi: Manage Provider Settings` | Open extension settings                                                                             |
+| `OAI2LMApi: Manage Claude Provider Settings` | Open Claude channel settings                                                                  |
 
 ## Configuration
 
@@ -104,7 +106,7 @@ Configure the extension through VSCode settings (`Ctrl+,` or `Cmd+,`):
 | Setting                         | Default                        | Description                                                                                                                                                        |
 | ------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `oai2lmapi.enableClaudeChannel` | `false`                        | Enable the Claude channel provider                                                                                                                                 |
-| `oai2lmapi.claudeApiEndpoint`   | `https://api.anthropic.com/v1` | Anthropic Claude API endpoint URL. If left at default and the OpenAI endpoint is set to a custom OpenAI-compatible API, that endpoint is used for Claude requests. |
+| `oai2lmapi.claudeApiEndpoint`   | `""` (empty)                   | Anthropic Claude API endpoint URL. If empty and the OpenAI endpoint is set to a custom OpenAI-compatible API, that endpoint is used for Claude requests. Defaults to `https://api.anthropic.com/v1` at runtime when left empty. |
 
 ### Model Overrides
 
@@ -123,6 +125,7 @@ The `oai2lmapi.channelModelOverrides` setting allows per-channel configuration. 
 | `usePromptBasedToolCalling` | boolean       | Use XML-based prompt tool calling instead of native function calling                                  |
 | `useResponsesApi`           | boolean       | Force-enable or disable OpenAI Responses API for matching models (overrides `openaiResponsesApiMode`) |
 | `suppressChainOfThought`    | boolean       | Override `oai2lmapi.suppressChainOfThought` for matching models                                       |
+| `trimXmlToolParameterWhitespace` | boolean  | Override `oai2lmapi.trimXmlToolParameterWhitespace` for matching models                               |
 
 ### Example Configuration
 
@@ -211,7 +214,7 @@ This extension works with any API that implements the OpenAI chat completions fo
 
 ## Development Notes
 
-- Model metadata patterns are maintained in `@oai2lmapi/model-metadata` (`packages/model-metadata/src/index.ts`) and shared across all packages.
+- Model metadata patterns are maintained in `@oai2lmapi/model-metadata` (`packages/model-metadata/src/index.ts`) and shared across the project.
 
 ## License
 

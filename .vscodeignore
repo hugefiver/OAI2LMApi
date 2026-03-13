@@ -1,0 +1,41 @@
+# Source and dev files
+src/**
+scripts/**
+esbuild.js
+tsconfig.json
+eslint.config.mjs
+.mocharc.json
+.npmrc
+
+# Build artifacts not needed in VSIX
+out/test/**
+**/*.map
+**/*.ts
+!out/**/*.js
+
+# Test and dev tooling
+.vscode/**
+.vscode-test/**
+
+# Workspace and monorepo files
+packages/**
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# Git and CI
+.git/**
+.gitignore
+.github/**
+
+# Documentation and metadata not needed in VSIX
+AGENTS.md
+MIGRATION.md
+README.workspace.md
+vsc-extension-quickstart.md
+.yarnrc
+
+# Node modules (esbuild bundles dependencies)
+node_modules/**
+
+# Misc
+**/.eslintrc.json

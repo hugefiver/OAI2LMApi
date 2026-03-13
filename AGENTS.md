@@ -1,55 +1,42 @@
 # AGENTS.md — OAI2LMApi
 
-VSCode extension monorepo that bridges OpenAI-compatible APIs to the VSCode Language Model API.
+VSCode extension that bridges OpenAI-compatible APIs to the VSCode Language Model API.
 Supports OpenAI, Gemini, and Claude channels with streaming, tool calling, and thinking/reasoning.
 
 ## Project Structure
 
 ```
+src/                    # Extension source code
+out/                    # Build output
+assets/                 # Extension assets
+scripts/                # Build scripts
 packages/
-  vscode-extension/   # Main VSCode extension (CommonJS, Mocha tests)
-  opencode-provider/   # AI SDK provider + OpenCode plugin (ESM, esbuild)
   model-metadata/      # Shared model metadata registry (dual CJS+ESM)
+package.json            # Extension manifest + workspace config
+pnpm-workspace.yaml     # Workspace configuration
 ```
 
 ## Tech Stack
 
 - **TypeScript 5.9.3** with strict mode enabled everywhere
 - **Node ≥18**, **pnpm ≥10** (monorepo with `pnpm-workspace.yaml`)
-- **esbuild** for bundling (vscode-extension + opencode-provider)
-- **ESLint 9.x** flat config (`eslint.config.mjs` per package)
-- **Mocha + @vscode/test-electron** for vscode-extension tests
+- **esbuild** for bundling
+- **ESLint 9.x** flat config (`eslint.config.mjs`)
+- **Mocha + @vscode/test-electron** for extension tests
 - **node:test** (built-in) for model-metadata tests
 
 ## Build & Run Commands
 
-### Root-level (all packages)
+### Extension
 
 ```bash
-pnpm run build          # Build all packages
-pnpm run lint           # Lint all packages
-pnpm run test           # Test all packages
-pnpm run clean          # Clean all packages
-```
-
-### vscode-extension
-
-```bash
-pnpm --filter oai2lmapi run compile        # Full build (esbuild + type check)
-pnpm --filter oai2lmapi run compile:tests  # Compile test files (tsc)
-pnpm --filter oai2lmapi run check-types    # Type check only (tsc --noEmit)
-pnpm --filter oai2lmapi run lint           # ESLint src/
-pnpm --filter oai2lmapi run test           # Run Mocha tests (auto-runs pretest)
-pnpm --filter oai2lmapi run package        # vsce package --no-dependencies
-pnpm --filter oai2lmapi run watch          # Watch mode (esbuild + tsc parallel)
-```
-
-### opencode-provider
-
-```bash
-pnpm --filter @oai2lmapi/opencode-provider run build        # esbuild + tsc declarations
-pnpm --filter @oai2lmapi/opencode-provider run check-types  # tsc --noEmit
-pnpm --filter @oai2lmapi/opencode-provider run lint         # ESLint src/
+pnpm run build          # Full build (esbuild + type check)
+pnpm run compile:tests  # Compile test files (tsc)
+pnpm run check-types    # Type check only (tsc --noEmit)
+pnpm run lint           # ESLint src/
+pnpm run test           # Run Mocha tests (auto-runs pretest)
+pnpm run package        # vsce package --no-dependencies
+pnpm run watch          # Watch mode (esbuild + tsc parallel)
 ```
 
 ### model-metadata
@@ -62,7 +49,7 @@ pnpm --filter @oai2lmapi/model-metadata run lint   # ESLint src/
 
 ### Running a Single Test
 
-**vscode-extension** (Mocha): Tests run inside an Electron host. You cannot easily filter
+**Extension** (Mocha): Tests run inside an Electron host. You cannot easily filter
 individual tests from the CLI — the test runner is `out/test/runTest.js`. To run specific
 tests, use Mocha's `--grep` by editing `src/test/suite/index.ts` or using `.only`:
 
@@ -71,7 +58,7 @@ tests, use Mocha's `--grep` by editing `src/test/suite/index.ts` or using `.only
 test.only('should resolve model metadata', async () => { ... });
 ```
 
-Then: `pnpm --filter oai2lmapi run test`
+Then: `pnpm run test`
 
 **model-metadata** (node:test): Use `--test-name-pattern`:
 
@@ -112,7 +99,7 @@ On Linux, wrap test with: `xvfb-run -a pnpm run test`
 - Use **named imports**: `import { foo } from './bar';`
 - Use `node:` protocol for Node builtins: `import { readFileSync } from 'node:fs';`
 - Group logically: external libs → workspace packages → relative imports
-- vscode-extension uses CommonJS module resolution; opencode-provider uses ESM (bundler resolution)
+- vscode-extension uses CommonJS module resolution; opencode-provider is no longer part of the project.
 
 ### Formatting
 

@@ -1,6 +1,6 @@
 # @oai2lmapi/model-metadata
 
-Shared model metadata registry used by the VSCode extension and OpenCode provider.
+Shared model metadata registry used by the OAI2LMApi VSCode extension.
 
 ## Usage
 

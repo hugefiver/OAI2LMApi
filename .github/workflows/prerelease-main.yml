@@ -5,8 +5,17 @@ on:
     branches:
       - main
     paths:
-      - "packages/vscode-extension/**"
+      - "src/**"
       - "packages/model-metadata/**"
+      - "scripts/**"
+      - "assets/**"
+      - "esbuild.js"
+      - "tsconfig.json"
+      - "eslint.config.mjs"
+      - ".vscodeignore"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
       - ".github/workflows/prerelease-main.yml"
 
 jobs:
@@ -47,13 +56,13 @@ jobs:
 
       # Run lint and tests before packaging
       - name: Run ESLint
-        run: pnpm --filter ./packages/vscode-extension run lint
+        run: pnpm run lint
 
       - name: Compile TypeScript
-        run: pnpm --filter ./packages/vscode-extension run build
+        run: pnpm run build
 
       - name: Run tests
-        run: xvfb-run -a pnpm --filter ./packages/vscode-extension run test
+        run: xvfb-run -a pnpm run test
 
       # Get version from package.json for VS Code Marketplace prerelease
       # For pre-releases, use MAJOR.MINOR.X format where X = PATCH * 10^7 + SUFFIX (timestamp % 10^7).
@@ -63,7 +72,6 @@ jobs:
       - name: Get and adjust version for prerelease
         id: version
         shell: bash
-        working-directory: packages/vscode-extension
         run: |
           MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
           MINOR=$(node -p "require('./package.json').version.split('.')[1]")
@@ -79,18 +87,15 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using pre-release version $VERSION (patch: $PATCH, suffix: $SUFFIX, third: $THIRD_COMPONENT)"
 
-      - name: Copy README to extension
-        run: cp README.md packages/vscode-extension/README.md
-
       # Package with --pre-release flag for VS Code Marketplace
       - name: Package extension
-        run: pnpm --filter ./packages/vscode-extension exec vsce package --no-dependencies --pre-release
+        run: pnpm exec vsce package --no-dependencies --pre-release
 
       - name: Get VSIX filename
         id: vsix
         shell: bash
         run: |
-          VSIX_FILE=$(ls packages/vscode-extension/*.vsix | head -n 1)
+          VSIX_FILE=$(ls *.vsix | head -n 1)
           echo "filename=$VSIX_FILE" >> $GITHUB_OUTPUT
 
       - name: Publish to VS Code Marketplace (Preview)

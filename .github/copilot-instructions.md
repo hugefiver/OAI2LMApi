@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**OAI2LMApi** is a monorepo that includes a VSCode extension, an OpenCode provider, and a shared model metadata package. The VSCode extension bridges OpenAI-compatible APIs to VSCode's Language Model API for GitHub Copilot Chat and other AI-powered features.
+**OAI2LMApi** bridges OpenAI-compatible APIs to VSCode's Language Model API for GitHub Copilot Chat and other AI-powered features.
 
 ### Technology Stack
 
@@ -20,35 +20,35 @@
 ├── .github/workflows/          # CI/CD pipelines
 │   ├── lint-test.yml           # Linting and testing workflow
 │   ├── build-test-package.yml  # Build and package workflow
+│   ├── prerelease-main.yml     # Prerelease on main push workflow
 │   └── release.yml             # Release to marketplace workflow
 ├── .vscode/                    # VSCode workspace settings
 │   ├── launch.json             # Debug configurations
 │   ├── tasks.json              # Build tasks
 │   └── extensions.json         # Recommended extensions
+├── src/                        # Extension source code
+├── out/                        # Build output (generated, gitignored)
+├── assets/                     # Extension assets
+├── scripts/                    # Build scripts
 ├── packages/                   # Workspace packages
-│   ├── vscode-extension/       # VSCode extension package
-│   │   ├── src/                # Extension source code
-│   │   ├── out/                # Build output (generated, gitignored)
-│   │   ├── esbuild.js          # Custom esbuild bundler
-│   │   └── package.json        # Extension manifest and scripts
-│   ├── opencode-provider/      # OpenCode provider package
-│   │   ├── src/                # Provider source code
-│   │   └── package.json        # Provider manifest and scripts
 │   └── model-metadata/         # Shared model metadata package
 │       ├── src/index.ts        # Shared model metadata registry
 │       └── package.json        # Shared metadata manifest and scripts
-├── package.json                # Root workspace scripts
+├── esbuild.js                  # Custom esbuild bundler
+├── package.json                # Extension manifest and scripts
+├── tsconfig.json               # TypeScript compiler settings
+├── eslint.config.mjs           # ESLint config
 ├── pnpm-workspace.yaml         # Workspace configuration
-└── README.workspace.md         # Monorepo overview
+└── README.md                   # Project overview
 ```
 
 ### Key Files
 
-- **entry point**: `packages/vscode-extension/src/extension.ts` - exports `activate()` and `deactivate()`
-- **extension manifest**: `packages/vscode-extension/package.json` - VSCode extension metadata, commands, and configuration
+- **entry point**: `src/extension.ts` - exports `activate()` and `deactivate()`
+- **extension manifest**: `package.json` - VSCode extension metadata, commands, and configuration
 - **shared metadata**: `packages/model-metadata/src/index.ts` - model metadata registry used by all packages
-- **esbuild.js**: `packages/vscode-extension/esbuild.js` bundles extension into `packages/vscode-extension/out/extension.js`
-- **tsconfig.json**: `packages/vscode-extension/tsconfig.json` TypeScript compiler settings for the extension
+- **esbuild.js**: bundles extension into `out/extension.js`
+- **tsconfig.json**: TypeScript compiler settings for the extension
 
 ## Build & Development Workflow
 
@@ -72,7 +72,7 @@ npm install -g pnpm@10
    - Creates `node_modules/` with 545 packages
    - You may see warnings about ignored build scripts (safe to ignore)
 
-> **Monorepo note**: VSCode extension commands (`check-types`, `lint`, `compile`, `test`, `package`) are run from `packages/vscode-extension` (or via `pnpm --filter @oai2lmapi/vscode-extension`).
+> **Build note**: All VSCode extension commands (`check-types`, `lint`, `compile`, `test`, `package`) are run from the project root. Use `pnpm --filter @oai2lmapi/model-metadata` for the metadata package.
 
 ### Build Commands
 
@@ -268,7 +268,7 @@ Runs on version tags (v\*). Publishes to VS Code Marketplace.
 
 ### Known TODOs
 
-- `packages/vscode-extension/src/openaiClient.ts:195`: Chain-of-thought (reasoning_content) transmission not implemented
+- `src/openaiClient.ts:195`: Chain-of-thought (reasoning_content) transmission not implemented
 
 # Model Sync Rule
 

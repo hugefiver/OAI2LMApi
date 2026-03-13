@@ -25,7 +25,7 @@ function getLatestMtime(fileOrDirPath) {
   return latestMtime;
 }
 
-const root = path.resolve(__dirname, '..', '..', 'model-metadata');
+const root = path.resolve(__dirname, '..', 'packages', 'model-metadata');
 const srcDir = path.join(root, 'src');
 const dist = path.join(root, 'dist', 'index.js');
 const distDts = path.join(root, 'dist', 'index.d.ts');

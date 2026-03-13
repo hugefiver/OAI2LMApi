@@ -5,18 +5,32 @@ on:
     branches:
       - '**'  # Run on all branches
     paths:
-      - 'packages/vscode-extension/**'
+      - 'src/**'
       - 'packages/model-metadata/**'
+      - 'scripts/**'
+      - 'assets/**'
+      - 'esbuild.js'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
+      - '.vscodeignore'
       - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - 'package.json'
       - '.github/workflows/build-test-package.yml'
   pull_request:
     branches:
       - '**'
     paths:
-      - 'packages/vscode-extension/**'
+      - 'src/**'
       - 'packages/model-metadata/**'
+      - 'scripts/**'
+      - 'assets/**'
+      - 'esbuild.js'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
+      - '.vscodeignore'
       - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - 'package.json'
       - '.github/workflows/build-test-package.yml'
 
@@ -57,14 +71,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm --filter ./packages/vscode-extension run build
+        run: pnpm run build
 
       - name: Package extension
-        run: pnpm --filter ./packages/vscode-extension run package
+        run: pnpm run package
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
         with:
           name: vscode-extension
-          path: packages/vscode-extension/*.vsix
+          path: '*.vsix'
           retention-days: 30
