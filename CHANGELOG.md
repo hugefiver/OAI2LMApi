@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-03-13
+
+### Changed
+
+- **BREAKING**: Restructured monorepo — removed `opencode-provider` package and promoted `vscode-extension` to the project root.
+- Root `package.json` now serves as both the VSCode extension manifest and pnpm workspace root.
+- `pnpm-workspace.yaml` now only references `packages/model-metadata`.
+- Rewrote `.vscodeignore` for correct root-level VSIX packaging (excludes `packages/`, `scripts/`, workspace files).
+- Updated all GitHub Actions workflow path filters to cover root-level build/config files.
+
+### Removed
+
+- `packages/opencode-provider/` — entirely removed from the project.
+- `packages/vscode-extension/` — contents moved to project root.
+- 3 opencode-specific CI workflows (`opencode-lint-test.yml`, `opencode-prerelease-main.yml`, `opencode-release.yml`).
+- `MIGRATION.md` and `README.workspace.md` — no longer relevant.
+
 ## [0.3.4] - 2026-03-13
 
 ### Changed
