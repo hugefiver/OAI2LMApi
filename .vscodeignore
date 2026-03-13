@@ -8,10 +8,9 @@ eslint.config.mjs
 .npmrc
 
 # Build artifacts not needed in VSIX
-out/test/**
 **/*.map
 **/*.ts
-!out/**/*.js
+out/test/**
 
 # Test and dev tooling
 .vscode/**
@@ -29,13 +28,14 @@ pnpm-workspace.yaml
 
 # Documentation and metadata not needed in VSIX
 AGENTS.md
-MIGRATION.md
-README.workspace.md
 vsc-extension-quickstart.md
-.yarnrc
 
 # Node modules (esbuild bundles dependencies)
 node_modules/**
 
+# Windows device file artifact
+nul
+
 # Misc
 **/.eslintrc.json
+.yarnrc
