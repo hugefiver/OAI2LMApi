@@ -16,6 +16,7 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
     private disposables: vscode.Disposable[] = [];
     private modelList: ModelInformation[] = [];
     private _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
+    private tokensPerChar = 0.25;
     
     readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
@@ -417,6 +418,12 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
                         }
                     }
                 },
+                onUsage: (usage) => {
+                    const inputChars = chatMessages.reduce((sum, msg) => sum + (msg.content?.length ?? 0), 0);
+                    if (inputChars > 0 && usage.promptTokens > 0) {
+                        this.tokensPerChar = usage.promptTokens / inputChars;
+                    }
+                },
                 signal: abortController.signal,
                 tools,
                 toolChoice,
@@ -760,33 +767,23 @@ export class OpenAILanguageModelProvider implements vscode.LanguageModelChatProv
         text: string | vscode.LanguageModelChatRequestMessage,
         token: vscode.CancellationToken
     ): Promise<number> {
-        // Simple estimation: ~4 characters per token
-        // NOTE: This is a very rough approximation and may be significantly inaccurate
-        // Different models use different tokenization schemes:
-        // - GPT models use tiktoken (BPE-based)
-        // - Other models may use SentencePiece or other tokenizers
-        // - Non-English text typically requires more tokens per character
-        // For production use, consider integrating a proper tokenizer library
         let textContent: string;
         
         if (typeof text === 'string') {
             textContent = text;
         } else {
             if (typeof text.content === 'string') {
-                // Plain string content
                 textContent = text.content;
             } else if (Array.isArray(text.content)) {
-                // Array of content parts
                 textContent = text.content.map(part => this.extractTextFromPart(part)).join('');
             } else if (text.content && typeof text.content === 'object') {
-                // Single content part object
                 textContent = this.extractTextFromPart(text.content);
             } else {
                 textContent = '';
             }
         }
         
-        return Math.ceil(textContent.length / 4);
+        return Math.ceil(textContent.length * this.tokensPerChar);
     }
 
     /**

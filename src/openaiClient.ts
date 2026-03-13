@@ -407,6 +407,8 @@ export interface StreamOptions {
      * are reported together in a single batch.
      */
     onToolCallsComplete?: (toolCalls: CompletedToolCall[]) => void;
+    /** Called with token usage statistics after the API response completes. */
+    onUsage?: (usage: { promptTokens: number; completionTokens: number }) => void;
     signal?: AbortSignal;
     tools?: ToolDefinition[];
     toolChoice?: ToolChoice;
@@ -549,6 +551,7 @@ export class OpenAIClient {
                 model: model,
                 messages: openaiMessages,
                 stream: true,
+                stream_options: { include_usage: true },
                 temperature: 1.0,
                 max_tokens: maxTokens
             };
@@ -568,11 +571,16 @@ export class OpenAIClient {
 
             let chunkCount = 0;
             let finishReason: string | null = null;
+            let streamUsage: { prompt_tokens: number; completion_tokens: number } | undefined;
 
             for await (const chunk of stream) {
                 chunkCount++;
                 if (streamOptions.signal?.aborted) {
                     break;
+                }
+
+                if (chunk.usage) {
+                    streamUsage = { prompt_tokens: chunk.usage.prompt_tokens, completion_tokens: chunk.usage.completion_tokens };
                 }
 
                 const choice0 = chunk.choices[0];
@@ -734,6 +742,10 @@ export class OpenAIClient {
                     ...(streamOptions.toolChoice ? { tool_choice: streamOptions.toolChoice } : {})
                 }) as OpenAI.Chat.ChatCompletion;
 
+                if (response.usage && streamOptions.onUsage) {
+                    streamUsage = { prompt_tokens: response.usage.prompt_tokens, completion_tokens: response.usage.completion_tokens };
+                }
+
                 const msgAny = response.choices?.[0]?.message as unknown as Record<string, unknown> | undefined;
                 const nonStreamContent = msgAny?.content;
                 if (typeof nonStreamContent === 'string' && nonStreamContent.length > 0) {
@@ -770,6 +782,13 @@ export class OpenAIClient {
                 }
 
                 thinkTagParser.flush();
+            }
+
+            if (streamUsage && streamOptions.onUsage) {
+                streamOptions.onUsage({
+                    promptTokens: streamUsage.prompt_tokens,
+                    completionTokens: streamUsage.completion_tokens
+                });
             }
 
             return fullContent;
@@ -1015,6 +1034,16 @@ export class OpenAIClient {
                         }
                         break;
                     }
+                    case 'response.completed': {
+                        const completedResponse = event.response;
+                        if (completedResponse?.usage && streamOptions.onUsage) {
+                            streamOptions.onUsage({
+                                promptTokens: completedResponse.usage.input_tokens,
+                                completionTokens: completedResponse.usage.output_tokens
+                            });
+                        }
+                        break;
+                    }
                 }
             }
 
@@ -1055,6 +1084,13 @@ export class OpenAIClient {
                 }
 
                 const response = await this.client.responses.create(fallbackRequest) as OpenAI.Responses.Response;
+
+                if (response?.usage && streamOptions.onUsage) {
+                    streamOptions.onUsage({
+                        promptTokens: response.usage.input_tokens,
+                        completionTokens: response.usage.output_tokens
+                    });
+                }
 
                 const nonStreamContent = response?.output_text;
                 if (typeof nonStreamContent === 'string' && nonStreamContent.length > 0) {
