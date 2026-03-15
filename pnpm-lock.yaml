@@ -19,7 +19,7 @@ importers:
         version: link:packages/model-metadata
       openai:
         specifier: ^6.17.0
-        version: 6.22.0(zod@4.1.8)
+        version: 6.29.0(zod@4.1.8)
     devDependencies:
       '@ai-sdk/provider':
         specifier: ^2.0.0
@@ -1819,8 +1819,8 @@ packages:
     resolution: {integrity: sha512-YgBpdJHPyQ2UE5x+hlSXcnejzAvD0b22U2OuAP+8OnlJT+PjWPxtgmGqKKc+RgTM63U9gN0YzrYc71R2WT/hTA==}
     engines: {node: '>=18'}
 
-  openai@6.22.0:
-    resolution: {integrity: sha512-7Yvy17F33Bi9RutWbsaYt5hJEEJ/krRPOrwan+f9aCPuMat1WVsb2VNSII5W1EksKT6fF69TG/xj4XzodK3JZw==}
+  openai@6.29.0:
+    resolution: {integrity: sha512-YxoArl2BItucdO89/sN6edksV0x47WUTgkgVfCgX7EuEMhbirENsgYe5oO4LTjBL9PtdKtk2WqND1gSLcTd2yw==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -4470,7 +4470,7 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@6.22.0(zod@4.1.8):
+  openai@6.29.0(zod@4.1.8):
     optionalDependencies:
       zod: 4.1.8
 
