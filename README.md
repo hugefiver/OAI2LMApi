@@ -218,7 +218,7 @@ This extension works with any API that implements the OpenAI chat completions fo
 
 ## License
 
-MIT - See [LICENSE](LICENSE) for details.
+[Anti American AI Public License](https://github.com/hugefiver/AAAPL) - See [LICENSE](LICENSE) for details.
 
 ## Contributing
 

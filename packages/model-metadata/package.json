@@ -22,7 +22,7 @@
     "test": "pnpm run build && node --test \"test/**/*.test.js\"",
     "lint": "eslint src"
   },
-  "license": "MIT",
+  "license": "LicenseRef-AAAPL",
   "repository": {
     "type": "git",
     "url": "https://github.com/hugefiver/OAI2LMApi.git",
