@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-05-15
+
+### Changed
+
+- **License**: Migrated from MIT to the Anti American AI Public License (AAAPL).
+- **Dependencies**: Updated `openai` to 6.37.0, `@ai-sdk/google` to 2.0.72, `@ai-sdk/provider` to 2.0.3, `@vscode/vsce` to 3.9.1, `esbuild` to 0.27.7, `eslint` to 9.39.4, and various `@typescript-eslint/*` and `@types/node` upgrades.
+
+### Fixed
+
+- Updated CI workflows to use latest GitHub Actions versions.
+
 ## [0.4.2] - 2026-03-13
 
 ### Fixed
