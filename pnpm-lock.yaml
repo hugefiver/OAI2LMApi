@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@ai-sdk/google':
         specifier: ^2.0.0
-        version: 2.0.72(zod@4.1.8)
+        version: 2.0.73(zod@4.1.8)
       '@anthropic-ai/sdk':
         specifier: ^0.33.1
         version: 0.33.1
@@ -84,8 +84,8 @@ importers:
 
 packages:
 
-  '@ai-sdk/google@2.0.72':
-    resolution: {integrity: sha512-BjDY6l+rV4CmHKjZe4H0uRXW3M2o+g7PaYM8oFpW+9PP1qKNEybnJ6//Si7BSf6DT+86dKARrtEl09lxSSaMaA==}
+  '@ai-sdk/google@2.0.73':
+    resolution: {integrity: sha512-XbYFFSnr8ddK1pHNP7rALOY6s3JScRFcS6dXFFqMkK9ZY/CoGRwYHlSex7+NTcC2m1L1Y3NrfyUU7RD4jYV+ag==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2521,7 +2521,7 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/google@2.0.72(zod@4.1.8)':
+  '@ai-sdk/google@2.0.73(zod@4.1.8)':
     dependencies:
       '@ai-sdk/provider': 2.0.3
       '@ai-sdk/provider-utils': 3.0.25(zod@4.1.8)
